@@ -93,23 +93,26 @@ class TagDatabase:
         return [row[0] for row in c.fetchall()]
 
     def get_images_with_tags(self, tags):
-        # tags: list of tag strings
+        # Incremental search: tags are treated as prefixes (LIKE 'tag%')
+        c = self.conn.cursor()
         if not tags:
-            c = self.conn.cursor()
             c.execute("SELECT path FROM images ORDER BY path ASC")
             return [row[0] for row in c.fetchall()]
-        placeholders = ','.join('?' for _ in tags)
-        query = f'''
-            SELECT i.path FROM images i
-            JOIN image_tags it ON i.id = it.image_id
-            JOIN tags t ON t.id = it.tag_id
-            WHERE t.tag IN ({placeholders})
-            GROUP BY i.id
-            HAVING COUNT(DISTINCT t.tag) = ?
-            ORDER BY i.path ASC
-        '''
-        c = self.conn.cursor()
-        c.execute(query, (*tags, len(tags)))
+        # For each tag fragment, find images that have at least one tag starting with that fragment
+        # Build dynamic SQL
+        base_query = '''SELECT i.path FROM images i\n'''
+        join_clauses = []
+        where_clauses = []
+        params = []
+        for idx, tag in enumerate(tags):
+            join_clauses.append(f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id")
+            where_clauses.append(f"t{idx}.tag LIKE ?")
+            params.append(f"{tag}%")
+        query = base_query + ' '.join(join_clauses)
+        if where_clauses:
+            query += " WHERE " + ' AND '.join(where_clauses)
+        query += " GROUP BY i.id ORDER BY i.path ASC"
+        c.execute(query, params)
         return [row[0] for row in c.fetchall()]
 
 
@@ -383,21 +386,23 @@ class IPTCEditor(QMainWindow):
             QMessageBox.warning(self, "No Folder Selected", "Please select a folder first.")
             return
         supported = (".jpg", ".jpeg", ".png")
-        files = [f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)]
-        for fname in files:
-            fpath = os.path.join(self.folder_path, fname)
-            # Extract tags for this image
-            result = subprocess.run([
-                "exiv2", "-pi", fpath
-            ], capture_output=True, text=True)
-            if result.returncode != 0:
-                continue
-            for line in result.stdout.splitlines():
-                if "Iptc.Application2.Keywords" in line:
-                    parts = re.split(r"\s{2,}", line.strip())
-                    if len(parts) >= 4:
-                        keyword_value = parts[-1].strip()
-                        self.db.add_image_tag(fpath, keyword_value)
+        # Recursively walk the directory
+        for root, dirs, files in os.walk(self.folder_path):
+            for fname in files:
+                if fname.lower().endswith(supported):
+                    fpath = os.path.join(root, fname)
+                    # Extract tags for this image
+                    result = subprocess.run([
+                        "exiv2", "-pi", fpath
+                    ], capture_output=True, text=True)
+                    if result.returncode != 0:
+                        continue
+                    for line in result.stdout.splitlines():
+                        if "Iptc.Application2.Keywords" in line:
+                            parts = re.split(r"\s{2,}", line.strip())
+                            if len(parts) >= 4:
+                                keyword_value = parts[-1].strip()
+                                self.db.add_image_tag(fpath, keyword_value)
         self.show_auto_close_message("Scan Complete", "All images and tags have been added to the database.")
         self.load_previous_tags()
         self.update_search()
