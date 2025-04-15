@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QMessageBox,
+    QListView, QAbstractItemView
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
 
@@ -116,11 +117,20 @@ class IPTCEditor(QMainWindow):
         self.btn_select_folder.clicked.connect(self.select_folder)
         left_panel.addWidget(self.btn_select_folder)
 
-        self.list_widget = QListWidget()
-        self.list_widget.clicked.connect(self.image_selected)
-        left_panel.addWidget(self.list_widget)
+        # Replace QListWidget with QListView for thumbnails
+        self.list_view = QListView()
+        self.list_view.setViewMode(QListView.IconMode)
+        self.list_view.setIconSize(QPixmap(80, 80).size())
+        self.list_view.setResizeMode(QListView.Adjust)
+        self.list_view.setSpacing(10)
+        self.list_view.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.list_view.setMovement(QListView.Static)
+        self.list_view.setUniformItemSizes(True)
+        self.list_view.setMinimumHeight(200)
+        self.list_view.setMinimumWidth(200)
+        self.list_view.clicked.connect(self.image_selected)
+        left_panel.addWidget(self.list_view)
 
-        # Add a list for previously encountered tags.
         self.tags_list_widget = QListWidget()
         self.tags_list_widget.setMaximumHeight(150)
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
@@ -163,18 +173,29 @@ class IPTCEditor(QMainWindow):
             self.populate_listbox()
 
     def populate_listbox(self):
-        self.list_widget.clear()
+        # Now populates the QListView with thumbnails and filenames
         supported = (".jpg", ".jpeg", ".png")
         self.image_list = [
             f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)
         ]
-        self.list_widget.addItems(self.image_list)
+        model = QStandardItemModel()
+        for fname in self.image_list:
+            fpath = os.path.join(self.folder_path, fname)
+            pixmap = QPixmap(fpath)
+            if pixmap.isNull():
+                icon = QIcon()
+            else:
+                icon = QIcon(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            item = QStandardItem(icon, fname)
+            item.setEditable(False)
+            model.appendRow(item)
+        self.list_view.setModel(model)
 
     def image_selected(self, index):
-        selected_index = self.list_widget.currentRow()
+        selected_index = index.row()
         if selected_index < 0:
             return
-        image_name = self.list_widget.item(selected_index).text()
+        image_name = self.image_list[selected_index]
         self.current_image_path = os.path.join(self.folder_path, image_name)
         self.read_iptc()
         self.display_image(self.current_image_path)
