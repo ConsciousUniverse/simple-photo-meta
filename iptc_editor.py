@@ -331,6 +331,10 @@ class IPTCEditor(QMainWindow):
                     keywords.append(keyword_value)
         self.cleaned_keywords = keywords
 
+    def is_valid_tag(self, tag):
+        # Only allow alphanumeric and dashes
+        return bool(re.fullmatch(r"[A-Za-z0-9\-\s]+", tag))
+
     def read_iptc(self):
         if not self.current_image_path:
             QMessageBox.warning(
@@ -357,6 +361,11 @@ class IPTCEditor(QMainWindow):
 
         # Split the input into keywords by line (or comma, if you prefer)
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
+        # Validate tags
+        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
+        if invalid_tags:
+            QMessageBox.critical(self, "Invalid Tag(s)", f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
+            return
 
         # First, delete existing IPTC keywords
         try:
@@ -418,7 +427,8 @@ class IPTCEditor(QMainWindow):
                             parts = re.split(r"\s{2,}", line.strip())
                             if len(parts) >= 4:
                                 keyword_value = parts[-1].strip()
-                                self.db.add_image_tag(fpath, keyword_value)
+                                if self.is_valid_tag(keyword_value):
+                                    self.db.add_image_tag(fpath, keyword_value)
         self.show_auto_close_message("Scan Complete", "All images and tags have been added to the database.")
         self.load_previous_tags()
         self.update_search()
