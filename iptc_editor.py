@@ -20,15 +20,30 @@ from PySide6.QtCore import QTimer
 
 class TagDatabase:
     def __init__(self, db_path="tags.db"):
-        # Connect to the database file (it will be created in the current directory)
         self.conn = sqlite3.connect(db_path)
         self._create_table()
 
     def _create_table(self):
         c = self.conn.cursor()
-        # The 'tag' field is UNIQUE so that duplicate tags are ignored
+        # Tags table
         c.execute(
             "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)"
+        )
+        # Images table
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT UNIQUE)"
+        )
+        # Image-Tags relationship table
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS image_tags (
+                image_id INTEGER,
+                tag_id INTEGER,
+                PRIMARY KEY (image_id, tag_id),
+                FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )
+            """
         )
         self.conn.commit()
 
@@ -39,37 +54,62 @@ class TagDatabase:
             self.conn.commit()
         except Exception as e:
             print("Error inserting tag", tag, e)
+
+    def get_tag_id(self, tag):
+        c = self.conn.cursor()
+        c.execute("SELECT id FROM tags WHERE tag=?", (tag,))
+        row = c.fetchone()
+        return row[0] if row else None
+
+    def add_image(self, path):
+        c = self.conn.cursor()
+        c.execute("INSERT OR IGNORE INTO images (path) VALUES (?)", (path,))
+        self.conn.commit()
+        c.execute("SELECT id FROM images WHERE path=?", (path,))
+        row = c.fetchone()
+        return row[0] if row else None
+
+    def get_image_id(self, path):
+        c = self.conn.cursor()
+        c.execute("SELECT id FROM images WHERE path=?", (path,))
+        row = c.fetchone()
+        return row[0] if row else None
+
+    def add_image_tag(self, image_path, tag):
+        image_id = self.add_image(image_path)
+        self.add_tag(tag)
+        tag_id = self.get_tag_id(tag)
+        if image_id and tag_id:
+            c = self.conn.cursor()
+            c.execute(
+                "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)",
+                (image_id, tag_id),
+            )
+            self.conn.commit()
 
     def get_tags(self):
         c = self.conn.cursor()
         c.execute("SELECT tag FROM tags ORDER BY tag ASC")
         return [row[0] for row in c.fetchall()]
 
-
-# (Include the TagDatabase class from above here)
-class TagDatabase:
-    def __init__(self, db_path="tags.db"):
-        self.conn = sqlite3.connect(db_path)
-        self._create_table()
-
-    def _create_table(self):
-        c = self.conn.cursor()
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)"
-        )
-        self.conn.commit()
-
-    def add_tag(self, tag):
-        try:
+    def get_images_with_tags(self, tags):
+        # tags: list of tag strings
+        if not tags:
             c = self.conn.cursor()
-            c.execute("INSERT OR IGNORE INTO tags (tag) VALUES (?)", (tag,))
-            self.conn.commit()
-        except Exception as e:
-            print("Error inserting tag", tag, e)
-
-    def get_tags(self):
+            c.execute("SELECT path FROM images ORDER BY path ASC")
+            return [row[0] for row in c.fetchall()]
+        placeholders = ','.join('?' for _ in tags)
+        query = f'''
+            SELECT i.path FROM images i
+            JOIN image_tags it ON i.id = it.image_id
+            JOIN tags t ON t.id = it.tag_id
+            WHERE t.tag IN ({placeholders})
+            GROUP BY i.id
+            HAVING COUNT(DISTINCT t.tag) = ?
+            ORDER BY i.path ASC
+        '''
         c = self.conn.cursor()
-        c.execute("SELECT tag FROM tags ORDER BY tag ASC")
+        c.execute(query, (*tags, len(tags)))
         return [row[0] for row in c.fetchall()]
 
 
@@ -116,11 +156,22 @@ class IPTCEditor(QMainWindow):
 
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.clicked.connect(self.select_folder)
-        # Add the button above the splitter
+        # Add the scan directory button
+        self.btn_scan_directory = QPushButton("Scan Directory")
+        self.btn_scan_directory.clicked.connect(self.scan_directory)
+        # Add the search bar
+        self.search_bar = QTextEdit()
+        self.search_bar.setMaximumHeight(30)
+        self.search_bar.setPlaceholderText("Search by tag(s)...")
+        self.search_bar.textChanged.connect(self.update_search)
+
+        # Add the button and search bar above the splitter
         left_panel = QVBoxLayout()
         left_panel.addWidget(self.btn_select_folder)
+        left_panel.addWidget(self.btn_scan_directory)
+        left_panel.addWidget(self.search_bar)
         left_panel.addWidget(left_splitter)
-        left_panel.setStretch(1, 1)
+        left_panel.setStretch(3, 1)
 
         # Replace QListWidget with QListView for thumbnails
         self.list_view = QListView()
@@ -322,10 +373,55 @@ class IPTCEditor(QMainWindow):
                 )
                 # Save each keyword into our SQLite database.
                 for kw in keywords:
-                    self.db.add_tag(kw)
+                    self.db.add_image_tag(self.current_image_path, kw)
                 self.load_previous_tags()  # Refresh the list of previous tags.
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+    def scan_directory(self):
+        if not self.folder_path:
+            QMessageBox.warning(self, "No Folder Selected", "Please select a folder first.")
+            return
+        supported = (".jpg", ".jpeg", ".png")
+        files = [f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)]
+        for fname in files:
+            fpath = os.path.join(self.folder_path, fname)
+            # Extract tags for this image
+            result = subprocess.run([
+                "exiv2", "-pi", fpath
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                continue
+            for line in result.stdout.splitlines():
+                if "Iptc.Application2.Keywords" in line:
+                    parts = re.split(r"\s{2,}", line.strip())
+                    if len(parts) >= 4:
+                        keyword_value = parts[-1].strip()
+                        self.db.add_image_tag(fpath, keyword_value)
+        self.show_auto_close_message("Scan Complete", "All images and tags have been added to the database.")
+        self.load_previous_tags()
+        self.update_search()
+
+    def update_search(self):
+        # Get tags from search bar, split by whitespace or comma
+        text = self.search_bar.toPlainText().strip()
+        tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+        image_paths = self.db.get_images_with_tags(tags)
+        # Only show images in the current folder
+        filtered = [f for f in image_paths if os.path.dirname(f) == self.folder_path]
+        self.image_list = [os.path.basename(f) for f in filtered]
+        model = QStandardItemModel()
+        for fname in self.image_list:
+            fpath = os.path.join(self.folder_path, fname)
+            pixmap = QPixmap(fpath)
+            if pixmap.isNull():
+                icon = QIcon()
+            else:
+                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            item = QStandardItem(icon, fname)
+            item.setEditable(False)
+            model.appendRow(item)
+        self.list_view.setModel(model)
 
 
 if __name__ == "__main__":
