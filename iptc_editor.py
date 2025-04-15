@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QListView, QAbstractItemView, QSplitter
 )
-from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem
+from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
 
@@ -154,16 +154,25 @@ class IPTCEditor(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
+        # Set global font size
+        font = QFont()
+        font.setPointSize(16)
+        self.setFont(font)
+        central_widget.setFont(font)
+
         # LEFT PANEL: folder and image list, plus previously used tags.
         left_splitter = QSplitter(Qt.Vertical)
 
         self.btn_select_folder = QPushButton("Select Folder")
+        self.btn_select_folder.setFont(font)
         self.btn_select_folder.clicked.connect(self.select_folder)
         # Add the scan directory button
         self.btn_scan_directory = QPushButton("Scan Directory")
+        self.btn_scan_directory.setFont(font)
         self.btn_scan_directory.clicked.connect(self.scan_directory)
         # Add the search bar
         self.search_bar = QTextEdit()
+        self.search_bar.setFont(font)
         self.search_bar.setMaximumHeight(30)
         self.search_bar.setPlaceholderText("Search by tag(s)...")
         self.search_bar.textChanged.connect(self.update_search)
@@ -178,6 +187,7 @@ class IPTCEditor(QMainWindow):
 
         # Replace QListWidget with QListView for thumbnails
         self.list_view = QListView()
+        self.list_view.setFont(font)
         self.list_view.setViewMode(QListView.IconMode)
         self.list_view.setIconSize(QPixmap(250, 250).size())  # Increased size
         self.list_view.setResizeMode(QListView.Adjust)
@@ -191,6 +201,7 @@ class IPTCEditor(QMainWindow):
         left_splitter.addWidget(self.list_view)
 
         self.tags_list_widget = QListWidget()
+        self.tags_list_widget.setFont(font)
         self.tags_list_widget.setMaximumHeight(150)
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         self.tags_list_widget.clicked.connect(self.tag_clicked)
@@ -199,32 +210,38 @@ class IPTCEditor(QMainWindow):
 
         main_layout.addLayout(left_panel, 1)
 
-        # RIGHT PANEL: image display and IPTC metadata editor.
-        right_panel = QVBoxLayout()
+        # RIGHT PANEL: image display and IPTC metadata editor in a movable splitter.
+        right_splitter = QSplitter(Qt.Vertical)
 
-        # Canvas for image display
+        # Canvas for image display (expandable)
         self.image_label = QLabel("Image preview will appear here")
-        self.image_label.setFixedSize(500, 400)
+        self.image_label.setFont(font)
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: gray;")
-        right_panel.addWidget(self.image_label)
+        self.image_label.setMinimumHeight(400)
+        right_splitter.addWidget(self.image_label)
 
-        # Text edit for IPTC data input
+        # Container for IPTC text edit and buttons
+        iptc_widget = QWidget()
+        iptc_layout = QVBoxLayout(iptc_widget)
+        iptc_layout.setContentsMargins(0, 0, 0, 0)
         self.iptc_text_edit = QTextEdit()
-        right_panel.addWidget(self.iptc_text_edit)
-
-        # Buttons for reading and saving IPTC data
+        self.iptc_text_edit.setFont(font)
+        iptc_layout.addWidget(self.iptc_text_edit)
         btn_layout = QHBoxLayout()
         self.btn_read = QPushButton("Read IPTC")
+        self.btn_read.setFont(font)
         self.btn_read.clicked.connect(self.read_iptc)
         btn_layout.addWidget(self.btn_read)
-
         self.btn_save = QPushButton("Save IPTC")
+        self.btn_save.setFont(font)
         self.btn_save.clicked.connect(self.save_iptc)
         btn_layout.addWidget(self.btn_save)
-        right_panel.addLayout(btn_layout)
+        iptc_layout.addLayout(btn_layout)
+        right_splitter.addWidget(iptc_widget)
+        right_splitter.setSizes([600, 200])  # Make preview larger by default
 
-        main_layout.addLayout(right_panel, 2)
+        main_layout.addWidget(right_splitter, 2)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -346,8 +363,7 @@ class IPTCEditor(QMainWindow):
             delete_result = subprocess.run(
                 f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
                 shell=True,
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
             )
             if delete_result.returncode != 0:
                 QMessageBox.critical(self, "exiv2 Error", delete_result.stderr)
