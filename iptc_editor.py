@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QMessageBox,
-    QListView, QAbstractItemView
+    QListView, QAbstractItemView, QSplitter
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt
@@ -112,30 +112,36 @@ class IPTCEditor(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
 
         # LEFT PANEL: folder and image list, plus previously used tags.
-        left_panel = QVBoxLayout()
+        left_splitter = QSplitter(Qt.Vertical)
+
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.clicked.connect(self.select_folder)
+        # Add the button above the splitter
+        left_panel = QVBoxLayout()
         left_panel.addWidget(self.btn_select_folder)
+        left_panel.addWidget(left_splitter)
+        left_panel.setStretch(1, 1)
 
         # Replace QListWidget with QListView for thumbnails
         self.list_view = QListView()
         self.list_view.setViewMode(QListView.IconMode)
-        self.list_view.setIconSize(QPixmap(80, 80).size())
+        self.list_view.setIconSize(QPixmap(250, 250).size())  # Increased size
         self.list_view.setResizeMode(QListView.Adjust)
         self.list_view.setSpacing(10)
         self.list_view.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_view.setMovement(QListView.Static)
         self.list_view.setUniformItemSizes(True)
-        self.list_view.setMinimumHeight(200)
-        self.list_view.setMinimumWidth(200)
+        self.list_view.setMinimumHeight(250)
+        self.list_view.setMinimumWidth(250)
         self.list_view.clicked.connect(self.image_selected)
-        left_panel.addWidget(self.list_view)
+        left_splitter.addWidget(self.list_view)
 
         self.tags_list_widget = QListWidget()
         self.tags_list_widget.setMaximumHeight(150)
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         self.tags_list_widget.clicked.connect(self.tag_clicked)
-        left_panel.addWidget(self.tags_list_widget)
+        left_splitter.addWidget(self.tags_list_widget)
+        left_splitter.setSizes([400, 100])  # Initial splitter sizes
 
         main_layout.addLayout(left_panel, 1)
 
@@ -185,7 +191,7 @@ class IPTCEditor(QMainWindow):
             if pixmap.isNull():
                 icon = QIcon()
             else:
-                icon = QIcon(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             item = QStandardItem(icon, fname)
             item.setEditable(False)
             model.appendRow(item)
