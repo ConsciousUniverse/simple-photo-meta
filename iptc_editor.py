@@ -1,8 +1,4 @@
-import os
-import subprocess
-import sys
-import shlex
-import re
+import sys, os, sqlite3, subprocess, shlex, re
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -18,7 +14,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
-import sqlite3
+from PySide6.QtCore import QTimer
+
 
 class TagDatabase:
     def __init__(self, db_path="tags.db"):
@@ -29,7 +26,9 @@ class TagDatabase:
     def _create_table(self):
         c = self.conn.cursor()
         # The 'tag' field is UNIQUE so that duplicate tags are ignored
-        c.execute("CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)")
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)"
+        )
         self.conn.commit()
 
     def add_tag(self, tag):
@@ -45,6 +44,34 @@ class TagDatabase:
         c.execute("SELECT tag FROM tags ORDER BY tag ASC")
         return [row[0] for row in c.fetchall()]
 
+
+# (Include the TagDatabase class from above here)
+class TagDatabase:
+    def __init__(self, db_path="tags.db"):
+        self.conn = sqlite3.connect(db_path)
+        self._create_table()
+
+    def _create_table(self):
+        c = self.conn.cursor()
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)"
+        )
+        self.conn.commit()
+
+    def add_tag(self, tag):
+        try:
+            c = self.conn.cursor()
+            c.execute("INSERT OR IGNORE INTO tags (tag) VALUES (?)", (tag,))
+            self.conn.commit()
+        except Exception as e:
+            print("Error inserting tag", tag, e)
+
+    def get_tags(self):
+        c = self.conn.cursor()
+        c.execute("SELECT tag FROM tags ORDER BY tag ASC")
+        return [row[0] for row in c.fetchall()]
+
+
 class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -52,43 +79,76 @@ class IPTCEditor(QMainWindow):
         self.folder_path = ""
         self.image_list = []
         self.current_image_path = None
-        self.cleaned_keywords = []
+        # Create or open the SQLite database
+        self.db = TagDatabase()
 
-        self._setup_ui()
+        self.create_widgets()
+        self.load_previous_tags()
 
-    def _setup_ui(self):
+    def show_auto_close_message(
+        self, title, message, icon=QMessageBox.Information, timeout=1000
+    ):
+        """
+        Shows a QMessageBox that automatically closes after 'timeout' milliseconds.
+
+        :param title: The title of the message box.
+        :param message: The message text.
+        :param icon: The icon of the message box (e.g., QMessageBox.Information, etc.).
+        :param timeout: Time in milliseconds before the message box is automatically closed.
+        """
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(icon)
+
+        # Set the timer to automatically close the message box.
+        QTimer.singleShot(timeout, msg_box.close)
+        msg_box.exec()
+
+    def create_widgets(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
-        # Left side: Folder selection and list of images
+        # LEFT PANEL: folder and image list, plus previously used tags.
         left_panel = QVBoxLayout()
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.clicked.connect(self.select_folder)
         left_panel.addWidget(self.btn_select_folder)
 
         self.list_widget = QListWidget()
-        self.list_widget.itemClicked.connect(self.on_item_clicked)
+        self.list_widget.clicked.connect(self.image_selected)
         left_panel.addWidget(self.list_widget)
+
+        # Add a list for previously encountered tags.
+        self.tags_list_widget = QListWidget()
+        self.tags_list_widget.setMaximumHeight(150)
+        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
+        self.tags_list_widget.clicked.connect(self.tag_clicked)
+        left_panel.addWidget(self.tags_list_widget)
 
         main_layout.addLayout(left_panel, 1)
 
-        # Right side: Image display, IPTC text, and buttons
+        # RIGHT PANEL: image display and IPTC metadata editor.
         right_panel = QVBoxLayout()
 
+        # Canvas for image display
         self.image_label = QLabel("Image preview will appear here")
         self.image_label.setFixedSize(500, 400)
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: gray;")
         right_panel.addWidget(self.image_label)
 
+        # Text edit for IPTC data input
         self.iptc_text_edit = QTextEdit()
         right_panel.addWidget(self.iptc_text_edit)
 
+        # Buttons for reading and saving IPTC data
         btn_layout = QHBoxLayout()
         self.btn_read = QPushButton("Read IPTC")
         self.btn_read.clicked.connect(self.read_iptc)
         btn_layout.addWidget(self.btn_read)
+
         self.btn_save = QPushButton("Save IPTC")
         self.btn_save.clicked.connect(self.save_iptc)
         btn_layout.addWidget(self.btn_save)
@@ -97,14 +157,12 @@ class IPTCEditor(QMainWindow):
         main_layout.addLayout(right_panel, 2)
 
     def select_folder(self):
-        """Opens a dialog to select a folder containing images."""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.folder_path = folder
-            self.populate_list()
+            self.populate_listbox()
 
-    def populate_list(self):
-        """Populates the list widget with image filenames (supports .jpg, .jpeg, .png)."""
+    def populate_listbox(self):
         self.list_widget.clear()
         supported = (".jpg", ".jpeg", ".png")
         self.image_list = [
@@ -112,28 +170,52 @@ class IPTCEditor(QMainWindow):
         ]
         self.list_widget.addItems(self.image_list)
 
-    def on_item_clicked(self, item):
-        """Loads and displays the selected image."""
-        image_name = item.text()
+    def image_selected(self, index):
+        selected_index = self.list_widget.currentRow()
+        if selected_index < 0:
+            return
+        image_name = self.list_widget.item(selected_index).text()
         self.current_image_path = os.path.join(self.folder_path, image_name)
+        self.read_iptc()
         self.display_image(self.current_image_path)
 
     def display_image(self, path):
-        """Displays an image on the QLabel, scaled to fit."""
-        pixmap = QPixmap(path)
-        if pixmap.isNull():
-            QMessageBox.warning(self, "Error", f"Could not load image: {path}")
-            return
-        pixmap = pixmap.scaled(
-            self.image_label.width(),
-            self.image_label.height(),
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation,
-        )
-        self.image_label.setPixmap(pixmap)
+        try:
+            pixmap = QPixmap(path)
+            if pixmap.isNull():
+                raise Exception("Cannot load image")
+            pixmap = pixmap.scaled(
+                self.image_label.width(),
+                self.image_label.height(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            self.image_label.setPixmap(pixmap)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open image: {e}")
+
+    def load_previous_tags(self):
+        # Load unique keywords from the SQLite database and populate the list widget.
+        tags = self.db.get_tags()
+        self.tags_list_widget.clear()
+        for tag in tags:
+            self.tags_list_widget.addItem(tag)
+
+    def tag_clicked(self, index):
+        # Get the text of the clicked tag.
+        tag = self.tags_list_widget.currentItem().text()
+        # Get the current content of the text edit.
+        current_text = self.iptc_text_edit.toPlainText().strip()
+        # If there is existing text, append a space (or a newline, or a comma) and then the new tag.
+        if current_text:
+            # Here we append with a new line; you can customize to use a comma, space, etc.
+            new_text = f"{current_text}\n{tag}"
+        else:
+            new_text = tag
+        self.iptc_text_edit.setPlainText(new_text)
 
     def extract_keywords(self):
-        # Run exiv2 to get IPTC data from the image.
+        # Extract keywords from exiv2 output.
         result = subprocess.run(
             ["exiv2", "-pi", self.current_image_path], capture_output=True, text=True
         )
@@ -142,42 +224,29 @@ class IPTCEditor(QMainWindow):
             self.cleaned_keywords = []
             return
         keywords = []
+        # Use the split-by-multiple-spaces approach.
         for line in result.stdout.splitlines():
-            # Process only lines with the Keywords tag.
             if "Iptc.Application2.Keywords" in line:
-                # Split on two or more consecutive whitespace characters.
                 parts = re.split(r"\s{2,}", line.strip())
                 if len(parts) >= 4:
-                    # The last part holds the actual keyword value.
                     keyword_value = parts[-1].strip()
                     keywords.append(keyword_value)
-                else:
-                    print("DEBUG: Unexpected format:", line)
         self.cleaned_keywords = keywords
 
     def read_iptc(self):
-        """
-        Reads IPTC metadata from the current image using exiv2,
-        extracts only the keyword values, and displays them in the text edit.
-        """
         if not self.current_image_path:
             QMessageBox.warning(
                 self, "No Image Selected", "Please select an image first."
             )
             return
+
         try:
             self.extract_keywords()
-            # Display each keyword on its own line
             self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
     def save_iptc(self):
-        """
-        Saves IPTC metadata (multiple keywords) to the current image using exiv2.
-        Deletes all existing keywords, then adds each one individually to avoid
-        combining them into a single entry.
-        """
         if not self.current_image_path:
             QMessageBox.warning(
                 self, "No Image Selected", "Please select an image first."
@@ -187,10 +256,12 @@ class IPTCEditor(QMainWindow):
         if not raw_input:
             QMessageBox.information(self, "Empty Data", "No IPTC data provided.")
             return
-        # Split keywords by lines or comma depending what's better; here it's lines
+
+        # Split the input into keywords by line (or comma, if you prefer)
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
+
+        # First, delete existing IPTC keywords
         try:
-            # delete exising
             delete_result = subprocess.run(
                 f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
                 shell=True,
@@ -198,28 +269,34 @@ class IPTCEditor(QMainWindow):
                 text=True,
             )
             if delete_result.returncode != 0:
-                QMessageBox.critical(self, "exiv2 Error", run_result.stderr)
+                QMessageBox.critical(self, "exiv2 Error", delete_result.stderr)
+                return
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-        # Build the command with one `add` per keyword
+            return
+
+        # Build and run the command to add each keyword individually
         commands = [
-            f'-M "add Iptc.Application2.Keywords {shlex.quote(kw.strip())}"'
-            for kw in keywords
+            f'-M "add Iptc.Application2.Keywords {shlex.quote(kw)}"' for kw in keywords
         ]
         full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
         try:
             run_result = subprocess.run(
-                full_cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
+                full_cmd, shell=True, capture_output=True, text=True
             )
             if run_result.returncode != 0:
                 QMessageBox.critical(self, "exiv2 Error", run_result.stderr)
             else:
-                QMessageBox.information(
-                    self, "Success", "IPTC keywords saved correctly!"
+                self.show_auto_close_message(
+                    "Success",
+                    "IPTC keywords saved correctly!",
+                    QMessageBox.Information,
+                    timeout=1000,
                 )
+                # Save each keyword into our SQLite database.
+                for kw in keywords:
+                    self.db.add_tag(kw)
+                self.load_previous_tags()  # Refresh the list of previous tags.
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
