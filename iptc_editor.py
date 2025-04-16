@@ -120,9 +120,13 @@ class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("IPTC Editor")
+        self.resize(1920, 1080)  # Set initial window size to 1920px wide
         self.folder_path = ""
         self.image_list = []
         self.current_image_path = None
+        self.current_page = 0
+        self.page_size = 3
+        self.total_pages = 1
         # Create or open the SQLite database
         self.db = TagDatabase()
 
@@ -160,58 +164,64 @@ class IPTCEditor(QMainWindow):
         self.setFont(font)
         central_widget.setFont(font)
 
-        # LEFT PANEL: folder and image list, plus previously used tags.
-        left_splitter = QSplitter(Qt.Vertical)
-
+        # LEFT PANEL: folder and image list
+        left_panel = QVBoxLayout()
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.setFont(font)
         self.btn_select_folder.clicked.connect(self.select_folder)
-        # Add the scan directory button
         self.btn_scan_directory = QPushButton("Scan Directory")
         self.btn_scan_directory.setFont(font)
         self.btn_scan_directory.clicked.connect(self.scan_directory)
-        # Add the search bar
         self.search_bar = QTextEdit()
         self.search_bar.setFont(font)
         self.search_bar.setMaximumHeight(30)
         self.search_bar.setPlaceholderText("Search by tag(s)...")
         self.search_bar.textChanged.connect(self.update_search)
 
-        # Add the button and search bar above the splitter
-        left_panel = QVBoxLayout()
         left_panel.addWidget(self.btn_select_folder)
         left_panel.addWidget(self.btn_scan_directory)
         left_panel.addWidget(self.search_bar)
-        left_panel.addWidget(left_splitter)
-        left_panel.setStretch(3, 1)
 
-        # Replace QListWidget with QListView for thumbnails
+        # Thumbnails list
         self.list_view = QListView()
         self.list_view.setFont(font)
         self.list_view.setViewMode(QListView.IconMode)
-        self.list_view.setIconSize(QPixmap(250, 250).size())  # Increased size
+        self.list_view.setIconSize(QPixmap(175, 175).size())
         self.list_view.setResizeMode(QListView.Adjust)
-        self.list_view.setSpacing(10)
+        self.list_view.setSpacing(7)  # Changed from 10 to 7
         self.list_view.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_view.setMovement(QListView.Static)
         self.list_view.setUniformItemSizes(True)
         self.list_view.setMinimumHeight(250)
         self.list_view.setMinimumWidth(250)
         self.list_view.clicked.connect(self.image_selected)
-        left_splitter.addWidget(self.list_view)
+        # Add context menu policy and handler for right-click
+        self.list_view.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_view.customContextMenuRequested.connect(self.show_image_filename_context_menu)
+        left_panel.addWidget(self.list_view)
 
-        self.tags_list_widget = QListWidget()
-        self.tags_list_widget.setFont(font)
-        self.tags_list_widget.setMaximumHeight(150)
-        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
-        self.tags_list_widget.clicked.connect(self.tag_clicked)
-        left_splitter.addWidget(self.tags_list_widget)
-        left_splitter.setSizes([400, 100])  # Initial splitter sizes
+        # Pagination controls
+        self.pagination_layout = QHBoxLayout()
+        self.btn_prev = QPushButton("Previous")
+        self.btn_prev.setFont(font)
+        self.btn_prev.clicked.connect(self.prev_page)
+        self.btn_next = QPushButton("Next")
+        self.btn_next.setFont(font)
+        self.btn_next.clicked.connect(self.next_page)
+        self.page_label = QLabel()
+        self.page_label.setFont(font)
+        self.pagination_layout.addWidget(self.btn_prev)
+        self.pagination_layout.addWidget(self.page_label)
+        self.pagination_layout.addWidget(self.btn_next)
+        left_panel.addLayout(self.pagination_layout)
 
-        main_layout.addLayout(left_panel, 1)
+        # Add left panel to main layout
+        left_panel_widget = QWidget()
+        left_panel_widget.setLayout(left_panel)
+        main_layout.addWidget(left_panel_widget, 1)
 
-        # RIGHT PANEL: image display and IPTC metadata editor in a movable splitter.
-        right_splitter = QSplitter(Qt.Vertical)
+        # CENTER PANEL: image display and IPTC metadata editor in a vertical splitter
+        center_splitter = QSplitter(Qt.Vertical)
 
         # Canvas for image display (expandable)
         self.image_label = QLabel("Image preview will appear here")
@@ -219,7 +229,7 @@ class IPTCEditor(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: gray;")
         self.image_label.setMinimumHeight(400)
-        right_splitter.addWidget(self.image_label)
+        center_splitter.addWidget(self.image_label)
 
         # Container for IPTC text edit and buttons
         iptc_widget = QWidget()
@@ -238,10 +248,101 @@ class IPTCEditor(QMainWindow):
         self.btn_save.clicked.connect(self.save_iptc)
         btn_layout.addWidget(self.btn_save)
         iptc_layout.addLayout(btn_layout)
-        right_splitter.addWidget(iptc_widget)
-        right_splitter.setSizes([600, 200])  # Make preview larger by default
+        center_splitter.addWidget(iptc_widget)
+        center_splitter.setSizes([600, 200])
 
-        main_layout.addWidget(right_splitter, 2)
+        main_layout.addWidget(center_splitter, 2)
+
+        # RIGHT PANEL: tags list (not split)
+        right_panel = QVBoxLayout()
+        right_panel.addWidget(QLabel("Tags:"))
+        self.tags_list_widget = QListWidget()
+        self.tags_list_widget.setFont(font)
+        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
+        self.tags_list_widget.clicked.connect(self.tag_clicked)
+        self.tags_list_widget.setStyleSheet("""
+            QListWidget::item {
+                background: skyblue;
+                color: black;
+                font-size: 16pt;
+                margin-bottom: 7px;
+                border-radius: 6px;
+                padding: 4px 8px;
+                min-height: 32px;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            QListWidget::item:selected {
+                background: #87ceeb;
+                color: yellow;
+            }
+        """)
+        self.tags_list_widget.setWordWrap(True)
+        right_panel.addWidget(self.tags_list_widget)
+        right_panel_widget = QWidget()
+        right_panel_widget.setLayout(right_panel)
+        main_layout.addWidget(right_panel_widget, 1)
+
+    def update_pagination(self):
+        if not self.image_list:
+            self.current_page = 0
+            self.total_pages = 1
+        else:
+            self.total_pages = (len(self.image_list) - 1) // self.page_size + 1
+            if self.current_page >= self.total_pages:
+                self.current_page = self.total_pages - 1
+            if self.current_page < 0:
+                self.current_page = 0
+        self.page_label.setText(f"Page {self.current_page + 1} / {self.total_pages}")
+        self.btn_prev.setEnabled(self.current_page > 0)
+        self.btn_next.setEnabled(self.current_page < self.total_pages - 1)
+
+    def prev_page(self):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.show_current_page()
+
+    def next_page(self):
+        if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            self.show_current_page()
+
+    def show_current_page(self):
+        start = self.current_page * self.page_size
+        end = start + self.page_size
+        page_items = self.image_list[start:end]
+        model = QStandardItemModel()
+        for fname in page_items:
+            fpath = os.path.join(self.folder_path, fname)
+            pixmap = QPixmap(fpath)
+            if pixmap.isNull():
+                icon = QIcon()
+            else:
+                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            # Only set icon, not text (no filename shown)
+            item = QStandardItem()
+            item.setIcon(icon)
+            item.setEditable(False)
+            # Remove text and set size hint to icon size to avoid extra space
+            item.setText("")
+            item.setSizeHint(QPixmap(175, 175).size())
+            # Store filename in item data for context menu
+            item.setData(fname, Qt.UserRole + 1)
+            model.appendRow(item)
+        self.list_view.setModel(model)
+        self.update_pagination()
+
+    def show_image_filename_context_menu(self, pos):
+        index = self.list_view.indexAt(pos)
+        if not index.isValid():
+            return
+        # Retrieve filename from item data
+        model = self.list_view.model()
+        item = model.itemFromIndex(index)
+        fname = item.data(Qt.UserRole + 1)
+        if fname:
+            # Show filename in a message box (or could use QToolTip)
+            QMessageBox.information(self, "Filename", fname)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -251,28 +352,23 @@ class IPTCEditor(QMainWindow):
 
     def populate_listbox(self):
         # Now populates the QListView with thumbnails and filenames
-        supported = (".jpg", ".jpeg", ".png")
+        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
         self.image_list = [
             f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)
         ]
-        model = QStandardItemModel()
-        for fname in self.image_list:
-            fpath = os.path.join(self.folder_path, fname)
-            pixmap = QPixmap(fpath)
-            if pixmap.isNull():
-                icon = QIcon()
-            else:
-                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            item = QStandardItem(icon, fname)
-            item.setEditable(False)
-            model.appendRow(item)
-        self.list_view.setModel(model)
+        self.current_page = 0
+        self.update_pagination()
+        self.show_current_page()
 
     def image_selected(self, index):
+        # Map the clicked index to the correct image in the current page
+        start = self.current_page * self.page_size
         selected_index = index.row()
         if selected_index < 0:
             return
-        image_name = self.image_list[selected_index]
+        if start + selected_index >= len(self.image_list):
+            return
+        image_name = self.image_list[start + selected_index]
         self.current_image_path = os.path.join(self.folder_path, image_name)
         self.read_iptc()
         self.display_image(self.current_image_path)
@@ -437,22 +533,20 @@ class IPTCEditor(QMainWindow):
         # Get tags from search bar, split by whitespace or comma
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        image_paths = self.db.get_images_with_tags(tags)
-        # Only show images in the current folder
-        filtered = [f for f in image_paths if os.path.dirname(f) == self.folder_path]
-        self.image_list = [os.path.basename(f) for f in filtered]
-        model = QStandardItemModel()
-        for fname in self.image_list:
-            fpath = os.path.join(self.folder_path, fname)
-            pixmap = QPixmap(fpath)
-            if pixmap.isNull():
-                icon = QIcon()
-            else:
-                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            item = QStandardItem(icon, fname)
-            item.setEditable(False)
-            model.appendRow(item)
-        self.list_view.setModel(model)
+        if not tags:
+            # If no search, show all images in the folder (like populate_listbox)
+            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
+            self.image_list = [
+                f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)
+            ]
+        else:
+            image_paths = self.db.get_images_with_tags(tags)
+            # Only show images in the current folder
+            filtered = [f for f in image_paths if os.path.dirname(f) == self.folder_path]
+            self.image_list = [os.path.basename(f) for f in filtered]
+        self.current_page = 0
+        self.update_pagination()
+        self.show_current_page()
 
 
 if __name__ == "__main__":
