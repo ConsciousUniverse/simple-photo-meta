@@ -256,8 +256,17 @@ class IPTCEditor(QMainWindow):
         # RIGHT PANEL: tags list (not split)
         right_panel = QVBoxLayout()
         right_panel.addWidget(QLabel("Tags:"))
+
+        # Add tag search bar
+        self.tags_search_bar = QTextEdit()
+        self.tags_search_bar.setFont(self.font())
+        self.tags_search_bar.setMaximumHeight(30)
+        self.tags_search_bar.setPlaceholderText("Search tags...")
+        self.tags_search_bar.textChanged.connect(self.update_tags_search)
+        right_panel.addWidget(self.tags_search_bar)
+
         self.tags_list_widget = QListWidget()
-        self.tags_list_widget.setFont(font)
+        self.tags_list_widget.setFont(self.font())
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         self.tags_list_widget.clicked.connect(self.tag_clicked)
         self.tags_list_widget.setStyleSheet("""
@@ -390,10 +399,24 @@ class IPTCEditor(QMainWindow):
 
     def load_previous_tags(self):
         # Load unique keywords from the SQLite database and populate the list widget.
-        tags = self.db.get_tags()
+        self.all_tags = self.db.get_tags()
+        self.update_tags_list_widget(self.all_tags)
+
+    def update_tags_list_widget(self, tags):
         self.tags_list_widget.clear()
         for tag in tags:
             self.tags_list_widget.addItem(tag)
+
+    def update_tags_search(self):
+        # Get search text, filter tags, and update the list widget
+        search_text = self.tags_search_bar.toPlainText().strip().lower()
+        if not hasattr(self, "all_tags"):
+            self.all_tags = self.db.get_tags()
+        if not search_text:
+            filtered = self.all_tags
+        else:
+            filtered = [tag for tag in self.all_tags if search_text in tag.lower()]
+        self.update_tags_list_widget(filtered)
 
     def tag_clicked(self, index):
         # Get the text of the clicked tag.
@@ -516,6 +539,7 @@ class IPTCEditor(QMainWindow):
                 for kw in keywords:
                     self.db.add_image_tag(self.current_image_path, kw)
                 self.load_previous_tags()  # Refresh the list of previous tags.
+                self.update_tags_search()  # Refresh tag search after saving
             else:
                 QMessageBox.critical(
                     self,
@@ -551,6 +575,7 @@ class IPTCEditor(QMainWindow):
         self.show_auto_close_message("Scan Complete", "All images and tags have been added to the database.")
         self.load_previous_tags()
         self.update_search()
+        self.update_tags_search()  # Refresh tag search after scan
 
     def update_search(self):
         # Get tags from search bar, split by whitespace or comma
