@@ -488,7 +488,24 @@ class IPTCEditor(QMainWindow):
             )
             if run_result.returncode != 0:
                 QMessageBox.critical(self, "exiv2 Error", run_result.stderr)
-            else:
+                return
+            # Write check: read back the tags and compare
+            verify_result = subprocess.run(
+                ["exiv2", "-pi", self.current_image_path], capture_output=True, text=True
+            )
+            if verify_result.returncode != 0:
+                QMessageBox.critical(self, "Verification Error", verify_result.stderr)
+                return
+            # Extract keywords from output
+            written_keywords = []
+            for line in verify_result.stdout.splitlines():
+                if "Iptc.Application2.Keywords" in line:
+                    parts = re.split(r"\s{2,}", line.strip())
+                    if len(parts) >= 4:
+                        keyword_value = parts[-1].strip()
+                        written_keywords.append(keyword_value)
+            # Compare sets (order-insensitive)
+            if set(written_keywords) == set(keywords):
                 self.show_auto_close_message(
                     "Success",
                     "IPTC keywords saved correctly!",
@@ -499,6 +516,12 @@ class IPTCEditor(QMainWindow):
                 for kw in keywords:
                     self.db.add_image_tag(self.current_image_path, kw)
                 self.load_previous_tags()  # Refresh the list of previous tags.
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Write Verification Failed",
+                    f"Tags written do not match input.\nExpected: {keywords}\nGot: {written_keywords}"
+                )
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
