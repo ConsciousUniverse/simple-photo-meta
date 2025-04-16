@@ -1,0 +1,39 @@
+name: iptc-editor
+base: core22
+version: '1.0'
+summary: IPTC Metadata Editor
+description: |
+  A Qt-based GUI tool for editing IPTC metadata and managing image tags.
+
+grade: stable
+confinement: strict
+
+apps:
+  iptc-editor:
+    command: bin/iptc-editor
+    extensions: [gnome]
+    plugs: [home, removable-media]
+
+parts:
+  iptc-editor:
+    plugin: python
+    source: .
+    python-requirements:
+      - PySide6
+    stage-packages:
+      - exiv2
+      - libsqlite3-0
+      - libqt6core6
+      - libqt6gui6
+      - libqt6widgets6
+      - libqt6network6
+      - libqt6dbus6
+      - libqt6svg6
+      - libqt6concurrent6
+      - libqt6opengl6
+    override-build: |
+      snapcraftctl build
+      # Create a launcher script
+      echo '#!/bin/sh' > $SNAPCRAFT_PART_INSTALL/bin/iptc-editor
+      echo 'exec python3 $SNAP/iptc_editor.py "$@"' >> $SNAPCRAFT_PART_INSTALL/bin/iptc-editor
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/iptc-editor
