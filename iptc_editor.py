@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer, QThread, Signal
+import hashlib
+from PIL import Image
 
 
 class TagDatabase:
@@ -46,6 +48,15 @@ class TagDatabase:
                 PRIMARY KEY (image_id, tag_id),
                 FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
                 FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scanned_dirs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT UNIQUE,
+                last_scan TIMESTAMP
             )
             """
         )
@@ -194,6 +205,29 @@ class TagDatabase:
             c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
         return [row[0] for row in c.fetchall()]
 
+    def mark_directory_scanned(self, dir_path):
+        c = self.conn.cursor()
+        c.execute("INSERT OR REPLACE INTO scanned_dirs (path, last_scan) VALUES (?, datetime('now'))", (os.path.abspath(dir_path),))
+        self.conn.commit()
+
+    def was_directory_scanned(self, dir_path):
+        c = self.conn.cursor()
+        c.execute("SELECT last_scan FROM scanned_dirs WHERE path=?", (os.path.abspath(dir_path),))
+        row = c.fetchone()
+        return row[0] if row else None
+
+    def remove_missing_images(self, dir_path):
+        c = self.conn.cursor()
+        c.execute("SELECT path FROM images WHERE path LIKE ?", (os.path.join(os.path.abspath(dir_path), "%"),))
+        all_paths = [row[0] for row in c.fetchall()]
+        removed = 0
+        for path in all_paths:
+            if not os.path.exists(path):
+                c.execute("DELETE FROM images WHERE path=?", (path,))
+                removed += 1
+        self.conn.commit()
+        return removed
+
 
 class ScanWorker(QThread):
     scan_finished = Signal()
@@ -228,25 +262,6 @@ class ScanWorker(QThread):
                                         db.add_image_tag(fpath, keyword_value)
         finally:
             self.scan_finished.emit()
-
-
-class ScanImagesOnlyWorker(QThread):
-    scan_finished = Signal()
-
-    def __init__(self, folder_path, db_path):
-        super().__init__()
-        self.folder_path = folder_path
-        self.db_path = db_path
-
-    def run(self):
-        db = TagDatabase(self.db_path)
-        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
-        for root, dirs, files in os.walk(self.folder_path):
-            for fname in files:
-                if fname.lower().endswith(supported):
-                    fpath = os.path.join(root, fname)
-                    db.add_image(fpath)
-        self.scan_finished.emit()
 
 
 class IPTCEditor(QMainWindow):
@@ -475,7 +490,11 @@ class IPTCEditor(QMainWindow):
         for fpath in page_items:
             if not fpath.lower().endswith(supported):
                 continue
-            pixmap = QPixmap(fpath)
+            thumb_path = self.ensure_thumbnail(fpath)
+            if thumb_path and os.path.exists(thumb_path):
+                pixmap = QPixmap(thumb_path)
+            else:
+                pixmap = QPixmap(fpath)
             if pixmap.isNull():
                 icon = QIcon()
             else:
@@ -505,24 +524,28 @@ class IPTCEditor(QMainWindow):
             # Show only the basename in the message box
             QMessageBox.information(self, "Filename", os.path.basename(fpath))
 
-    def scan_folder_for_images_only(self, folder_path):
-        """Recursively scan for all supported image files and add their paths to the DB (no tags), in a thread."""
-        self.show_loading_dialog("Scanning for images...")
-        self.images_only_worker = ScanImagesOnlyWorker(folder_path, self.db.db_path)
-        self.images_only_worker.scan_finished.connect(self.on_images_only_scan_finished)
-        self.images_only_worker.start()
-
-    def on_images_only_scan_finished(self):
-        self.hide_loading_dialog()
-        self.update_pagination()
-        self.show_current_page()
-
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.folder_path = folder
             self.current_page = 0
-            self.scan_folder_for_images_only(folder)  # Now threaded with spinner
+            # Only scan if not previously scanned
+            if not self.db.was_directory_scanned(folder):
+                self.show_loading_dialog("Scanning for images and tags...")
+                self.worker = ScanWorker(folder, self.db.db_path, self.is_valid_tag)
+                self.worker.scan_finished.connect(self.on_scan_finished)
+                self.worker.start()
+            else:
+                self.update_pagination()
+                self.show_current_page()
+
+    def on_scan_finished(self):
+        if self.folder_path:
+            self.db.mark_directory_scanned(self.folder_path)
+        self.hide_loading_dialog()
+        self.load_previous_tags()
+        self.update_search()
+        self.update_tags_search()  # Refresh tag search after scan
 
     def save_tags_to_file_and_db(self, show_dialogs=False):
         """
@@ -722,22 +745,42 @@ class IPTCEditor(QMainWindow):
             )
             return
         self.show_loading_dialog()
+        # Remove missing images from DB before rescanning
+        self.db.remove_missing_images(self.folder_path)
         # Pass db_path instead of db instance, and use the correct attribute
         self.worker = ScanWorker(self.folder_path, self.db.db_path, self.is_valid_tag)
         self.worker.scan_finished.connect(self.on_scan_finished)
         self.worker.start()
-
-    def on_scan_finished(self):
-        self.hide_loading_dialog()
-        self.load_previous_tags()
-        self.update_search()
-        self.update_tags_search()  # Refresh tag search after scan
 
     def update_search(self):
         # Just reset to first page and update pagination/display
         self.current_page = 0
         self.update_pagination()
         self.show_current_page()
+
+    def get_thumbnail_path(self, image_path):
+        """Return the path to the cached thumbnail for a given image."""
+        folder = os.path.dirname(image_path)
+        thumb_dir = os.path.join(folder, ".thumbnails")
+        os.makedirs(thumb_dir, exist_ok=True)
+        # Use a hash of the absolute path for uniqueness
+        hash_str = hashlib.sha256(os.path.abspath(image_path).encode()).hexdigest()
+        ext = ".jpg"
+        return os.path.join(thumb_dir, f"{hash_str}{ext}")
+
+    def ensure_thumbnail(self, image_path, size=(250, 250)):
+        """Create a thumbnail for the image if it doesn't exist. Return the thumbnail path."""
+        thumb_path = self.get_thumbnail_path(image_path)
+        if not os.path.exists(thumb_path):
+            try:
+                with Image.open(image_path) as img:
+                    img.thumbnail(size, Image.LANCZOS)
+                    img = img.convert("RGB")
+                    img.save(thumb_path, "JPEG", quality=85)
+            except Exception as e:
+                print(f"Failed to create thumbnail for {image_path}: {e}")
+                return None
+        return thumb_path
 
 
 if __name__ == "__main__":
