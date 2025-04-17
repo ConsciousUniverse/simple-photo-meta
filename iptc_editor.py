@@ -524,15 +524,67 @@ class IPTCEditor(QMainWindow):
             self.current_page = 0
             self.scan_folder_for_images_only(folder)  # Now threaded with spinner
 
+    def save_tags_to_file_and_db(self, show_dialogs=False):
+        """
+        Save the current IPTC input pane tags to both the tag database and the image file (if any).
+        If show_dialogs is True, show user dialogs for errors/success. If False, suppress dialogs.
+        """
+        if not self.current_image_path:
+            return
+        raw_input = self.iptc_text_edit.toPlainText().strip()
+        if not raw_input:
+            # If empty, clear tags in DB and file
+            self.db.set_image_tags(self.current_image_path, [])
+            # Remove all IPTC keywords from file
+            subprocess.run(
+                f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+            return
+        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
+        # Validate tags
+        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
+        if invalid_tags:
+            if show_dialogs:
+                QMessageBox.critical(
+                    self,
+                    "Invalid Tag(s)",
+                    f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
+                )
+            return
+        # Remove all IPTC keywords from file
+        subprocess.run(
+            f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        # Add each keyword
+        commands = [f'-M "add Iptc.Application2.Keywords {shlex.quote(kw)}"' for kw in keywords]
+        full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
+        subprocess.run(
+            full_cmd, shell=True, capture_output=True, text=True
+        )
+        # Save to DB
+        self.db.set_image_tags(self.current_image_path, keywords)
+
+    def save_iptc(self):
+        self.save_tags_to_file_and_db(show_dialogs=True)
+        self.load_previous_tags()
+        self.update_tags_search()
+
     def image_selected(self, index):
+        # Save tags for the previously previewed image (if any)
+        self.save_tags_to_file_and_db(show_dialogs=False)
+        self.load_previous_tags()
+        self.update_tags_search()
         # Map the clicked index to the correct image in the current page
-        start = self.current_page * self.page_size
         selected_index = index.row()
-        if selected_index < 0:
+        if selected_index < 0 or selected_index >= len(self.image_list):
             return
-        if start + selected_index >= len(self.image_list):
-            return
-        image_name = self.image_list[start + selected_index]
+        image_name = self.image_list[selected_index]
         self.current_image_path = os.path.join(self.folder_path, image_name)
         self.read_iptc()
         self.display_image(self.current_image_path)
@@ -629,94 +681,6 @@ class IPTCEditor(QMainWindow):
         try:
             self.extract_keywords()
             self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-
-    def save_iptc(self):
-        if not self.current_image_path:
-            QMessageBox.warning(
-                self, "No Image Selected", "Please select an image first."
-            )
-            return
-        raw_input = self.iptc_text_edit.toPlainText().strip()
-        if not raw_input:
-            QMessageBox.information(self, "Empty Data", "No IPTC data provided.")
-            return
-
-        # Split the input into keywords by line (or comma, if you prefer)
-        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
-        # Validate tags
-        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
-        if invalid_tags:
-            QMessageBox.critical(
-                self,
-                "Invalid Tag(s)",
-                f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
-            )
-            return
-
-        # First, delete existing IPTC keywords
-        try:
-            delete_result = subprocess.run(
-                f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
-                shell=True,
-                capture_output=True,
-                text=True,
-            )
-            if delete_result.returncode != 0:
-                QMessageBox.critical(self, "exiv2 Error", delete_result.stderr)
-                return
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-            return
-
-        # Build and run the command to add each keyword individually
-        commands = [
-            f'-M "add Iptc.Application2.Keywords {shlex.quote(kw)}"' for kw in keywords
-        ]
-        full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
-        try:
-            run_result = subprocess.run(
-                full_cmd, shell=True, capture_output=True, text=True
-            )
-            if run_result.returncode != 0:
-                QMessageBox.critical(self, "exiv2 Error", run_result.stderr)
-                return
-            # Write check: read back the tags and compare
-            verify_result = subprocess.run(
-                ["exiv2", "-pi", self.current_image_path],
-                capture_output=True,
-                text=True,
-            )
-            if verify_result.returncode != 0:
-                QMessageBox.critical(self, "Verification Error", verify_result.stderr)
-                return
-            # Extract keywords from output
-            written_keywords = []
-            for line in verify_result.stdout.splitlines():
-                if "Iptc.Application2.Keywords" in line:
-                    parts = re.split(r"\s{2,}", line.strip())
-                    if len(parts) >= 4:
-                        keyword_value = parts[-1].strip()
-                        written_keywords.append(keyword_value)
-            # Compare sets (order-insensitive)
-            if set(written_keywords) == set(keywords):
-                self.show_auto_close_message(
-                    "Success",
-                    "IPTC keywords saved correctly!",
-                    QMessageBox.Information,
-                    timeout=1000,
-                )
-                # Save each keyword into our SQLite database.
-                self.db.set_image_tags(self.current_image_path, keywords)
-                self.load_previous_tags()  # Refresh the list of previous tags.
-                self.update_tags_search()  # Refresh tag search after saving
-            else:
-                QMessageBox.critical(
-                    self,
-                    "Write Verification Failed",
-                    f"Tags written do not match input.\nExpected: {keywords}\nGot: {written_keywords}",
-                )
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
