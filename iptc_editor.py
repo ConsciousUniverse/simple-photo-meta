@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QMessageBox,
-    QListView, QAbstractItemView, QSplitter
+    QListView,
+    QAbstractItemView,
+    QSplitter,
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
@@ -118,17 +120,19 @@ class TagDatabase:
             return [row[0] for row in c.fetchall()]
         # For each tag fragment, find images that have at least one tag starting with that fragment
         # Build dynamic SQL
-        base_query = '''SELECT i.path FROM images i\n'''
+        base_query = """SELECT i.path FROM images i\n"""
         join_clauses = []
         where_clauses = []
         params = []
         for idx, tag in enumerate(tags):
-            join_clauses.append(f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id")
+            join_clauses.append(
+                f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
+            )
             where_clauses.append(f"t{idx}.tag LIKE ?")
             params.append(f"{tag}%")
-        query = base_query + ' '.join(join_clauses)
+        query = base_query + " ".join(join_clauses)
         if where_clauses:
-            query += " WHERE " + ' AND '.join(where_clauses)
+            query += " WHERE " + " AND ".join(where_clauses)
         query += " GROUP BY i.id ORDER BY i.path ASC"
         c.execute(query, params)
         return [row[0] for row in c.fetchall()]
@@ -215,7 +219,9 @@ class IPTCEditor(QMainWindow):
         self.list_view.clicked.connect(self.image_selected)
         # Add context menu policy and handler for right-click
         self.list_view.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.list_view.customContextMenuRequested.connect(self.show_image_filename_context_menu)
+        self.list_view.customContextMenuRequested.connect(
+            self.show_image_filename_context_menu
+        )
         left_panel.addWidget(self.list_view)
 
         # Pagination controls
@@ -287,7 +293,8 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setFont(self.font())
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         self.tags_list_widget.clicked.connect(self.tag_clicked)
-        self.tags_list_widget.setStyleSheet("""
+        self.tags_list_widget.setStyleSheet(
+            """
             QListWidget::item {
                 background: skyblue;
                 color: black;
@@ -303,7 +310,8 @@ class IPTCEditor(QMainWindow):
                 background: #87ceeb;
                 color: yellow;
             }
-        """)
+        """
+        )
         self.tags_list_widget.setWordWrap(True)
         right_panel.addWidget(self.tags_list_widget)
         right_panel_widget = QWidget()
@@ -345,7 +353,9 @@ class IPTCEditor(QMainWindow):
             if pixmap.isNull():
                 icon = QIcon()
             else:
-                icon = QIcon(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon = QIcon(
+                    pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
             # Only set icon, not text (no filename shown)
             item = QStandardItem()
             item.setIcon(icon)
@@ -470,7 +480,7 @@ class IPTCEditor(QMainWindow):
 
     def is_valid_tag(self, tag):
         # Only allow alphanumeric and dashes
-        return bool(re.fullmatch(r"[A-Za-z0-9\-\s]+", tag))
+        return bool(re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]*$", tag))
 
     def read_iptc(self):
         if not self.current_image_path:
@@ -501,7 +511,11 @@ class IPTCEditor(QMainWindow):
         # Validate tags
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         if invalid_tags:
-            QMessageBox.critical(self, "Invalid Tag(s)", f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
+            QMessageBox.critical(
+                self,
+                "Invalid Tag(s)",
+                f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
+            )
             return
 
         # First, delete existing IPTC keywords
@@ -509,7 +523,8 @@ class IPTCEditor(QMainWindow):
             delete_result = subprocess.run(
                 f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
                 shell=True,
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if delete_result.returncode != 0:
                 QMessageBox.critical(self, "exiv2 Error", delete_result.stderr)
@@ -532,7 +547,9 @@ class IPTCEditor(QMainWindow):
                 return
             # Write check: read back the tags and compare
             verify_result = subprocess.run(
-                ["exiv2", "-pi", self.current_image_path], capture_output=True, text=True
+                ["exiv2", "-pi", self.current_image_path],
+                capture_output=True,
+                text=True,
             )
             if verify_result.returncode != 0:
                 QMessageBox.critical(self, "Verification Error", verify_result.stderr)
@@ -561,14 +578,16 @@ class IPTCEditor(QMainWindow):
                 QMessageBox.critical(
                     self,
                     "Write Verification Failed",
-                    f"Tags written do not match input.\nExpected: {keywords}\nGot: {written_keywords}"
+                    f"Tags written do not match input.\nExpected: {keywords}\nGot: {written_keywords}",
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
     def scan_directory(self):
         if not self.folder_path:
-            QMessageBox.warning(self, "No Folder Selected", "Please select a folder first.")
+            QMessageBox.warning(
+                self, "No Folder Selected", "Please select a folder first."
+            )
             return
         supported = (".jpg", ".jpeg", ".png")
         # Recursively walk the directory
@@ -577,9 +596,9 @@ class IPTCEditor(QMainWindow):
                 if fname.lower().endswith(supported):
                     fpath = os.path.join(root, fname)
                     # Extract tags for this image
-                    result = subprocess.run([
-                        "exiv2", "-pi", fpath
-                    ], capture_output=True, text=True)
+                    result = subprocess.run(
+                        ["exiv2", "-pi", fpath], capture_output=True, text=True
+                    )
                     if result.returncode != 0:
                         continue
                     for line in result.stdout.splitlines():
@@ -589,7 +608,9 @@ class IPTCEditor(QMainWindow):
                                 keyword_value = parts[-1].strip()
                                 if self.is_valid_tag(keyword_value):
                                     self.db.add_image_tag(fpath, keyword_value)
-        self.show_auto_close_message("Scan Complete", "All images and tags have been added to the database.")
+        self.show_auto_close_message(
+            "Scan Complete", "All images and tags have been added to the database."
+        )
         self.load_previous_tags()
         self.update_search()
         self.update_tags_search()  # Refresh tag search after scan
@@ -608,7 +629,11 @@ class IPTCEditor(QMainWindow):
             image_paths = self.db.get_images_with_tags(tags)
             # Only show images in the current folder (case-insensitive, cross-platform)
             folder_norm = os.path.normcase(os.path.abspath(self.folder_path))
-            filtered = [f for f in image_paths if os.path.normcase(os.path.abspath(os.path.dirname(f))) == folder_norm]
+            filtered = [
+                f
+                for f in image_paths
+                if os.path.normcase(os.path.abspath(os.path.dirname(f))) == folder_norm
+            ]
             self.image_list = [os.path.basename(f) for f in filtered]
         self.current_page = 0
         self.update_pagination()
