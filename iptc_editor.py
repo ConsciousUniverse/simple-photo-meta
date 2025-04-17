@@ -18,11 +18,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QThread, Signal
 
 
 class TagDatabase:
     def __init__(self, db_path="tags.db"):
+        self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self._create_table()
 
@@ -135,6 +136,41 @@ class TagDatabase:
         query += " GROUP BY i.id ORDER BY i.path ASC"
         c.execute(query, params)
         return [row[0] for row in c.fetchall()]
+
+
+class ScanWorker(QThread):
+    scan_finished = Signal()
+
+    def __init__(self, folder_path, db_path, is_valid_tag):
+        super().__init__()
+        self.folder_path = folder_path
+        self.db_path = db_path
+        self.is_valid_tag = is_valid_tag
+
+    def run(self):
+        import subprocess, os, re
+        try:
+            # Create a new TagDatabase instance in this thread
+            db = TagDatabase(self.db_path)
+            supported = (".jpg", ".jpeg", ".png")
+            for root, dirs, files in os.walk(self.folder_path):
+                for fname in files:
+                    if fname.lower().endswith(supported):
+                        fpath = os.path.join(root, fname)
+                        result = subprocess.run(
+                            ["exiv2", "-pi", fpath], capture_output=True, text=True
+                        )
+                        if result.returncode != 0:
+                            continue
+                        for line in result.stdout.splitlines():
+                            if "Iptc.Application2.Keywords" in line:
+                                parts = re.split(r"\s{2,}", line.strip())
+                                if len(parts) >= 4:
+                                    keyword_value = parts[-1].strip()
+                                    if self.is_valid_tag(keyword_value):
+                                        db.add_image_tag(fpath, keyword_value)
+        finally:
+            self.scan_finished.emit()
 
 
 class IPTCEditor(QMainWindow):
@@ -610,25 +646,12 @@ class IPTCEditor(QMainWindow):
             )
             return
         self.show_loading_dialog()
-        supported = (".jpg", ".jpeg", ".png")
-        # Recursively walk the directory
-        for root, dirs, files in os.walk(self.folder_path):
-            for fname in files:
-                if fname.lower().endswith(supported):
-                    fpath = os.path.join(root, fname)
-                    # Extract tags for this image
-                    result = subprocess.run(
-                        ["exiv2", "-pi", fpath], capture_output=True, text=True
-                    )
-                    if result.returncode != 0:
-                        continue
-                    for line in result.stdout.splitlines():
-                        if "Iptc.Application2.Keywords" in line:
-                            parts = re.split(r"\s{2,}", line.strip())
-                            if len(parts) >= 4:
-                                keyword_value = parts[-1].strip()
-                                if self.is_valid_tag(keyword_value):
-                                    self.db.add_image_tag(fpath, keyword_value)
+        # Pass db_path instead of db instance, and use the correct attribute
+        self.worker = ScanWorker(self.folder_path, self.db.db_path, self.is_valid_tag)
+        self.worker.scan_finished.connect(self.on_scan_finished)
+        self.worker.start()
+
+    def on_scan_finished(self):
         self.hide_loading_dialog()
         self.load_previous_tags()
         self.update_search()
