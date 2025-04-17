@@ -137,6 +137,63 @@ class TagDatabase:
         c.execute(query, params)
         return [row[0] for row in c.fetchall()]
 
+    def get_image_count_in_folder(self, folder_path, tags=None):
+        c = self.conn.cursor()
+        if tags:
+            # Use the same logic as get_images_with_tags, but count(*)
+            base_query = """SELECT COUNT(DISTINCT i.id) FROM images i\n"""
+            join_clauses = []
+            where_clauses = []
+            params = []
+            for idx, tag in enumerate(tags):
+                join_clauses.append(
+                    f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
+                )
+                where_clauses.append(f"t{idx}.tag LIKE ?")
+                params.append(f"%{tag}%")
+            query = base_query + " ".join(join_clauses)
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+            # Only images in the folder
+            query += " AND " if where_clauses else " WHERE "
+            query += "i.path LIKE ?"
+            params.append(os.path.join(os.path.abspath(folder_path), "%"))
+            c.execute(query, params)
+        else:
+            query = "SELECT COUNT(*) FROM images WHERE path LIKE ?"
+            c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"),))
+        row = c.fetchone()
+        return row[0] if row else 0
+
+    def get_images_in_folder_paginated(self, folder_path, page, page_size, tags=None):
+        c = self.conn.cursor()
+        offset = page * page_size
+        if tags:
+            base_query = """SELECT i.path FROM images i\n"""
+            join_clauses = []
+            where_clauses = []
+            params = []
+            for idx, tag in enumerate(tags):
+                join_clauses.append(
+                    f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
+                )
+                where_clauses.append(f"t{idx}.tag LIKE ?")
+                params.append(f"%{tag}%")
+            query = base_query + " ".join(join_clauses)
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+            # Only images in the folder
+            query += " AND " if where_clauses else " WHERE "
+            query += "i.path LIKE ?"
+            params.append(os.path.join(os.path.abspath(folder_path), "%"))
+            query += " GROUP BY i.id ORDER BY i.path ASC LIMIT ? OFFSET ?"
+            params.extend([page_size, offset])
+            c.execute(query, params)
+        else:
+            query = "SELECT path FROM images WHERE path LIKE ? ORDER BY path ASC LIMIT ? OFFSET ?"
+            c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
+        return [row[0] for row in c.fetchall()]
+
 
 class ScanWorker(QThread):
     scan_finished = Signal()
@@ -226,6 +283,9 @@ class IPTCEditor(QMainWindow):
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.setFont(font)
         self.btn_select_folder.clicked.connect(self.select_folder)
+        self.btn_scan_directory = QPushButton("Scan Directory")
+        self.btn_scan_directory.setFont(font)
+        self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
         self.search_bar.setFont(font)
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
@@ -233,6 +293,7 @@ class IPTCEditor(QMainWindow):
         self.search_bar.textChanged.connect(self.update_search)
 
         left_panel.addWidget(self.btn_select_folder)
+        left_panel.addWidget(self.btn_scan_directory)
         left_panel.addWidget(self.search_bar)
 
         # Thumbnails list
@@ -350,11 +411,16 @@ class IPTCEditor(QMainWindow):
         main_layout.addWidget(right_panel_widget, 1)
 
     def update_pagination(self):
-        if not self.image_list:
+        # Use the database to get the count of images in the current folder (with search tags)
+        if not self.folder_path:
             self.current_page = 0
             self.total_pages = 1
+            self.image_list = []
         else:
-            self.total_pages = (len(self.image_list) - 1) // self.page_size + 1
+            text = self.search_bar.toPlainText().strip()
+            tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+            total_images = self.db.get_image_count_in_folder(self.folder_path, tags if tags else None)
+            self.total_pages = (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
             if self.current_page >= self.total_pages:
                 self.current_page = self.total_pages - 1
             if self.current_page < 0:
@@ -374,12 +440,37 @@ class IPTCEditor(QMainWindow):
             self.show_current_page()
 
     def show_current_page(self):
-        start = self.current_page * self.page_size
-        end = start + self.page_size
-        page_items = self.image_list[start:end]
+        # Use the database to get the images for the current page
+        if not self.folder_path:
+            self.image_list = []
+            model = QStandardItemModel()
+            self.list_view.setModel(model)
+            self.update_pagination()
+            return
+        text = self.search_bar.toPlainText().strip()
+        tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+        page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags if tags else None)
+        self.image_list = [os.path.basename(f) for f in page_items]
+        # Auto-scan tags for images on this page
+        for fpath in page_items:
+            try:
+                result = subprocess.run([
+                    "exiv2", "-pi", fpath
+                ], capture_output=True, text=True)
+                if result.returncode != 0:
+                    continue
+                for line in result.stdout.splitlines():
+                    if "Iptc.Application2.Keywords" in line:
+                        parts = re.split(r"\s{2,}", line.strip())
+                        if len(parts) >= 4:
+                            keyword_value = parts[-1].strip()
+                            if self.is_valid_tag(keyword_value):
+                                self.db.add_image_tag(fpath, keyword_value)
+            except Exception:
+                pass
+        self.load_previous_tags()  # Refresh tag list after auto-scan
         model = QStandardItemModel()
-        for fname in page_items:
-            fpath = os.path.join(self.folder_path, fname)
+        for fpath in page_items:
             pixmap = QPixmap(fpath)
             if pixmap.isNull():
                 icon = QIcon()
@@ -387,15 +478,12 @@ class IPTCEditor(QMainWindow):
                 icon = QIcon(
                     pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 )
-            # Only set icon, not text (no filename shown)
             item = QStandardItem()
             item.setIcon(icon)
             item.setEditable(False)
-            # Remove text and set size hint to icon size to avoid extra space
             item.setText("")
             item.setSizeHint(QPixmap(175, 175).size())
-            # Store filename in item data for context menu
-            item.setData(fname, Qt.UserRole + 1)
+            item.setData(os.path.basename(fpath), Qt.UserRole + 1)
             model.appendRow(item)
         self.list_view.setModel(model)
         self.update_pagination()
@@ -416,18 +504,9 @@ class IPTCEditor(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.folder_path = folder
-            self.scan_directory()  # Automatically scan after selecting
-            self.populate_listbox()
-
-    def populate_listbox(self):
-        # Now populates the QListView with thumbnails and filenames
-        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
-        self.image_list = [
-            f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)
-        ]
-        self.current_page = 0
-        self.update_pagination()
-        self.show_current_page()
+            self.current_page = 0
+            self.update_pagination()
+            self.show_current_page()
 
     def image_selected(self, index):
         # Map the clicked index to the correct image in the current page
@@ -617,7 +696,7 @@ class IPTCEditor(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def show_loading_dialog(self, message="Loading images and tags..."):
+    def show_loading_dialog(self, message="Scanning directories..."):
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
         self.loading_dialog = QDialog(self)
         self.loading_dialog.setModal(True)
@@ -658,25 +737,7 @@ class IPTCEditor(QMainWindow):
         self.update_tags_search()  # Refresh tag search after scan
 
     def update_search(self):
-        # Get tags from search bar, split by whitespace or comma
-        text = self.search_bar.toPlainText().strip()
-        tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        if not tags:
-            # If no search, show all images in the folder (like populate_listbox)
-            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
-            self.image_list = [
-                f for f in os.listdir(self.folder_path) if f.lower().endswith(supported)
-            ]
-        else:
-            image_paths = self.db.get_images_with_tags(tags)
-            # Only show images in the current folder (case-insensitive, cross-platform)
-            folder_norm = os.path.normcase(os.path.abspath(self.folder_path))
-            filtered = [
-                f
-                for f in image_paths
-                if os.path.normcase(os.path.abspath(os.path.dirname(f))) == folder_norm
-            ]
-            self.image_list = [os.path.basename(f) for f in filtered]
+        # Just reset to first page and update pagination/display
         self.current_page = 0
         self.update_pagination()
         self.show_current_page()
