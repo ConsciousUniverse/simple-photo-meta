@@ -1,8 +1,10 @@
 # Simple Photo Meta (Alpha)
 
-A simple desktop IPTC Keyword photograph metatag editor application, wirtten in Python, using the QT GUI framework and the fantastic [EXIV2 metatag management CLI utility](https://github.com/exiv2/exiv2).
+A simple desktop IPTC Keyword photograph metatag editor application for MacOS and Linux, wirtten in Python, using the QT GUI framework and the fantastic [EXIV2 metatag management CLI utility](https://github.com/exiv2/exiv2).
 
-Produced with the considerable assistance of Github Copilot (GPT-4.1). Tested for Linux and MacOS.
+Produced with the considerable assistance of Github Copilot (GPT-4.1).
+
+Developing for MacOS and Linux; untested on Windows.
 
 ## Unsafe!
 
