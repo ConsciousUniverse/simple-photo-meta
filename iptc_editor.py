@@ -469,8 +469,7 @@ class IPTCEditor(QMainWindow):
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
         page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags if tags else None)
-        self.image_list = [os.path.basename(f) for f in page_items]
-        # Removed tag scan for images on this page for performance
+        self.image_list = page_items  # Store full paths, not just basenames
         model = QStandardItemModel()
         supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
         for fpath in page_items:
@@ -486,9 +485,10 @@ class IPTCEditor(QMainWindow):
             item = QStandardItem()
             item.setIcon(icon)
             item.setEditable(False)
+            # Show only the basename in the tooltip, but store full path in data
             item.setText("")
             item.setSizeHint(QPixmap(175, 175).size())
-            item.setData(os.path.basename(fpath), Qt.UserRole + 1)
+            item.setData(fpath, Qt.UserRole + 1)  # Store full path
             model.appendRow(item)
         self.list_view.setModel(model)
         self.update_pagination()
@@ -497,13 +497,13 @@ class IPTCEditor(QMainWindow):
         index = self.list_view.indexAt(pos)
         if not index.isValid():
             return
-        # Retrieve filename from item data
+        # Retrieve full path from item data
         model = self.list_view.model()
         item = model.itemFromIndex(index)
-        fname = item.data(Qt.UserRole + 1)
-        if fname:
-            # Show filename in a message box (or could use QToolTip)
-            QMessageBox.information(self, "Filename", fname)
+        fpath = item.data(Qt.UserRole + 1)
+        if fpath:
+            # Show only the basename in the message box
+            QMessageBox.information(self, "Filename", os.path.basename(fpath))
 
     def scan_folder_for_images_only(self, folder_path):
         """Recursively scan for all supported image files and add their paths to the DB (no tags), in a thread."""
@@ -584,24 +584,33 @@ class IPTCEditor(QMainWindow):
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
             return
-        image_name = self.image_list[selected_index]
-        self.current_image_path = os.path.join(self.folder_path, image_name)
+        image_path = self.image_list[selected_index]  # Already full path
+        self.current_image_path = image_path
         self.read_iptc()
         self.display_image(self.current_image_path)
 
     def display_image(self, path):
         try:
-            from PIL import Image
-            from PySide6.QtGui import QImage
-            pil_img = Image.open(path)
-            # Downscale if very large (e.g., width or height > 2000px)
-            max_dim = 2000
-            if pil_img.width > max_dim or pil_img.height > max_dim:
-                pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
-            pil_img = pil_img.convert("RGBA")
-            data = pil_img.tobytes("raw", "RGBA")
-            qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format_RGBA8888)
-            pixmap = QPixmap.fromImage(qimg)
+            FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
+            file_size = os.path.getsize(path)
+            ext = os.path.splitext(path)[1].lower()
+            if file_size > FILESIZE_THRESHOLD or ext in ['.tif', '.tiff']:
+                from PIL import Image
+                from PySide6.QtGui import QImage
+                import io
+                pil_img = Image.open(path)
+                # Always use first frame for multi-page TIFFs
+                if hasattr(pil_img, 'n_frames') and pil_img.n_frames > 1:
+                    pil_img.seek(0)
+                max_dim = 2000
+                if pil_img.width > max_dim or pil_img.height > max_dim:
+                    pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+                qimg = QImage.fromData(buf.getvalue())
+                pixmap = QPixmap.fromImage(qimg)
+            else:
+                pixmap = QPixmap(path)
             pixmap = pixmap.scaled(
                 self.image_label.width(),
                 self.image_label.height(),
@@ -610,7 +619,7 @@ class IPTCEditor(QMainWindow):
             )
             self.image_label.setPixmap(pixmap)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not open image: {e}")
+            QMessageBox.critical(self, "Error", f"Could not open image: {e}\nType: {type(e)}")
 
     def load_previous_tags(self):
         # Load unique keywords from the SQLite database and populate the list widget.
