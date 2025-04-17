@@ -113,13 +113,12 @@ class TagDatabase:
         return [row[0] for row in c.fetchall()]
 
     def get_images_with_tags(self, tags):
-        # Incremental search: tags are treated as prefixes (LIKE 'tag%')
+        # Partial search: tags are treated as substrings (LIKE '%tag%')
         c = self.conn.cursor()
         if not tags:
             c.execute("SELECT path FROM images ORDER BY path ASC")
             return [row[0] for row in c.fetchall()]
-        # For each tag fragment, find images that have at least one tag starting with that fragment
-        # Build dynamic SQL
+        # For each tag fragment, find images that have at least one tag containing that fragment
         base_query = """SELECT i.path FROM images i\n"""
         join_clauses = []
         where_clauses = []
@@ -129,7 +128,7 @@ class TagDatabase:
                 f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
             )
             where_clauses.append(f"t{idx}.tag LIKE ?")
-            params.append(f"{tag}%")
+            params.append(f"%{tag}%")
         query = base_query + " ".join(join_clauses)
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
