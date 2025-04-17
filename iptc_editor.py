@@ -190,9 +190,6 @@ class IPTCEditor(QMainWindow):
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.setFont(font)
         self.btn_select_folder.clicked.connect(self.select_folder)
-        self.btn_scan_directory = QPushButton("Scan Directory")
-        self.btn_scan_directory.setFont(font)
-        self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
         self.search_bar.setFont(font)
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
@@ -200,7 +197,6 @@ class IPTCEditor(QMainWindow):
         self.search_bar.textChanged.connect(self.update_search)
 
         left_panel.addWidget(self.btn_select_folder)
-        left_panel.addWidget(self.btn_scan_directory)
         left_panel.addWidget(self.search_bar)
 
         # Thumbnails list
@@ -384,6 +380,7 @@ class IPTCEditor(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.folder_path = folder
+            self.scan_directory()  # Automatically scan after selecting
             self.populate_listbox()
 
     def populate_listbox(self):
@@ -430,8 +427,10 @@ class IPTCEditor(QMainWindow):
         self.update_tags_list_widget(self.all_tags)
 
     def update_tags_list_widget(self, tags):
+        # Sort tags alphabetically before displaying
+        sorted_tags = sorted(tags, key=lambda t: t.lower())
         self.tags_list_widget.clear()
-        for tag in tags:
+        for tag in sorted_tags:
             self.tags_list_widget.addItem(tag)
 
     def update_tags_search(self):
@@ -582,12 +581,35 @@ class IPTCEditor(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+    def show_loading_dialog(self, message="Loading images and tags..."):
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+        self.loading_dialog = QDialog(self)
+        self.loading_dialog.setModal(True)
+        self.loading_dialog.setWindowTitle("Please Wait")
+        layout = QVBoxLayout()
+        label = QLabel(message)
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        progress = QProgressBar()
+        progress.setRange(0, 0)  # Indeterminate/busy
+        layout.addWidget(progress)
+        self.loading_dialog.setLayout(layout)
+        self.loading_dialog.setFixedSize(300, 120)
+        self.loading_dialog.show()
+        QApplication.processEvents()
+
+    def hide_loading_dialog(self):
+        if hasattr(self, 'loading_dialog') and self.loading_dialog:
+            self.loading_dialog.accept()
+            self.loading_dialog = None
+
     def scan_directory(self):
         if not self.folder_path:
             QMessageBox.warning(
                 self, "No Folder Selected", "Please select a folder first."
             )
             return
+        self.show_loading_dialog()
         supported = (".jpg", ".jpeg", ".png")
         # Recursively walk the directory
         for root, dirs, files in os.walk(self.folder_path):
@@ -607,9 +629,7 @@ class IPTCEditor(QMainWindow):
                                 keyword_value = parts[-1].strip()
                                 if self.is_valid_tag(keyword_value):
                                     self.db.add_image_tag(fpath, keyword_value)
-        self.show_auto_close_message(
-            "Scan Complete", "All images and tags have been added to the database."
-        )
+        self.hide_loading_dialog()
         self.load_previous_tags()
         self.update_search()
         self.update_tags_search()  # Refresh tag search after scan
