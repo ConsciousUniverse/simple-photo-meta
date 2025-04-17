@@ -590,8 +590,9 @@ class IPTCEditor(QMainWindow):
             ]
         else:
             image_paths = self.db.get_images_with_tags(tags)
-            # Only show images in the current folder
-            filtered = [f for f in image_paths if os.path.dirname(f) == self.folder_path]
+            # Only show images in the current folder (case-insensitive, cross-platform)
+            folder_norm = os.path.normcase(os.path.abspath(self.folder_path))
+            filtered = [f for f in image_paths if os.path.normcase(os.path.abspath(os.path.dirname(f))) == folder_norm]
             self.image_list = [os.path.basename(f) for f in filtered]
         self.current_page = 0
         self.update_pagination()
