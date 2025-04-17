@@ -88,6 +88,23 @@ class TagDatabase:
             )
             self.conn.commit()
 
+    def set_image_tags(self, image_path, tags):
+        """Replace all tags for an image with the provided list."""
+        image_id = self.add_image(image_path)
+        c = self.conn.cursor()
+        # Remove all existing tag associations for this image
+        c.execute("DELETE FROM image_tags WHERE image_id=?", (image_id,))
+        # Add new tags
+        for tag in tags:
+            self.add_tag(tag)
+            tag_id = self.get_tag_id(tag)
+            if tag_id:
+                c.execute(
+                    "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)",
+                    (image_id, tag_id),
+                )
+        self.conn.commit()
+
     def get_tags(self):
         c = self.conn.cursor()
         c.execute("SELECT tag FROM tags ORDER BY tag ASC")
@@ -537,8 +554,7 @@ class IPTCEditor(QMainWindow):
                     timeout=1000,
                 )
                 # Save each keyword into our SQLite database.
-                for kw in keywords:
-                    self.db.add_image_tag(self.current_image_path, kw)
+                self.db.set_image_tags(self.current_image_path, keywords)
                 self.load_previous_tags()  # Refresh the list of previous tags.
                 self.update_tags_search()  # Refresh tag search after saving
             else:
