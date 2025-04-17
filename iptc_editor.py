@@ -280,7 +280,7 @@ class IPTCEditor(QMainWindow):
                 padding: 4px 8px;
                 min-height: 32px;
                 white-space: pre-wrap;
-                word-break: break-word;
+                /* word-break: break-word; Removed: not supported in Qt */
             }
             QListWidget::item:selected {
                 background: #87ceeb;
