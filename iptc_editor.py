@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys, os, sqlite3, subprocess, shlex, re
 from PySide6.QtWidgets import (
     QApplication,
@@ -174,7 +175,7 @@ class IPTCEditor(QMainWindow):
         self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
         self.search_bar.setFont(font)
-        self.search_bar.setMaximumHeight(30)
+        self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.search_bar.setPlaceholderText("Search by tag(s)...")
         self.search_bar.textChanged.connect(self.update_search)
 
@@ -260,7 +261,7 @@ class IPTCEditor(QMainWindow):
         # Add tag search bar
         self.tags_search_bar = QTextEdit()
         self.tags_search_bar.setFont(self.font())
-        self.tags_search_bar.setMaximumHeight(30)
+        self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.tags_search_bar.setPlaceholderText("Search tags...")
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
