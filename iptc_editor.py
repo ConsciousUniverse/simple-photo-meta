@@ -209,7 +209,7 @@ class ScanWorker(QThread):
         try:
             # Create a new TagDatabase instance in this thread
             db = TagDatabase(self.db_path)
-            supported = (".jpg", ".jpeg", ".png")
+            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
             for root, dirs, files in os.walk(self.folder_path):
                 for fname in files:
                     if fname.lower().endswith(supported):
@@ -230,6 +230,25 @@ class ScanWorker(QThread):
             self.scan_finished.emit()
 
 
+class ScanImagesOnlyWorker(QThread):
+    scan_finished = Signal()
+
+    def __init__(self, folder_path, db_path):
+        super().__init__()
+        self.folder_path = folder_path
+        self.db_path = db_path
+
+    def run(self):
+        db = TagDatabase(self.db_path)
+        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+        for root, dirs, files in os.walk(self.folder_path):
+            for fname in files:
+                if fname.lower().endswith(supported):
+                    fpath = os.path.join(root, fname)
+                    db.add_image(fpath)
+        self.scan_finished.emit()
+
+
 class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -239,7 +258,7 @@ class IPTCEditor(QMainWindow):
         self.image_list = []
         self.current_image_path = None
         self.current_page = 0
-        self.page_size = 3
+        self.page_size = 10
         self.total_pages = 1
         # Create or open the SQLite database
         self.db = TagDatabase()
@@ -451,26 +470,12 @@ class IPTCEditor(QMainWindow):
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
         page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags if tags else None)
         self.image_list = [os.path.basename(f) for f in page_items]
-        # Auto-scan tags for images on this page
-        for fpath in page_items:
-            try:
-                result = subprocess.run([
-                    "exiv2", "-pi", fpath
-                ], capture_output=True, text=True)
-                if result.returncode != 0:
-                    continue
-                for line in result.stdout.splitlines():
-                    if "Iptc.Application2.Keywords" in line:
-                        parts = re.split(r"\s{2,}", line.strip())
-                        if len(parts) >= 4:
-                            keyword_value = parts[-1].strip()
-                            if self.is_valid_tag(keyword_value):
-                                self.db.add_image_tag(fpath, keyword_value)
-            except Exception:
-                pass
-        self.load_previous_tags()  # Refresh tag list after auto-scan
+        # Removed tag scan for images on this page for performance
         model = QStandardItemModel()
+        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
         for fpath in page_items:
+            if not fpath.lower().endswith(supported):
+                continue
             pixmap = QPixmap(fpath)
             if pixmap.isNull():
                 icon = QIcon()
@@ -500,13 +505,24 @@ class IPTCEditor(QMainWindow):
             # Show filename in a message box (or could use QToolTip)
             QMessageBox.information(self, "Filename", fname)
 
+    def scan_folder_for_images_only(self, folder_path):
+        """Recursively scan for all supported image files and add their paths to the DB (no tags), in a thread."""
+        self.show_loading_dialog("Scanning for images...")
+        self.images_only_worker = ScanImagesOnlyWorker(folder_path, self.db.db_path)
+        self.images_only_worker.scan_finished.connect(self.on_images_only_scan_finished)
+        self.images_only_worker.start()
+
+    def on_images_only_scan_finished(self):
+        self.hide_loading_dialog()
+        self.update_pagination()
+        self.show_current_page()
+
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.folder_path = folder
             self.current_page = 0
-            self.update_pagination()
-            self.show_current_page()
+            self.scan_folder_for_images_only(folder)  # Now threaded with spinner
 
     def image_selected(self, index):
         # Map the clicked index to the correct image in the current page
@@ -523,9 +539,17 @@ class IPTCEditor(QMainWindow):
 
     def display_image(self, path):
         try:
-            pixmap = QPixmap(path)
-            if pixmap.isNull():
-                raise Exception("Cannot load image")
+            from PIL import Image
+            from PySide6.QtGui import QImage
+            pil_img = Image.open(path)
+            # Downscale if very large (e.g., width or height > 2000px)
+            max_dim = 2000
+            if pil_img.width > max_dim or pil_img.height > max_dim:
+                pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+            pil_img = pil_img.convert("RGBA")
+            data = pil_img.tobytes("raw", "RGBA")
+            qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format_RGBA8888)
+            pixmap = QPixmap.fromImage(qimg)
             pixmap = pixmap.scaled(
                 self.image_label.width(),
                 self.image_label.height(),
