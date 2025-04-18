@@ -816,6 +816,10 @@ class IPTCEditor(QMainWindow):
                 return None
         return thumb_path
 
+    def on_search_text_changed(self):
+        # Debounce: restart timer on every keystroke
+        self.search_debounce_timer.start(350)  # 400ms delay
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
