@@ -348,7 +348,11 @@ class IPTCEditor(QMainWindow):
         self.search_bar.setFont(font)
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.search_bar.setPlaceholderText("Search by tag(s)...")
-        self.search_bar.textChanged.connect(self.update_search)
+        self.search_bar.textChanged.connect(self.on_search_text_changed)
+
+        self.search_debounce_timer = QTimer()
+        self.search_debounce_timer.setSingleShot(True)
+        self.search_debounce_timer.timeout.connect(self.update_search)
 
         left_panel.addWidget(self.btn_select_folder)
         left_panel.addWidget(self.btn_scan_directory)
