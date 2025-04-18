@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QListView,
     QAbstractItemView,
     QSplitter,
+    QDialog,
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
@@ -286,6 +287,23 @@ class ScanWorker(QThread):
                                         db.add_image_tag(fpath, keyword_value)
         finally:
             self.scan_finished.emit()
+
+
+class CustomMessageDialog(QDialog):
+    def __init__(self, parent=None, title="", message=""):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+        self.label = QLabel(message)
+        self.label.setWordWrap(True)
+        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        layout.addWidget(self.label)
+        btn = QPushButton("OK")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+        self.setMinimumWidth(350)
+        self.setMinimumHeight(120)
+        self.adjustSize()
 
 
 class IPTCEditor(QMainWindow):
@@ -829,16 +847,8 @@ class IPTCEditor(QMainWindow):
 
     def scan_directory(self):
         if not self.folder_path:
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("No Folder Selected")
-            msg.setText("Please select a folder first.")
-            # Only set minimum sizes, do not override icon pixmap or use qproperty-pixmap
-            msg.setStyleSheet(
-                "QLabel { padding: 18px; min-width: 320px; min-height: 40px; }"
-                "QMessageBox { min-width: 380px; min-height: 120px; }"
-            )
-            msg.exec()
+            dlg = CustomMessageDialog(self, "No Folder Selected", "Please select a folder first.")
+            dlg.exec()
             return
         # Confirmation dialog before scanning
         confirm_box = QMessageBox(self)
