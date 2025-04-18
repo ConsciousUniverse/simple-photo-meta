@@ -833,7 +833,11 @@ class IPTCEditor(QMainWindow):
             msg.setIcon(QMessageBox.Warning)
             msg.setWindowTitle("No Folder Selected")
             msg.setText("Please select a folder first.")
-            self.style_dialog(msg)
+            # Only set minimum sizes, do not override icon pixmap or use qproperty-pixmap
+            msg.setStyleSheet(
+                "QLabel { padding: 18px; min-width: 320px; min-height: 40px; }"
+                "QMessageBox { min-width: 380px; min-height: 120px; }"
+            )
             msg.exec()
             return
         # Confirmation dialog before scanning
