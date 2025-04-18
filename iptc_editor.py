@@ -407,7 +407,22 @@ class IPTCEditor(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: gray;")
         self.image_label.setMinimumHeight(400)
-        center_splitter.addWidget(self.image_label)
+        # Add rotation controls below image_label
+        rotate_controls = QHBoxLayout()
+        self.btn_rotate_left = QPushButton("⟲ Rotate Left")
+        self.btn_rotate_right = QPushButton("⟳ Rotate Right")
+        self.btn_rotate_left.setFont(font)
+        self.btn_rotate_right.setFont(font)
+        self.btn_rotate_left.clicked.connect(self.rotate_left)
+        self.btn_rotate_right.clicked.connect(self.rotate_right)
+        rotate_controls.addWidget(self.btn_rotate_left)
+        rotate_controls.addWidget(self.btn_rotate_right)
+        image_widget = QWidget()
+        image_layout = QVBoxLayout(image_widget)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.addWidget(self.image_label)
+        image_layout.addLayout(rotate_controls)
+        center_splitter.addWidget(image_widget)
 
         # Container for IPTC text edit and buttons
         iptc_widget = QWidget()
@@ -417,10 +432,6 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setFont(font)
         iptc_layout.addWidget(self.iptc_text_edit)
         btn_layout = QHBoxLayout()
-        self.btn_read = QPushButton("Read IPTC")
-        self.btn_read.setFont(font)
-        self.btn_read.clicked.connect(self.read_iptc)
-        btn_layout.addWidget(self.btn_read)
         self.btn_save = QPushButton("Save IPTC")
         self.btn_save.setFont(font)
         self.btn_save.clicked.connect(self.save_iptc)
@@ -471,6 +482,19 @@ class IPTCEditor(QMainWindow):
         right_panel_widget = QWidget()
         right_panel_widget.setLayout(right_panel)
         main_layout.addWidget(right_panel_widget, 1)
+
+        self._preview_rotation_angle = 0
+        self._preview_image_cache = None
+
+    def rotate_left(self):
+        if self.current_image_path:
+            self._preview_rotation_angle = (self._preview_rotation_angle - 90) % 360
+            self.display_image(self.current_image_path)
+
+    def rotate_right(self):
+        if self.current_image_path:
+            self._preview_rotation_angle = (self._preview_rotation_angle + 90) % 360
+            self.display_image(self.current_image_path)
 
     def update_pagination(self):
         # Use the database to get the count of images in the current folder (with search tags)
@@ -643,7 +667,7 @@ class IPTCEditor(QMainWindow):
             return
         image_path = self.image_list[selected_index]  # Already full path
         self.current_image_path = image_path
-        self.read_iptc()
+        self._preview_rotation_angle = 0  # Reset rotation on new image
         self.display_image(self.current_image_path)
 
     def display_image(self, path):
@@ -662,12 +686,19 @@ class IPTCEditor(QMainWindow):
                 max_dim = 2000
                 if pil_img.width > max_dim or pil_img.height > max_dim:
                     pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+                # Apply rotation if needed
+                if hasattr(self, '_preview_rotation_angle') and self._preview_rotation_angle:
+                    pil_img = pil_img.rotate(-self._preview_rotation_angle, expand=True)
                 buf = io.BytesIO()
                 pil_img.save(buf, format="PNG")
                 qimg = QImage.fromData(buf.getvalue())
                 pixmap = QPixmap.fromImage(qimg)
             else:
                 pixmap = QPixmap(path)
+                if hasattr(self, '_preview_rotation_angle') and self._preview_rotation_angle:
+                    from PySide6.QtGui import QTransform
+                    transform = QTransform().rotate(self._preview_rotation_angle)
+                    pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
             pixmap = pixmap.scaled(
                 self.image_label.width(),
                 self.image_label.height(),
@@ -736,19 +767,6 @@ class IPTCEditor(QMainWindow):
     def is_valid_tag(self, tag):
         # Only allow alphanumeric and dashes
         return bool(re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]*$", tag))
-
-    def read_iptc(self):
-        if not self.current_image_path:
-            QMessageBox.warning(
-                self, "No Image Selected", "Please select an image first."
-            )
-            return
-
-        try:
-            self.extract_keywords()
-            self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
 
     def show_loading_dialog(self, message="Scanning directories..."):
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
