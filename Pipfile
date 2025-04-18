@@ -8,6 +8,9 @@ pyside6 = "*"
 pillow = "*"
 
 [dev-packages]
+setuptools = "*"
+build = "*"
+wheel = "*"
 
 [requires]
 python_version = "3.13"

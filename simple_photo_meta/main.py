@@ -904,8 +904,12 @@ class IPTCEditor(QMainWindow):
         self.search_debounce_timer.start(350)  # 400ms delay
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     window = IPTCEditor()
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

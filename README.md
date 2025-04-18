@@ -20,6 +20,37 @@ This is an Alpha version of this software, and as such is made available for tes
 - Edit existing IPTC Keyword metatags.
 - Delete existing IPTC Keyword metatags.
 
+## Installation & Quick Start
+
+1. **Install system dependencies** (required for image metadata editing):
+
+   On macOS (with Homebrew):
+   ```sh
+   brew install exiv2
+   pip3 install PySide6
+   ```
+
+   On Ubuntu:
+   ```sh
+   sudo apt update
+   sudo apt install exiv2 python3-pip python3-pyside6
+   ```
+
+2. **Install Python dependencies**:
+   ```sh
+   pip install -r requirements.txt
+   ```
+
+3. **Install the app** (from the project root):
+   ```sh
+   pip install .
+   ```
+
+4. **Run the app**:
+   ```sh
+   simple-photo-meta
+   ```
+
 ## Screenshots
 
 Coming soon ...
