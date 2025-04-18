@@ -432,7 +432,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setFont(font)
         iptc_layout.addWidget(self.iptc_text_edit)
         btn_layout = QHBoxLayout()
-        self.btn_save = QPushButton("Save IPTC")
+        self.btn_save = QPushButton("Save Tags")
         self.btn_save.setFont(font)
         self.btn_save.clicked.connect(self.save_iptc)
         btn_layout.addWidget(self.btn_save)
@@ -653,22 +653,38 @@ class IPTCEditor(QMainWindow):
 
     def save_iptc(self):
         self.save_tags_to_file_and_db(show_dialogs=True)
+        self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
         self.load_previous_tags()
         self.update_tags_search()
 
     def image_selected(self, index):
-        # Save tags for the previously previewed image (if any)
-        self.save_tags_to_file_and_db(show_dialogs=False)
+        # Check if there are unsaved changes before switching images
+        current_input = self.iptc_text_edit.toPlainText().strip()
+        if hasattr(self, 'last_loaded_keywords') and self.current_image_path is not None:
+            if current_input != self.last_loaded_keywords:
+                reply = QMessageBox.question(
+                    self,
+                    "Save Changes?",
+                    "You have unsaved changes to the tags. Save before switching images?",
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                )
+                if reply == QMessageBox.Cancel:
+                    return  # Don't switch images
+                elif reply == QMessageBox.Yes:
+                    self.save_tags_to_file_and_db(show_dialogs=True)
+                # If No, discard changes and continue
         self.load_previous_tags()
         self.update_tags_search()
-        # Map the clicked index to the correct image in the current page
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
             return
-        image_path = self.image_list[selected_index]  # Already full path
+        image_path = self.image_list[selected_index]
         self.current_image_path = image_path
-        self._preview_rotation_angle = 0  # Reset rotation on new image
+        self._preview_rotation_angle = 0
         self.display_image(self.current_image_path)
+        self.extract_keywords()
+        self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+        self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
 
     def display_image(self, path):
         try:
