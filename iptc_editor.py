@@ -205,6 +205,30 @@ class TagDatabase:
             c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
         return [row[0] for row in c.fetchall()]
 
+    def get_untagged_images_in_folder_paginated(self, folder_path, page, page_size):
+        c = self.conn.cursor()
+        offset = page * page_size
+        # Select images in folder that have no tags
+        query = '''
+            SELECT i.path FROM images i
+            LEFT JOIN image_tags it ON i.id = it.image_id
+            WHERE i.path LIKE ? AND it.tag_id IS NULL
+            ORDER BY i.path ASC LIMIT ? OFFSET ?
+        '''
+        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
+        return [row[0] for row in c.fetchall()]
+
+    def get_untagged_image_count_in_folder(self, folder_path):
+        c = self.conn.cursor()
+        query = '''
+            SELECT COUNT(*) FROM images i
+            LEFT JOIN image_tags it ON i.id = it.image_id
+            WHERE i.path LIKE ? AND it.tag_id IS NULL
+        '''
+        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"),))
+        row = c.fetchone()
+        return row[0] if row else 0
+
     def mark_directory_scanned(self, dir_path):
         c = self.conn.cursor()
         c.execute("INSERT OR REPLACE INTO scanned_dirs (path, last_scan) VALUES (?, datetime('now'))", (os.path.abspath(dir_path),))
@@ -453,7 +477,10 @@ class IPTCEditor(QMainWindow):
         else:
             text = self.search_bar.toPlainText().strip()
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-            total_images = self.db.get_image_count_in_folder(self.folder_path, tags if tags else None)
+            if not tags:
+                total_images = self.db.get_untagged_image_count_in_folder(self.folder_path)
+            else:
+                total_images = self.db.get_image_count_in_folder(self.folder_path, tags)
             self.total_pages = (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
             if self.current_page >= self.total_pages:
                 self.current_page = self.total_pages - 1
@@ -483,7 +510,10 @@ class IPTCEditor(QMainWindow):
             return
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags if tags else None)
+        if not tags:
+            page_items = self.db.get_untagged_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size)
+        else:
+            page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags)
         self.image_list = page_items  # Store full paths, not just basenames
         model = QStandardItemModel()
         supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
