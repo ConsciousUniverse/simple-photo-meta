@@ -305,6 +305,15 @@ class IPTCEditor(QMainWindow):
         self.create_widgets()
         self.load_previous_tags()
 
+    def style_dialog(self, dialog, min_width=380, min_height=120, padding=18):
+        """
+        Apply minimum size and padding to dialogs for better readability, without forcing text color.
+        """
+        dialog.setMinimumWidth(min_width)
+        dialog.setMinimumHeight(min_height)
+        # Only apply padding to QLabel, do not set color
+        dialog.setStyleSheet(f"QLabel {{ padding: {padding}px; }}")
+
     def show_auto_close_message(
         self, title, message, icon=QMessageBox.Information, timeout=1000
     ):
@@ -320,6 +329,7 @@ class IPTCEditor(QMainWindow):
         msg_box.setWindowTitle(title)
         msg_box.setText(message)
         msg_box.setIcon(icon)
+        self.style_dialog(msg_box)
 
         # Set the timer to automatically close the message box.
         QTimer.singleShot(timeout, msg_box.close)
@@ -579,8 +589,11 @@ class IPTCEditor(QMainWindow):
         item = model.itemFromIndex(index)
         fpath = item.data(Qt.UserRole + 1)
         if fpath:
-            # Show only the basename in the message box
-            QMessageBox.information(self, "Filename", os.path.basename(fpath))
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Filename")
+            msg.setText(os.path.basename(fpath))
+            self.style_dialog(msg)
+            msg.exec()
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -629,11 +642,12 @@ class IPTCEditor(QMainWindow):
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         if invalid_tags:
             if show_dialogs:
-                QMessageBox.critical(
-                    self,
-                    "Invalid Tag(s)",
-                    f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
-                )
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("Invalid Tag(s)")
+                msg.setText(f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
+                self.style_dialog(msg)
+                msg.exec()
             return
         # Remove all IPTC keywords from file
         subprocess.run(
@@ -662,12 +676,14 @@ class IPTCEditor(QMainWindow):
         current_input = self.iptc_text_edit.toPlainText().strip()
         if hasattr(self, 'last_loaded_keywords') and self.current_image_path is not None:
             if current_input != self.last_loaded_keywords:
-                reply = QMessageBox.question(
-                    self,
-                    "Save Changes?",
-                    "You have unsaved changes to the tags. Save before switching images?",
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
-                )
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Question)
+                msg.setWindowTitle("Save Changes?")
+                msg.setText("You have unsaved changes to the tags. Save before switching images?")
+                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+                msg.setDefaultButton(QMessageBox.Yes)
+                self.style_dialog(msg)
+                reply = msg.exec()
                 if reply == QMessageBox.Cancel:
                     return  # Don't switch images
                 elif reply == QMessageBox.Yes:
@@ -723,7 +739,12 @@ class IPTCEditor(QMainWindow):
             )
             self.image_label.setPixmap(pixmap)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not open image: {e}\nType: {type(e)}")
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Critical)
+            msg.setWindowTitle("Error")
+            msg.setText(f"Could not open image: {e}\nType: {type(e)}")
+            self.style_dialog(msg)
+            msg.exec()
 
     def load_previous_tags(self):
         # Load unique keywords from the SQLite database and populate the list widget.
@@ -797,7 +818,7 @@ class IPTCEditor(QMainWindow):
         progress.setRange(0, 0)  # Indeterminate/busy
         layout.addWidget(progress)
         self.loading_dialog.setLayout(layout)
-        self.loading_dialog.setFixedSize(300, 120)
+        self.style_dialog(self.loading_dialog, min_width=340, min_height=120, padding=16)
         self.loading_dialog.show()
         QApplication.processEvents()
 
@@ -808,18 +829,22 @@ class IPTCEditor(QMainWindow):
 
     def scan_directory(self):
         if not self.folder_path:
-            QMessageBox.warning(
-                self, "No Folder Selected", "Please select a folder first."
-            )
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("No Folder Selected")
+            msg.setText("Please select a folder first.")
+            self.style_dialog(msg)
+            msg.exec()
             return
         # Confirmation dialog before scanning
-        confirm = QMessageBox.question(
-            self,
-            "Confirm Scan",
-            f"Are you sure you want to scan the directory?\n\n{self.folder_path}",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+        confirm_box = QMessageBox(self)
+        confirm_box.setIcon(QMessageBox.Question)
+        confirm_box.setWindowTitle("Confirm Scan")
+        confirm_box.setText(f"Are you sure you want to scan the directory?\n\n{self.folder_path}")
+        confirm_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        confirm_box.setDefaultButton(QMessageBox.No)
+        self.style_dialog(confirm_box)
+        confirm = confirm_box.exec()
         if confirm != QMessageBox.Yes:
             return
         self.show_loading_dialog()
