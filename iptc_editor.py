@@ -812,6 +812,16 @@ class IPTCEditor(QMainWindow):
                 self, "No Folder Selected", "Please select a folder first."
             )
             return
+        # Confirmation dialog before scanning
+        confirm = QMessageBox.question(
+            self,
+            "Confirm Scan",
+            f"Are you sure you want to scan the directory?\n\n{self.folder_path}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
         self.show_loading_dialog()
         # Remove missing images from DB before rescanning
         self.db.remove_missing_images(self.folder_path)
