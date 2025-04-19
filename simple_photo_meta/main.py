@@ -558,6 +558,40 @@ class IPTCEditor(QMainWindow):
         right_panel = QVBoxLayout()
         right_panel.addWidget(QLabel("Tags:"))
 
+        # Add tag search bar before anything that uses it
+        self.tags_search_bar = QTextEdit()
+        self.tags_search_bar.setFont(self.font())
+        self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
+        self.tags_search_bar.setPlaceholderText("Search tags...")
+        self.tags_search_bar.textChanged.connect(self.update_tags_search)
+        right_panel.addWidget(self.tags_search_bar)
+
+        # Create tags_list_widget early so it's available for other methods
+        self.tags_list_widget = QListWidget()
+        self.tags_list_widget.setFont(self.font())
+        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
+        self.tags_list_widget.clicked.connect(self.tag_clicked)
+        self.tags_list_widget.setStyleSheet(
+            """
+            QListWidget::item {
+                background: skyblue;
+                color: black;
+                font-size: 16pt;
+                margin-bottom: 7px;
+                border-radius: 6px;
+                padding: 4px 8px;
+                min-height: 32px;
+                white-space: pre-wrap;
+            }
+            QListWidget::item:selected {
+                background: #87ceeb;
+                color: yellow;
+            }
+        """
+        )
+        self.tags_list_widget.setWordWrap(True)
+        right_panel.addWidget(self.tags_list_widget)
+
         # IPTC Application2 Tag Dropdown
         self.iptc_tag_dropdown = QComboBox()
         self.iptc_tag_dropdown.setFont(self.font())
@@ -575,39 +609,6 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
 
-        # Add tag search bar
-        self.tags_search_bar = QTextEdit()
-        self.tags_search_bar.setFont(self.font())
-        self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.tags_search_bar.setPlaceholderText("Search tags...")
-        self.tags_search_bar.textChanged.connect(self.update_tags_search)
-        right_panel.addWidget(self.tags_search_bar)
-
-        self.tags_list_widget = QListWidget()
-        self.tags_list_widget.setFont(self.font())
-        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
-        self.tags_list_widget.clicked.connect(self.tag_clicked)
-        self.tags_list_widget.setStyleSheet(
-            """
-            QListWidget::item {
-                background: skyblue;
-                color: black;
-                font-size: 16pt;
-                margin-bottom: 7px;
-                border-radius: 6px;
-                padding: 4px 8px;
-                min-height: 32px;
-                white-space: pre-wrap;
-                /* word-break: break-word; Removed: not supported in Qt */
-            }
-            QListWidget::item:selected {
-                background: #87ceeb;
-                color: yellow;
-            }
-        """
-        )
-        self.tags_list_widget.setWordWrap(True)
-        right_panel.addWidget(self.tags_list_widget)
         right_panel_widget = QWidget()
         right_panel_widget.setLayout(right_panel)
         main_layout.addWidget(right_panel_widget, 1)
@@ -753,6 +754,7 @@ class IPTCEditor(QMainWindow):
         if self.folder_path:
             self.db.mark_directory_scanned(self.folder_path)
         self.hide_loading_dialog()
+        self.remove_unused_tags_from_db()
         self.load_previous_tags()
         self.update_search()
         self.update_tags_search()  # Refresh tag search after scan
@@ -764,12 +766,19 @@ class IPTCEditor(QMainWindow):
         tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
-            subprocess.run(
+            result = subprocess.run(
                 f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
                 shell=True,
                 capture_output=True,
                 text=True,
             )
+            if result.returncode != 0 and show_dialogs:
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("exiv2 Error")
+                msg.setText(f"Failed to delete IPTC tag {tag_type}:\n{result.stderr}")
+                self.style_dialog(msg)
+                msg.exec()
             return
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
@@ -784,7 +793,8 @@ class IPTCEditor(QMainWindow):
                 self.style_dialog(msg)
                 msg.exec()
             return
-        subprocess.run(
+        # Try writing tags to file, show error if not supported
+        del_result = subprocess.run(
             f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
             shell=True,
             capture_output=True,
@@ -794,8 +804,27 @@ class IPTCEditor(QMainWindow):
             f'-M "add Iptc.Application2.{tag_type} {shlex.quote(kw)}"' for kw in keywords
         ]
         full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
-        subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
+        add_result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
+        if add_result.returncode != 0:
+            if show_dialogs:
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("exiv2 Error")
+                msg.setText(f"Failed to write IPTC tag {tag_type}:\n{add_result.stderr}")
+                self.style_dialog(msg)
+                msg.exec()
+            return  # Do NOT update DB if write failed
         self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+
+    def remove_unused_tags_from_db(self):
+        c = self.db.conn.cursor()
+        # Remove tag-image associations for tags not present in any image
+        c.execute("""
+            DELETE FROM tags WHERE id NOT IN (
+                SELECT tag_id FROM image_tags
+            )
+        """)
+        self.db.conn.commit()
 
     def save_iptc(self):
         self.save_tags_to_file_and_db(show_dialogs=True)
@@ -803,31 +832,35 @@ class IPTCEditor(QMainWindow):
         self.load_previous_tags()
         self.update_tags_search()
 
-    def image_selected(self, index):
-        # Check if there are unsaved changes before switching images
+    def maybe_save_unsaved_changes(self):
         current_input = self.iptc_text_edit.toPlainText().strip()
         if (
             hasattr(self, "last_loaded_keywords")
             and self.current_image_path is not None
+            and current_input != self.last_loaded_keywords
         ):
-            if current_input != self.last_loaded_keywords:
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Question)
-                msg.setWindowTitle("Save Changes?")
-                msg.setText(
-                    "You have unsaved changes to the tags. Save before switching images?"
-                )
-                msg.setStandardButtons(
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
-                )
-                msg.setDefaultButton(QMessageBox.Yes)
-                self.style_dialog(msg)
-                reply = msg.exec()
-                if reply == QMessageBox.Cancel:
-                    return  # Don't switch images
-                elif reply == QMessageBox.Yes:
-                    self.save_tags_to_file_and_db(show_dialogs=True)
-                # If No, discard changes and continue
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Save Changes?")
+            msg.setText(
+                "You have unsaved changes to the tags. Save before switching?"
+            )
+            msg.setStandardButtons(
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            msg.setDefaultButton(QMessageBox.Yes)
+            self.style_dialog(msg)
+            reply = msg.exec()
+            if reply == QMessageBox.Cancel:
+                return False  # Cancel the action
+            elif reply == QMessageBox.Yes:
+                self.save_tags_to_file_and_db(show_dialogs=True)
+        return True
+
+    def image_selected(self, index):
+        # Prompt to save unsaved changes before switching images
+        if not self.maybe_save_unsaved_changes():
+            return  # Don't switch images
         self.load_previous_tags()
         self.update_tags_search()
         selected_index = index.row()
@@ -1042,11 +1075,25 @@ class IPTCEditor(QMainWindow):
         self.search_debounce_timer.start(350)  # 400ms delay
 
     def on_iptc_tag_changed(self, index):
-        # Update the selected IPTC tag dict
+        # Prompt to save unsaved changes before switching tag type
+        if not self.maybe_save_unsaved_changes():
+            # Revert dropdown to previous index if cancelled
+            self.iptc_tag_dropdown.blockSignals(True)
+            for i in range(self.iptc_tag_dropdown.count()):
+                if self.iptc_tag_dropdown.itemData(i)['tag'] == (self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'):
+                    self.iptc_tag_dropdown.setCurrentIndex(i)
+                    break
+            self.iptc_tag_dropdown.blockSignals(False)
+            return
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(index)
         self.load_previous_tags()
         self.update_search()
         self.update_tags_search()
+        if self.current_image_path:
+            self.extract_keywords()
+            self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+            self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
+            self.display_image(self.current_image_path)
 
 
 def main():
