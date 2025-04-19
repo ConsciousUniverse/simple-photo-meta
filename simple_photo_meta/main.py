@@ -23,7 +23,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer, QThread, Signal
 import hashlib
 from PIL import Image
-from iptc_tags import iptc_application2_tags
+from iptc_tags import iptc_writable_tags
 
 
 class TagDatabase:
@@ -596,11 +596,11 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown = QComboBox()
         self.iptc_tag_dropdown.setFont(self.font())
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
-        # Populate dropdown with tag name and description
+        # Populate dropdown with name and set description as tooltip
         keyword_index = 0
-        for i, tag in enumerate(iptc_application2_tags):
-            display = f"{tag['tag']} - {tag['description']}"
-            self.iptc_tag_dropdown.addItem(display, tag)
+        for i, tag in enumerate(iptc_writable_tags):
+            self.iptc_tag_dropdown.addItem(tag['name'], tag)
+            self.iptc_tag_dropdown.setItemData(i, tag['description'], Qt.ToolTipRole)
             if tag['tag'] == 'Keywords':
                 keyword_index = i
         self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
@@ -861,8 +861,6 @@ class IPTCEditor(QMainWindow):
         # Prompt to save unsaved changes before switching images
         if not self.maybe_save_unsaved_changes():
             return  # Don't switch images
-        self.load_previous_tags()
-        self.update_tags_search()
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
             return
@@ -871,8 +869,14 @@ class IPTCEditor(QMainWindow):
         self._preview_rotation_angle = 0
         self.display_image(self.current_image_path)
         self.extract_keywords()
-        self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+        # Always update the input field, even if there are no tags
+        if hasattr(self, 'cleaned_keywords') and self.cleaned_keywords:
+            self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+        else:
+            self.iptc_text_edit.setPlainText("")
         self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
+        self.load_previous_tags()
+        self.update_tags_search()
 
     def display_image(self, path):
         try:
