@@ -139,8 +139,22 @@ class TagDatabase:
     def get_images_with_tags(self, tags, tag_type=None):
         c = self.conn.cursor()
         if not tags:
-            c.execute("SELECT path FROM images ORDER BY path ASC")
-            return [row[0] for row in c.fetchall()]
+            if tag_type:
+                # Return images that do NOT have any tags of this tag_type
+                query = '''
+                    SELECT i.path FROM images i
+                    WHERE i.id NOT IN (
+                        SELECT it.image_id FROM image_tags it
+                        JOIN tags t ON t.id = it.tag_id
+                        WHERE t.tag_type = ?
+                    )
+                    ORDER BY i.path ASC
+                '''
+                c.execute(query, (tag_type,))
+                return [row[0] for row in c.fetchall()]
+            else:
+                c.execute("SELECT path FROM images ORDER BY path ASC")
+                return [row[0] for row in c.fetchall()]
         base_query = """SELECT i.path FROM images i\n"""
         join_clauses = []
         where_clauses = []
@@ -247,6 +261,35 @@ class TagDatabase:
             WHERE i.path LIKE ? AND it.tag_id IS NULL
         """
         c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"),))
+        row = c.fetchone()
+        return row[0] if row else 0
+
+    def get_untagged_images_of_type_in_folder_paginated(self, folder_path, page, page_size, tag_type):
+        c = self.conn.cursor()
+        offset = page * page_size
+        query = '''
+            SELECT i.path FROM images i
+            WHERE i.path LIKE ? AND i.id NOT IN (
+                SELECT it.image_id FROM image_tags it
+                JOIN tags t ON t.id = it.tag_id
+                WHERE t.tag_type = ?
+            )
+            ORDER BY i.path ASC LIMIT ? OFFSET ?
+        '''
+        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), tag_type, page_size, offset))
+        return [row[0] for row in c.fetchall()]
+
+    def get_untagged_image_count_of_type_in_folder(self, folder_path, tag_type):
+        c = self.conn.cursor()
+        query = '''
+            SELECT COUNT(*) FROM images i
+            WHERE i.path LIKE ? AND i.id NOT IN (
+                SELECT it.image_id FROM image_tags it
+                JOIN tags t ON t.id = it.tag_id
+                WHERE t.tag_type = ?
+            )
+        '''
+        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), tag_type))
         row = c.fetchone()
         return row[0] if row else 0
 
@@ -593,9 +636,14 @@ class IPTCEditor(QMainWindow):
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
             tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
             if not tags:
-                total_images = self.db.get_untagged_image_count_in_folder(
-                    self.folder_path
-                )
+                if tag_type:
+                    total_images = self.db.get_untagged_image_count_of_type_in_folder(
+                        self.folder_path, tag_type
+                    )
+                else:
+                    total_images = self.db.get_untagged_image_count_in_folder(
+                        self.folder_path
+                    )
             else:
                 total_images = self.db.get_image_count_in_folder(self.folder_path, tags, tag_type)
             self.total_pages = (
@@ -631,9 +679,14 @@ class IPTCEditor(QMainWindow):
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
         tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
         if not tags:
-            page_items = self.db.get_untagged_images_in_folder_paginated(
-                self.folder_path, self.current_page, self.page_size
-            )
+            if tag_type:
+                page_items = self.db.get_untagged_images_of_type_in_folder_paginated(
+                    self.folder_path, self.current_page, self.page_size, tag_type
+                )
+            else:
+                page_items = self.db.get_untagged_images_in_folder_paginated(
+                    self.folder_path, self.current_page, self.page_size
+                )
         else:
             page_items = self.db.get_images_in_folder_paginated(
                 self.folder_path, self.current_page, self.page_size, tags, tag_type
