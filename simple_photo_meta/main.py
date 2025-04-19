@@ -136,13 +136,11 @@ class TagDatabase:
             c.execute("SELECT tag FROM tags ORDER BY tag ASC")
         return [row[0] for row in c.fetchall()]
 
-    def get_images_with_tags(self, tags):
-        # Partial search: tags are treated as substrings (LIKE '%tag%')
+    def get_images_with_tags(self, tags, tag_type=None):
         c = self.conn.cursor()
         if not tags:
             c.execute("SELECT path FROM images ORDER BY path ASC")
             return [row[0] for row in c.fetchall()]
-        # For each tag fragment, find images that have at least one tag containing that fragment
         base_query = """SELECT i.path FROM images i\n"""
         join_clauses = []
         where_clauses = []
@@ -153,6 +151,9 @@ class TagDatabase:
             )
             where_clauses.append(f"t{idx}.tag LIKE ?")
             params.append(f"%{tag}%")
+            if tag_type:
+                where_clauses.append(f"t{idx}.tag_type = ?")
+                params.append(tag_type)
         query = base_query + " ".join(join_clauses)
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
@@ -160,10 +161,9 @@ class TagDatabase:
         c.execute(query, params)
         return [row[0] for row in c.fetchall()]
 
-    def get_image_count_in_folder(self, folder_path, tags=None):
+    def get_image_count_in_folder(self, folder_path, tags=None, tag_type=None):
         c = self.conn.cursor()
         if tags:
-            # Use the same logic as get_images_with_tags, but count(*)
             base_query = """SELECT COUNT(DISTINCT i.id) FROM images i\n"""
             join_clauses = []
             where_clauses = []
@@ -174,10 +174,12 @@ class TagDatabase:
                 )
                 where_clauses.append(f"t{idx}.tag LIKE ?")
                 params.append(f"%{tag}%")
+                if tag_type:
+                    where_clauses.append(f"t{idx}.tag_type = ?")
+                    params.append(tag_type)
             query = base_query + " ".join(join_clauses)
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
-            # Only images in the folder
             query += " AND " if where_clauses else " WHERE "
             query += "i.path LIKE ?"
             params.append(os.path.join(os.path.abspath(folder_path), "%"))
@@ -188,7 +190,7 @@ class TagDatabase:
         row = c.fetchone()
         return row[0] if row else 0
 
-    def get_images_in_folder_paginated(self, folder_path, page, page_size, tags=None):
+    def get_images_in_folder_paginated(self, folder_path, page, page_size, tags=None, tag_type=None):
         c = self.conn.cursor()
         offset = page * page_size
         if tags:
@@ -202,10 +204,12 @@ class TagDatabase:
                 )
                 where_clauses.append(f"t{idx}.tag LIKE ?")
                 params.append(f"%{tag}%")
+                if tag_type:
+                    where_clauses.append(f"t{idx}.tag_type = ?")
+                    params.append(tag_type)
             query = base_query + " ".join(join_clauses)
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
-            # Only images in the folder
             query += " AND " if where_clauses else " WHERE "
             query += "i.path LIKE ?"
             params.append(os.path.join(os.path.abspath(folder_path), "%"))
@@ -587,12 +591,13 @@ class IPTCEditor(QMainWindow):
         else:
             text = self.search_bar.toPlainText().strip()
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+            tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
             if not tags:
                 total_images = self.db.get_untagged_image_count_in_folder(
                     self.folder_path
                 )
             else:
-                total_images = self.db.get_image_count_in_folder(self.folder_path, tags)
+                total_images = self.db.get_image_count_in_folder(self.folder_path, tags, tag_type)
             self.total_pages = (
                 (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
             )
@@ -624,13 +629,14 @@ class IPTCEditor(QMainWindow):
             return
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
         if not tags:
             page_items = self.db.get_untagged_images_in_folder_paginated(
                 self.folder_path, self.current_page, self.page_size
             )
         else:
             page_items = self.db.get_images_in_folder_paginated(
-                self.folder_path, self.current_page, self.page_size, tags
+                self.folder_path, self.current_page, self.page_size, tags, tag_type
             )
         self.image_list = page_items  # Store full paths, not just basenames
         model = QStandardItemModel()
@@ -699,26 +705,20 @@ class IPTCEditor(QMainWindow):
         self.update_tags_search()  # Refresh tag search after scan
 
     def save_tags_to_file_and_db(self, show_dialogs=False):
-        """
-        Save the current IPTC input pane tags to both the tag database and the image file (if any).
-        If show_dialogs is True, show user dialogs for errors/success. If False, suppress dialogs.
-        """
         if not self.current_image_path:
             return
         raw_input = self.iptc_text_edit.toPlainText().strip()
+        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
         if not raw_input:
-            # If empty, clear tags in DB and file
-            self.db.set_image_tags(self.current_image_path, [], self.selected_iptc_tag['tag'])
-            # Remove all IPTC keywords from file
+            self.db.set_image_tags(self.current_image_path, [], tag_type)
             subprocess.run(
-                f'exiv2 -M f"Iptc.Application2.{self.selected_iptc_tag['tag']}" "{self.current_image_path}"',
+                f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
                 shell=True,
                 capture_output=True,
                 text=True,
             )
             return
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
-        # Validate tags
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         if invalid_tags:
             if show_dialogs:
@@ -731,21 +731,18 @@ class IPTCEditor(QMainWindow):
                 self.style_dialog(msg)
                 msg.exec()
             return
-        # Remove all IPTC keywords from file
         subprocess.run(
-            f'exiv2 -M f"Iptc.Application2.{self.selected_iptc_tag['tag']}" "{self.current_image_path}"',
+            f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
             shell=True,
             capture_output=True,
             text=True,
         )
-        # Add each keyword
         commands = [
-            f'-M f"add Iptc.Application2.{self.selected_iptc_tag['tag']} {shlex.quote(kw)}"' for kw in keywords
+            f'-M "add Iptc.Application2.{tag_type} {shlex.quote(kw)}"' for kw in keywords
         ]
         full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
         subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
-        # Save to DB
-        self.db.set_image_tags(self.current_image_path, keywords, self.selected_iptc_tag['tag'])
+        self.db.set_image_tags(self.current_image_path, keywords, tag_type)
 
     def save_iptc(self):
         self.save_tags_to_file_and_db(show_dialogs=True)
@@ -844,8 +841,9 @@ class IPTCEditor(QMainWindow):
             msg.exec()
 
     def load_previous_tags(self):
-        # Load unique keywords from the SQLite database and populate the list widget.
-        self.all_tags = self.db.get_tags()
+        # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
+        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+        self.all_tags = self.db.get_tags(tag_type)
         self.update_tags_list_widget(self.all_tags)
 
     def update_tags_list_widget(self, tags):
@@ -857,9 +855,10 @@ class IPTCEditor(QMainWindow):
 
     def update_tags_search(self):
         # Get search text, filter tags, and update the list widget
+        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+        if not hasattr(self, "all_tags") or not self.all_tags:
+            self.all_tags = self.db.get_tags(tag_type)
         search_text = self.tags_search_bar.toPlainText().strip().lower()
-        if not hasattr(self, "all_tags"):
-            self.all_tags = self.db.get_tags()
         if not search_text:
             filtered = self.all_tags
         else:
@@ -880,7 +879,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setPlainText(new_text)
 
     def extract_keywords(self):
-        # Extract keywords from exiv2 output.
+        # Extract tags for the selected tag type from exiv2 output.
         result = subprocess.run(
             ["exiv2", "-pi", self.current_image_path], capture_output=True, text=True
         )
@@ -889,9 +888,9 @@ class IPTCEditor(QMainWindow):
             self.cleaned_keywords = []
             return
         keywords = []
-        # Use the split-by-multiple-spaces approach.
+        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
         for line in result.stdout.splitlines():
-            if f"Iptc.Application2.{self.selected_iptc_tag['tag']}" in line:
+            if f"Iptc.Application2.{tag_type}" in line:
                 parts = re.split(r"\s{2,}", line.strip())
                 if len(parts) >= 4:
                     keyword_value = parts[-1].strip()
@@ -992,6 +991,9 @@ class IPTCEditor(QMainWindow):
     def on_iptc_tag_changed(self, index):
         # Update the selected IPTC tag dict
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(index)
+        self.load_previous_tags()
+        self.update_search()
+        self.update_tags_search()
 
 
 def main():
