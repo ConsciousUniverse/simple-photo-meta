@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QComboBox,  # <-- Add QComboBox
 )
-from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
+from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont, QTextCursor
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer, QThread, Signal
 import hashlib
@@ -570,7 +570,9 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget = QListWidget()
         self.tags_list_widget.setFont(self.font())
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
-        self.tags_list_widget.clicked.connect(self.tag_clicked)
+        # Use itemClicked instead of clicked for more reliable tag selection
+        self.tags_list_widget.itemClicked.connect(self.tag_clicked)
+        print("Connected itemClicked signal to tag_clicked")  # Debug print
         self.tags_list_widget.setStyleSheet(
             """
             QListWidget::item {
@@ -764,11 +766,11 @@ class IPTCEditor(QMainWindow):
             return
         raw_input = self.iptc_text_edit.toPlainText().strip()
         tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
+        multi_valued = self.selected_iptc_tag.get('multi_valued', False) if self.selected_iptc_tag else False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
             result = subprocess.run(
-                f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
-                shell=True,
+                ["exiv2", "-M", f"del Iptc.Application2.{tag_type}", self.current_image_path],
                 capture_output=True,
                 text=True,
             )
@@ -793,18 +795,22 @@ class IPTCEditor(QMainWindow):
                 self.style_dialog(msg)
                 msg.exec()
             return
-        # Try writing tags to file, show error if not supported
-        del_result = subprocess.run(
-            f'exiv2 -M "del Iptc.Application2.{tag_type}" "{self.current_image_path}"',
-            shell=True,
+        subprocess.run(
+            ["exiv2", "-M", f"del Iptc.Application2.{tag_type}", self.current_image_path],
             capture_output=True,
             text=True,
         )
-        commands = [
-            f'-M "add Iptc.Application2.{tag_type} {shlex.quote(kw)}"' for kw in keywords
-        ]
-        full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
-        add_result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
+        cmd = ["exiv2"]
+        if multi_valued:
+            for kw in keywords:
+                cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{kw}\""])
+            self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+        else:
+            combined = " | ".join(keywords)
+            cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{combined}\""])
+            self.db.set_image_tags(self.current_image_path, [combined] if combined else [], tag_type)
+        cmd.append(self.current_image_path)
+        add_result = subprocess.run(cmd, capture_output=True, text=True)
         if add_result.returncode != 0:
             if show_dialogs:
                 msg = QMessageBox(self)
@@ -813,8 +819,7 @@ class IPTCEditor(QMainWindow):
                 msg.setText(f"Failed to write IPTC tag {tag_type}:\n{add_result.stderr}")
                 self.style_dialog(msg)
                 msg.exec()
-            return  # Do NOT update DB if write failed
-        self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+            return
 
     def remove_unused_tags_from_db(self):
         c = self.db.conn.cursor()
@@ -828,7 +833,7 @@ class IPTCEditor(QMainWindow):
 
     def save_iptc(self):
         self.save_tags_to_file_and_db(show_dialogs=True)
-        self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
+        # Do NOT refresh the input field here! Only update tags list/search.
         self.load_previous_tags()
         self.update_tags_search()
 
@@ -868,6 +873,7 @@ class IPTCEditor(QMainWindow):
         self.current_image_path = image_path
         self._preview_rotation_angle = 0
         self.display_image(self.current_image_path)
+        self.iptc_text_edit.clear()  # Explicitly clear input field before setting new tags
         self.extract_keywords()
         # Always update the input field, even if there are no tags
         if hasattr(self, 'cleaned_keywords') and self.cleaned_keywords:
@@ -940,6 +946,9 @@ class IPTCEditor(QMainWindow):
         # Sort tags alphabetically before displaying
         sorted_tags = sorted(tags, key=lambda t: t.lower())
         self.tags_list_widget.clear()
+        self.tags_list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tags_list_widget.setEnabled(True)
+        print("update_tags_list_widget: Adding tags:", tags)  # Debug print
         for tag in sorted_tags:
             self.tags_list_widget.addItem(tag)
 
@@ -955,18 +964,18 @@ class IPTCEditor(QMainWindow):
             filtered = [tag for tag in self.all_tags if search_text in tag.lower()]
         self.update_tags_list_widget(filtered)
 
-    def tag_clicked(self, index):
-        # Get the text of the clicked tag.
-        tag = self.tags_list_widget.currentItem().text()
-        # Get the current content of the text edit.
-        current_text = self.iptc_text_edit.toPlainText().strip()
-        # If there is existing text, append a space (or a newline, or a comma) and then the new tag.
-        if current_text:
-            # Here we append with a new line; you can customize to use a comma, space, etc.
-            new_text = f"{current_text}\n{tag}"
+    def tag_clicked(self, item):
+        print(f"Tag clicked: {item.text()}")  # Debug print
+        tag = item.text()
+        self.iptc_text_edit.setFocus()
+        cursor = self.iptc_text_edit.textCursor()
+        if self.iptc_text_edit.toPlainText().strip():
+            tag_to_insert = "\n" + tag
         else:
-            new_text = tag
-        self.iptc_text_edit.setPlainText(new_text)
+            tag_to_insert = tag
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(tag_to_insert)
+        self.iptc_text_edit.setTextCursor(cursor)
 
     def extract_keywords(self):
         # Extract tags for the selected tag type from exiv2 output.
