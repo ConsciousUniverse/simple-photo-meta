@@ -72,17 +72,17 @@ class TagDatabase:
         )
         self.conn.commit()
 
-    def add_tag(self, tag):
+    def add_tag(self, tag, tag_type):
         try:
             c = self.conn.cursor()
-            c.execute("INSERT OR IGNORE INTO tags (tag) VALUES (?)", (tag,))
+            c.execute("INSERT OR IGNORE INTO tags (tag, tag_type) VALUES (?, ?)", (tag, tag_type))
             self.conn.commit()
         except Exception as e:
-            print("Error inserting tag", tag, e)
+            print("Error inserting tag", tag, tag_type, e)
 
-    def get_tag_id(self, tag):
+    def get_tag_id(self, tag, tag_type):
         c = self.conn.cursor()
-        c.execute("SELECT id FROM tags WHERE tag=?", (tag,))
+        c.execute("SELECT id FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
         row = c.fetchone()
         return row[0] if row else None
 
@@ -100,10 +100,10 @@ class TagDatabase:
         row = c.fetchone()
         return row[0] if row else None
 
-    def add_image_tag(self, image_path, tag):
+    def add_image_tag(self, image_path, tag, tag_type):
         image_id = self.add_image(image_path)
-        self.add_tag(tag)
-        tag_id = self.get_tag_id(tag)
+        self.add_tag(tag, tag_type)
+        tag_id = self.get_tag_id(tag, tag_type)
         if image_id and tag_id:
             c = self.conn.cursor()
             c.execute(
@@ -112,16 +112,15 @@ class TagDatabase:
             )
             self.conn.commit()
 
-    def set_image_tags(self, image_path, tags):
-        """Replace all tags for an image with the provided list."""
+    def set_image_tags(self, image_path, tags, tag_type):
         image_id = self.add_image(image_path)
         c = self.conn.cursor()
-        # Remove all existing tag associations for this image
-        c.execute("DELETE FROM image_tags WHERE image_id=?", (image_id,))
+        # Remove all existing tag associations for this image for this tag_type
+        c.execute("DELETE FROM image_tags WHERE image_id IN (SELECT images.id FROM images WHERE images.path=?) AND tag_id IN (SELECT id FROM tags WHERE tag_type=?)", (image_path, tag_type))
         # Add new tags
         for tag in tags:
-            self.add_tag(tag)
-            tag_id = self.get_tag_id(tag)
+            self.add_tag(tag, tag_type)
+            tag_id = self.get_tag_id(tag, tag_type)
             if tag_id:
                 c.execute(
                     "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)",
@@ -129,9 +128,12 @@ class TagDatabase:
                 )
         self.conn.commit()
 
-    def get_tags(self):
+    def get_tags(self, tag_type=None):
         c = self.conn.cursor()
-        c.execute("SELECT tag FROM tags ORDER BY tag ASC")
+        if tag_type:
+            c.execute("SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,))
+        else:
+            c.execute("SELECT tag FROM tags ORDER BY tag ASC")
         return [row[0] for row in c.fetchall()]
 
     def get_images_with_tags(self, tags):
@@ -316,7 +318,7 @@ class ScanWorker(QThread):
                                     if self.is_valid_tag(keyword_value):
                                         tags.append(keyword_value)
                         # Replace all tags for this image in the DB with the current set
-                        db.set_image_tags(fpath, tags)
+                        db.set_image_tags(fpath, tags, self.selected_iptc_tag['tag'])
         finally:
             self.scan_finished.emit()
 
@@ -706,7 +708,7 @@ class IPTCEditor(QMainWindow):
         raw_input = self.iptc_text_edit.toPlainText().strip()
         if not raw_input:
             # If empty, clear tags in DB and file
-            self.db.set_image_tags(self.current_image_path, [])
+            self.db.set_image_tags(self.current_image_path, [], self.selected_iptc_tag['tag'])
             # Remove all IPTC keywords from file
             subprocess.run(
                 f'exiv2 -M f"Iptc.Application2.{self.selected_iptc_tag['tag']}" "{self.current_image_path}"',
@@ -743,7 +745,7 @@ class IPTCEditor(QMainWindow):
         full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
         subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
         # Save to DB
-        self.db.set_image_tags(self.current_image_path, keywords)
+        self.db.set_image_tags(self.current_image_path, keywords, self.selected_iptc_tag['tag'])
 
     def save_iptc(self):
         self.save_tags_to_file_and_db(show_dialogs=True)
