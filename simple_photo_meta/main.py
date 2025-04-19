@@ -16,12 +16,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QSplitter,
     QDialog,
+    QComboBox,  # <-- Add QComboBox
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer, QThread, Signal
 import hashlib
 from PIL import Image
+from iptc_tags import iptc_application2_tags
 
 
 class TagDatabase:
@@ -32,9 +34,16 @@ class TagDatabase:
 
     def _create_table(self):
         c = self.conn.cursor()
-        # Tags table
+        # Tags table (add tag_type column)
         c.execute(
-            "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT UNIQUE)"
+            """
+            CREATE TABLE IF NOT EXISTS tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag TEXT,
+                tag_type TEXT,
+                UNIQUE(tag, tag_type)
+            )
+            """
         )
         # Images table
         c.execute(
@@ -203,47 +212,61 @@ class TagDatabase:
             c.execute(query, params)
         else:
             query = "SELECT path FROM images WHERE path LIKE ? ORDER BY path ASC LIMIT ? OFFSET ?"
-            c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
+            c.execute(
+                query,
+                (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset),
+            )
         return [row[0] for row in c.fetchall()]
 
     def get_untagged_images_in_folder_paginated(self, folder_path, page, page_size):
         c = self.conn.cursor()
         offset = page * page_size
         # Select images in folder that have no tags
-        query = '''
+        query = """
             SELECT i.path FROM images i
             LEFT JOIN image_tags it ON i.id = it.image_id
             WHERE i.path LIKE ? AND it.tag_id IS NULL
             ORDER BY i.path ASC LIMIT ? OFFSET ?
-        '''
-        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset))
+        """
+        c.execute(
+            query, (os.path.join(os.path.abspath(folder_path), "%"), page_size, offset)
+        )
         return [row[0] for row in c.fetchall()]
 
     def get_untagged_image_count_in_folder(self, folder_path):
         c = self.conn.cursor()
-        query = '''
+        query = """
             SELECT COUNT(*) FROM images i
             LEFT JOIN image_tags it ON i.id = it.image_id
             WHERE i.path LIKE ? AND it.tag_id IS NULL
-        '''
+        """
         c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"),))
         row = c.fetchone()
         return row[0] if row else 0
 
     def mark_directory_scanned(self, dir_path):
         c = self.conn.cursor()
-        c.execute("INSERT OR REPLACE INTO scanned_dirs (path, last_scan) VALUES (?, datetime('now'))", (os.path.abspath(dir_path),))
+        c.execute(
+            "INSERT OR REPLACE INTO scanned_dirs (path, last_scan) VALUES (?, datetime('now'))",
+            (os.path.abspath(dir_path),),
+        )
         self.conn.commit()
 
     def was_directory_scanned(self, dir_path):
         c = self.conn.cursor()
-        c.execute("SELECT last_scan FROM scanned_dirs WHERE path=?", (os.path.abspath(dir_path),))
+        c.execute(
+            "SELECT last_scan FROM scanned_dirs WHERE path=?",
+            (os.path.abspath(dir_path),),
+        )
         row = c.fetchone()
         return row[0] if row else None
 
     def remove_missing_images(self, dir_path):
         c = self.conn.cursor()
-        c.execute("SELECT path FROM images WHERE path LIKE ?", (os.path.join(os.path.abspath(dir_path), "%"),))
+        c.execute(
+            "SELECT path FROM images WHERE path LIKE ?",
+            (os.path.join(os.path.abspath(dir_path), "%"),),
+        )
         all_paths = [row[0] for row in c.fetchall()]
         removed = 0
         for path in all_paths:
@@ -257,14 +280,16 @@ class TagDatabase:
 class ScanWorker(QThread):
     scan_finished = Signal()
 
-    def __init__(self, folder_path, db_path, is_valid_tag):
+    def __init__(self, folder_path, db_path, is_valid_tag, selected_iptc_tag):
         super().__init__()
         self.folder_path = folder_path
         self.db_path = db_path
+        self.selected_iptc_tag = selected_iptc_tag
         self.is_valid_tag = is_valid_tag
 
     def run(self):
         import subprocess, os, re
+
         try:
             # Create a new TagDatabase instance in this thread
             db = TagDatabase(self.db_path)
@@ -284,7 +309,7 @@ class ScanWorker(QThread):
                         # Collect all valid tags from the image
                         tags = []
                         for line in result.stdout.splitlines():
-                            if "Iptc.Application2.Keywords" in line:
+                            if f"Iptc.Application2.{self.selected_iptc_tag['tag']}" in line:
                                 parts = re.split(r"\s{2,}", line.strip())
                                 if len(parts) >= 4:
                                     keyword_value = parts[-1].strip()
@@ -303,7 +328,9 @@ class CustomMessageDialog(QDialog):
         layout = QVBoxLayout(self)
         self.label = QLabel(message)
         self.label.setWordWrap(True)
-        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         layout.addWidget(self.label)
         btn = QPushButton("OK")
         btn.clicked.connect(self.accept)
@@ -324,6 +351,7 @@ class IPTCEditor(QMainWindow):
         self.current_page = 0
         self.page_size = 10
         self.total_pages = 1
+        self.selected_iptc_tag = None  # <-- Store selected tag dict
         # Create or open the SQLite database
         self.db = TagDatabase()
 
@@ -481,6 +509,23 @@ class IPTCEditor(QMainWindow):
         right_panel = QVBoxLayout()
         right_panel.addWidget(QLabel("Tags:"))
 
+        # IPTC Application2 Tag Dropdown
+        self.iptc_tag_dropdown = QComboBox()
+        self.iptc_tag_dropdown.setFont(self.font())
+        self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
+        # Populate dropdown with tag name and description
+        keyword_index = 0
+        for i, tag in enumerate(iptc_application2_tags):
+            display = f"{tag['tag']} - {tag['description']}"
+            self.iptc_tag_dropdown.addItem(display, tag)
+            if tag['tag'] == 'Keywords':
+                keyword_index = i
+        self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
+        right_panel.addWidget(self.iptc_tag_dropdown)
+        # Set initial value to 'Keywords' if present
+        self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
+        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
+
         # Add tag search bar
         self.tags_search_bar = QTextEdit()
         self.tags_search_bar.setFont(self.font())
@@ -541,10 +586,14 @@ class IPTCEditor(QMainWindow):
             text = self.search_bar.toPlainText().strip()
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
             if not tags:
-                total_images = self.db.get_untagged_image_count_in_folder(self.folder_path)
+                total_images = self.db.get_untagged_image_count_in_folder(
+                    self.folder_path
+                )
             else:
                 total_images = self.db.get_image_count_in_folder(self.folder_path, tags)
-            self.total_pages = (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
+            self.total_pages = (
+                (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
+            )
             if self.current_page >= self.total_pages:
                 self.current_page = self.total_pages - 1
             if self.current_page < 0:
@@ -574,9 +623,13 @@ class IPTCEditor(QMainWindow):
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
         if not tags:
-            page_items = self.db.get_untagged_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size)
+            page_items = self.db.get_untagged_images_in_folder_paginated(
+                self.folder_path, self.current_page, self.page_size
+            )
         else:
-            page_items = self.db.get_images_in_folder_paginated(self.folder_path, self.current_page, self.page_size, tags)
+            page_items = self.db.get_images_in_folder_paginated(
+                self.folder_path, self.current_page, self.page_size, tags
+            )
         self.image_list = page_items  # Store full paths, not just basenames
         model = QStandardItemModel()
         supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
@@ -628,7 +681,7 @@ class IPTCEditor(QMainWindow):
             # Only scan if not previously scanned
             if not self.db.was_directory_scanned(folder):
                 self.show_loading_dialog("Scanning for images and tags...")
-                self.worker = ScanWorker(folder, self.db.db_path, self.is_valid_tag)
+                self.worker = ScanWorker(folder, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag)
                 self.worker.scan_finished.connect(self.on_scan_finished)
                 self.worker.start()
             else:
@@ -656,7 +709,7 @@ class IPTCEditor(QMainWindow):
             self.db.set_image_tags(self.current_image_path, [])
             # Remove all IPTC keywords from file
             subprocess.run(
-                f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
+                f'exiv2 -M f"Iptc.Application2.{self.selected_iptc_tag['tag']}" "{self.current_image_path}"',
                 shell=True,
                 capture_output=True,
                 text=True,
@@ -670,23 +723,25 @@ class IPTCEditor(QMainWindow):
                 msg = QMessageBox(self)
                 msg.setIcon(QMessageBox.Critical)
                 msg.setWindowTitle("Invalid Tag(s)")
-                msg.setText(f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
+                msg.setText(
+                    f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only."
+                )
                 self.style_dialog(msg)
                 msg.exec()
             return
         # Remove all IPTC keywords from file
         subprocess.run(
-            f'exiv2 -M "del Iptc.Application2.Keywords" "{self.current_image_path}"',
+            f'exiv2 -M f"Iptc.Application2.{self.selected_iptc_tag['tag']}" "{self.current_image_path}"',
             shell=True,
             capture_output=True,
             text=True,
         )
         # Add each keyword
-        commands = [f'-M "add Iptc.Application2.Keywords {shlex.quote(kw)}"' for kw in keywords]
+        commands = [
+            f'-M f"add Iptc.Application2.{self.selected_iptc_tag['tag']} {shlex.quote(kw)}"' for kw in keywords
+        ]
         full_cmd = f'exiv2 {" ".join(commands)} "{self.current_image_path}"'
-        subprocess.run(
-            full_cmd, shell=True, capture_output=True, text=True
-        )
+        subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
         # Save to DB
         self.db.set_image_tags(self.current_image_path, keywords)
 
@@ -699,13 +754,20 @@ class IPTCEditor(QMainWindow):
     def image_selected(self, index):
         # Check if there are unsaved changes before switching images
         current_input = self.iptc_text_edit.toPlainText().strip()
-        if hasattr(self, 'last_loaded_keywords') and self.current_image_path is not None:
+        if (
+            hasattr(self, "last_loaded_keywords")
+            and self.current_image_path is not None
+        ):
             if current_input != self.last_loaded_keywords:
                 msg = QMessageBox(self)
                 msg.setIcon(QMessageBox.Question)
                 msg.setWindowTitle("Save Changes?")
-                msg.setText("You have unsaved changes to the tags. Save before switching images?")
-                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+                msg.setText(
+                    "You have unsaved changes to the tags. Save before switching images?"
+                )
+                msg.setStandardButtons(
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                )
                 msg.setDefaultButton(QMessageBox.Yes)
                 self.style_dialog(msg)
                 reply = msg.exec()
@@ -732,19 +794,23 @@ class IPTCEditor(QMainWindow):
             FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
             file_size = os.path.getsize(path)
             ext = os.path.splitext(path)[1].lower()
-            if file_size > FILESIZE_THRESHOLD or ext in ['.tif', '.tiff']:
+            if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff"]:
                 from PIL import Image
                 from PySide6.QtGui import QImage
                 import io
+
                 pil_img = Image.open(path)
                 # Always use first frame for multi-page TIFFs
-                if hasattr(pil_img, 'n_frames') and pil_img.n_frames > 1:
+                if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
                     pil_img.seek(0)
                 max_dim = 2000
                 if pil_img.width > max_dim or pil_img.height > max_dim:
                     pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
                 # Apply rotation if needed
-                if hasattr(self, '_preview_rotation_angle') and self._preview_rotation_angle:
+                if (
+                    hasattr(self, "_preview_rotation_angle")
+                    and self._preview_rotation_angle
+                ):
                     pil_img = pil_img.rotate(-self._preview_rotation_angle, expand=True)
                 buf = io.BytesIO()
                 pil_img.save(buf, format="PNG")
@@ -752,8 +818,12 @@ class IPTCEditor(QMainWindow):
                 pixmap = QPixmap.fromImage(qimg)
             else:
                 pixmap = QPixmap(path)
-                if hasattr(self, '_preview_rotation_angle') and self._preview_rotation_angle:
+                if (
+                    hasattr(self, "_preview_rotation_angle")
+                    and self._preview_rotation_angle
+                ):
                     from PySide6.QtGui import QTransform
+
                     transform = QTransform().rotate(self._preview_rotation_angle)
                     pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
             pixmap = pixmap.scaled(
@@ -819,7 +889,7 @@ class IPTCEditor(QMainWindow):
         keywords = []
         # Use the split-by-multiple-spaces approach.
         for line in result.stdout.splitlines():
-            if "Iptc.Application2.Keywords" in line:
+            if f"Iptc.Application2.{self.selected_iptc_tag['tag']}" in line:
                 parts = re.split(r"\s{2,}", line.strip())
                 if len(parts) >= 4:
                     keyword_value = parts[-1].strip()
@@ -832,6 +902,7 @@ class IPTCEditor(QMainWindow):
 
     def show_loading_dialog(self, message="Scanning directories..."):
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+
         self.loading_dialog = QDialog(self)
         self.loading_dialog.setModal(True)
         self.loading_dialog.setWindowTitle("Please Wait")
@@ -843,25 +914,31 @@ class IPTCEditor(QMainWindow):
         progress.setRange(0, 0)  # Indeterminate/busy
         layout.addWidget(progress)
         self.loading_dialog.setLayout(layout)
-        self.style_dialog(self.loading_dialog, min_width=340, min_height=120, padding=16)
+        self.style_dialog(
+            self.loading_dialog, min_width=340, min_height=120, padding=16
+        )
         self.loading_dialog.show()
         QApplication.processEvents()
 
     def hide_loading_dialog(self):
-        if hasattr(self, 'loading_dialog') and self.loading_dialog:
+        if hasattr(self, "loading_dialog") and self.loading_dialog:
             self.loading_dialog.accept()
             self.loading_dialog = None
 
     def scan_directory(self):
         if not self.folder_path:
-            dlg = CustomMessageDialog(self, "No Folder Selected", "Please select a folder first.")
+            dlg = CustomMessageDialog(
+                self, "No Folder Selected", "Please select a folder first."
+            )
             dlg.exec()
             return
         # Confirmation dialog before scanning
         confirm_box = QMessageBox(self)
         confirm_box.setIcon(QMessageBox.Question)
         confirm_box.setWindowTitle("Confirm Scan")
-        confirm_box.setText(f"Are you sure you want to scan the directory?\n\n{self.folder_path}")
+        confirm_box.setText(
+            f"Are you sure you want to scan the directory?\n\n{self.folder_path}"
+        )
         confirm_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         confirm_box.setDefaultButton(QMessageBox.No)
         self.style_dialog(confirm_box)
@@ -872,7 +949,7 @@ class IPTCEditor(QMainWindow):
         # Remove missing images from DB before rescanning
         self.db.remove_missing_images(self.folder_path)
         # Pass db_path instead of db instance, and use the correct attribute
-        self.worker = ScanWorker(self.folder_path, self.db.db_path, self.is_valid_tag)
+        self.worker = ScanWorker(self.folder_path, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag)
         self.worker.scan_finished.connect(self.on_scan_finished)
         self.worker.start()
 
@@ -909,6 +986,10 @@ class IPTCEditor(QMainWindow):
     def on_search_text_changed(self):
         # Debounce: restart timer on every keystroke
         self.search_debounce_timer.start(350)  # 400ms delay
+
+    def on_iptc_tag_changed(self, index):
+        # Update the selected IPTC tag dict
+        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(index)
 
 
 def main():
