@@ -270,6 +270,9 @@ class ScanWorker(QThread):
             db = TagDatabase(self.db_path)
             supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
             for root, dirs, files in os.walk(self.folder_path):
+                # Skip .thumbnails directories
+                if ".thumbnails" in dirs:
+                    dirs.remove(".thumbnails")
                 for fname in files:
                     if fname.lower().endswith(supported):
                         fpath = os.path.join(root, fname)
