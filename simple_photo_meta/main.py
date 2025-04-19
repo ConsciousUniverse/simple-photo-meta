@@ -278,13 +278,17 @@ class ScanWorker(QThread):
                         )
                         if result.returncode != 0:
                             continue
+                        # Collect all valid tags from the image
+                        tags = []
                         for line in result.stdout.splitlines():
                             if "Iptc.Application2.Keywords" in line:
                                 parts = re.split(r"\s{2,}", line.strip())
                                 if len(parts) >= 4:
                                     keyword_value = parts[-1].strip()
                                     if self.is_valid_tag(keyword_value):
-                                        db.add_image_tag(fpath, keyword_value)
+                                        tags.append(keyword_value)
+                        # Replace all tags for this image in the DB with the current set
+                        db.set_image_tags(fpath, tags)
         finally:
             self.scan_finished.emit()
 
