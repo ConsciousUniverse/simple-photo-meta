@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, sqlite3, subprocess, shlex, re
+import sys, os, sqlite3, subprocess, re
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -756,7 +756,7 @@ class IPTCEditor(QMainWindow):
 
     def save_tags_to_file_and_db(self, show_dialogs=False):
         if not self.current_image_path:
-            return
+            return True
         raw_input = self.iptc_text_edit.toPlainText().strip()
         tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
         multi_valued = self.selected_iptc_tag.get('multi_valued', False) if self.selected_iptc_tag else False
@@ -774,7 +774,7 @@ class IPTCEditor(QMainWindow):
                 msg.setText(f"Failed to delete IPTC tag {tag_type}:\n{result.stderr}")
                 self.style_dialog(msg)
                 msg.exec()
-            return
+            return True
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         if invalid_tags:
@@ -787,7 +787,7 @@ class IPTCEditor(QMainWindow):
                 )
                 self.style_dialog(msg)
                 msg.exec()
-            return
+            return False
         subprocess.run(
             ["exiv2", "-M", f"del Iptc.Application2.{tag_type}", self.current_image_path],
             capture_output=True,
@@ -813,7 +813,7 @@ class IPTCEditor(QMainWindow):
                 msg.setText(f"Failed to write IPTC tag {tag_type}:\n{add_result.stderr}")
                 self.style_dialog(msg)
                 msg.exec()
-            return
+            return True
 
     def remove_unused_tags_from_db(self):
         c = self.db.conn.cursor()
@@ -847,7 +847,7 @@ class IPTCEditor(QMainWindow):
             if reply == QMessageBox.Cancel:
                 return False  # Cancel the action
             elif reply == QMessageBox.Yes:
-                self.save_tags_to_file_and_db(show_dialogs=True)
+                return self.save_tags_to_file_and_db(show_dialogs=True)
         return True
 
     def image_selected(self, index):
