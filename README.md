@@ -13,12 +13,13 @@ This is an Alpha version of this software, and as such is made available for tes
 ## Features & Usage
 
 - Open directories (and subdirectories, recursively) and display contained image files as a paginated thumbail list.
-- Scan directories and add all discovered IPTC Keyword metatags to a list (for future re-use).
-- Search (realtime) all images by IPTC Keyword metatag.
-- Search (realtime) the discovered Keyword metatag list.
-- Add new IPTC Keyword metatags to images (image opened in a preview pane).
-- Edit existing IPTC Keyword metatags.
-- Delete existing IPTC Keyword metatags.
+- Scan directories and add discovered IPTC metatags to a list (for future re-use).
+- Select from a list of supported IPTC metatags, e.g., Keyword, Caption.
+- Search (realtime) all images by IPTC metatag.
+- Search (realtime) the discovered IPTC metatag list.
+- Add new IPTC metatags to images (image opened in a preview pane).
+- Edit existing IPTC metatags.
+- Delete existing IPTC metatags.
 
 ## Installation & Quick Start
 
