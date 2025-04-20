@@ -799,9 +799,10 @@ class IPTCEditor(QMainWindow):
                 cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{kw}\""])
             self.db.set_image_tags(self.current_image_path, keywords, tag_type)
         else:
-            combined = " | ".join(keywords)
-            cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{combined}\""])
-            self.db.set_image_tags(self.current_image_path, [combined] if combined else [], tag_type)
+            # For single-valued tags, only use the last value entered
+            single_value = keywords[-1] if keywords else ""
+            cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{single_value}\""])
+            self.db.set_image_tags(self.current_image_path, [single_value] if single_value else [], tag_type)
         cmd.append(self.current_image_path)
         add_result = subprocess.run(cmd, capture_output=True, text=True)
         if add_result.returncode != 0:
