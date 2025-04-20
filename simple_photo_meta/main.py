@@ -536,19 +536,13 @@ class IPTCEditor(QMainWindow):
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
 
-        # Container for IPTC text edit and buttons
+        # Container for IPTC text edit
         iptc_widget = QWidget()
         iptc_layout = QVBoxLayout(iptc_widget)
         iptc_layout.setContentsMargins(0, 0, 0, 0)
         self.iptc_text_edit = QTextEdit()
         self.iptc_text_edit.setFont(font)
         iptc_layout.addWidget(self.iptc_text_edit)
-        btn_layout = QHBoxLayout()
-        self.btn_save = QPushButton("Save Tags")
-        self.btn_save.setFont(font)
-        self.btn_save.clicked.connect(self.save_iptc)
-        btn_layout.addWidget(self.btn_save)
-        iptc_layout.addLayout(btn_layout)
         center_splitter.addWidget(iptc_widget)
         center_splitter.setSizes([600, 200])
 
@@ -572,7 +566,6 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         # Use itemClicked instead of clicked for more reliable tag selection
         self.tags_list_widget.itemClicked.connect(self.tag_clicked)
-        print("Connected itemClicked signal to tag_clicked")  # Debug print
         self.tags_list_widget.setStyleSheet(
             """
             QListWidget::item {
@@ -831,12 +824,6 @@ class IPTCEditor(QMainWindow):
         """)
         self.db.conn.commit()
 
-    def save_iptc(self):
-        self.save_tags_to_file_and_db(show_dialogs=True)
-        # Do NOT refresh the input field here! Only update tags list/search.
-        self.load_previous_tags()
-        self.update_tags_search()
-
     def maybe_save_unsaved_changes(self):
         current_input = self.iptc_text_edit.toPlainText().strip()
         if (
@@ -949,7 +936,6 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.clear()
         self.tags_list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tags_list_widget.setEnabled(True)
-        print("update_tags_list_widget: Adding tags:", tags)  # Debug print
         for tag in sorted_tags:
             self.tags_list_widget.addItem(tag)
 
@@ -966,7 +952,6 @@ class IPTCEditor(QMainWindow):
         self.update_tags_list_widget(filtered)
 
     def tag_clicked(self, item):
-        print(f"Tag clicked: {item.text()}")  # Debug print
         tag = item.text()
         self.iptc_text_edit.setFocus()
         cursor = self.iptc_text_edit.textCursor()
