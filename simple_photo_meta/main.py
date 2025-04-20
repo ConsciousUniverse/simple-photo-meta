@@ -869,6 +869,7 @@ class IPTCEditor(QMainWindow):
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
             return
+        # Always get the image path after maybe_save_unsaved_changes
         image_path = self.image_list[selected_index]
         self.current_image_path = image_path
         self._preview_rotation_angle = 0
