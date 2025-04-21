@@ -11,9 +11,8 @@ setup(
         "Pillow",
     ],
     entry_points={
-        "gui_scripts": [
-            "simple-photo-meta=simple_photo_meta.main:main"
-        ]
+        "gui_scripts": ["simple-photo-meta=simple_photo_meta.main:main"],
+        "console_scripts": ["simple-photo-meta=simple_photo_meta.main:main"],
     },
     include_package_data=True,
     license="GPLv3",
