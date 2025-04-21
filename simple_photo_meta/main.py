@@ -338,7 +338,7 @@ class ScanWorker(QThread):
 
     def run(self):
         import subprocess, os, re
-
+        from iptc_tags import iptc_writable_tags
         try:
             # Create a new TagDatabase instance in this thread
             db = TagDatabase(self.db_path)
@@ -355,17 +355,18 @@ class ScanWorker(QThread):
                         )
                         if result.returncode != 0:
                             continue
-                        # Collect all valid tags from the image
-                        tags = []
-                        for line in result.stdout.splitlines():
-                            if f"Iptc.Application2.{self.selected_iptc_tag['tag']}" in line:
-                                parts = re.split(r"\s{2,}", line.strip())
-                                if len(parts) >= 4:
-                                    keyword_value = parts[-1].strip()
-                                    if self.is_valid_tag(keyword_value):
-                                        tags.append(keyword_value)
-                        # Replace all tags for this image in the DB with the current set
-                        db.set_image_tags(fpath, tags, self.selected_iptc_tag['tag'])
+                        # For each IPTC tag type, collect and store tags
+                        for tag_info in iptc_writable_tags:
+                            tag_type = tag_info['tag']
+                            tags = []
+                            for line in result.stdout.splitlines():
+                                if f"Iptc.Application2.{tag_type}" in line:
+                                    parts = re.split(r"\s{2,}", line.strip())
+                                    if len(parts) >= 4:
+                                        value = parts[-1].strip()
+                                        if self.is_valid_tag(value):
+                                            tags.append(value)
+                            db.set_image_tags(fpath, tags, tag_type)
         finally:
             self.scan_finished.emit()
 
