@@ -1,0 +1,47 @@
+name: simple-photo-meta
+version: '0.1.0'
+summary: Simple Photo Meta Editor
+description: |
+  A local GUI tool for editing IPTC metadata on photos (built with PySide6 & Exiv2).
+base: core22
+grade: stable
+confinement: strict
+
+apps:
+  simple-photo-meta:
+    command: simple-photo-meta
+    plugs:
+      - home
+      - removable-media
+      - x11
+      - wayland
+      - opengl
+
+parts:
+  simple-photo-meta:
+    # No build plugin—install the wheel by hand
+    plugin: nil
+    source: .
+    build-packages:
+      - python3-venv   # to allow venv creation if needed
+    stage-packages:
+      - python3
+      - python3-pip
+      - exiv2
+      # Qt5/6 XCB backend & OpenGL support for PySide6
+      - libgl1-mesa-glx
+      - libegl1-mesa
+      - libxkbcommon0
+      - libxcb-icccm4
+      - libxcb-image0
+      - libxcb-keysyms1
+      - libxcb-render-util0
+      - libxcb-xinerama0
+
+    override-build: |
+      set -eux
+      # 1) Install your pure‐Python wheel into the snap’s $SNAPCRAFT_PART_INSTALL
+      python3 -m pip install --no-deps --prefix=$SNAPCRAFT_PART_INSTALL dist/simple_photo_meta-0.1.0-py3-none-any.whl
+      # 2) Ensure the console entrypoint is available under bin/
+      install -Dm755 $SNAPCRAFT_PART_INSTALL/bin/simple-photo-meta \
+                    $SNAPCRAFT_PART_INSTALL/bin/simple-photo-meta
