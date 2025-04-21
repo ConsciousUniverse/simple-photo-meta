@@ -848,7 +848,12 @@ class IPTCEditor(QMainWindow):
             if reply == QMessageBox.Cancel:
                 return False  # Cancel the action
             elif reply == QMessageBox.Yes:
-                return self.save_tags_to_file_and_db(show_dialogs=True)
+                save_result = self.save_tags_to_file_and_db(show_dialogs=True)
+                if save_result is False:
+                    return False  # Validation failed, do not proceed
+                return True  # Save succeeded, proceed
+            elif reply == QMessageBox.No:
+                return True  # Discard changes, proceed
         return True
 
     def image_selected(self, index):
