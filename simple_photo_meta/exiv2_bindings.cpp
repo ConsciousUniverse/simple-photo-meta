@@ -11,15 +11,15 @@ namespace py = pybind11;
 
 // Map human-readable IPTC labels to raw Exiv2 keys
 static const std::map<std::string, std::string> humanToRawKey = {
-    {"Caption/Abstract", "Iptc.Application2.Caption"},
+    {"Caption", "Iptc.Application2.Caption"},
     {"Keywords", "Iptc.Application2.Keywords"},
-    {"Byline/Author", "Iptc.Application2.Byline"},
-    {"Byline Title", "Iptc.Application2.BylineTitle"},
-    {"Date Created", "Iptc.Application2.DateCreated"},
-    {"Object Name", "Iptc.Application2.ObjectName"},
+    {"By-line", "Iptc.Application2.Byline"},
+    {"By-lineTitle", "Iptc.Application2.BylineTitle"},
+    {"DateCreated", "Iptc.Application2.DateCreated"},
+    {"ObjectName", "Iptc.Application2.ObjectName"},
     {"Credit", "Iptc.Application2.Credit"},
     {"Source", "Iptc.Application2.Source"},
-    {"Copyright Notice", "Iptc.Application2.CopyrightNotice"},
+    {"CopyrightNotice", "Iptc.Application2.CopyrightNotice"},
     {"Headline", "Iptc.Application2.Headline"},
     {"SpecialInstructions", "Iptc.Application2.SpecialInstructions"},
     {"Category", "Iptc.Application2.Category"},
@@ -58,9 +58,9 @@ public:
         val->read(value);
         Exiv2::Iptcdatum datum(iptcKey, val.get());
 
-        // Erase existing entries for this key
+        // Erase only matching entries
         auto it = data.findKey(iptcKey);
-        while (it != data.end())
+        while (it != data.end() && it->key() == key)
             it = data.erase(it);
         // Add new
         data.add(datum);
@@ -92,15 +92,16 @@ public:
                 ++it;
             }
 
-            // Dedupe
+            // Deduplicate
             std::vector<std::string> uniq;
             std::set<std::string> seen;
             for (auto const &v : values)
                 if (seen.insert(v).second)
                     uniq.push_back(v);
 
-            // Decide single vs list
-            if (uniq.size() > 1 || uniq.empty() == false && humanToRawKey.count(label) && label == "Keywords")
+            // Multi vs single
+            bool isMulti = (label == "Keywords");
+            if (uniq.size() > 1 || isMulti)
             {
                 iptc[label] = py::cast(uniq);
             }
@@ -130,24 +131,14 @@ public:
             if (itMap != humanToRawKey.end())
                 rawKey = itMap->second;
             else
-            {
-                // 2) lookup existing tags
-                for (auto const &md : data)
-                {
-                    if (md.tagLabel() == label)
-                    {
-                        rawKey = md.key();
-                        break;
-                    }
-                }
-            }
-            if (rawKey.empty())
-                continue;
+                continue; // unknown label, skip
+
             Exiv2::IptcKey iptcKey(rawKey);
-            // Erase existing
+            // Erase only matching entries
             auto it = data.findKey(iptcKey);
-            while (it != data.end())
+            while (it != data.end() && it->key() == rawKey)
                 it = data.erase(it);
+
             // Add new
             if (py::isinstance<py::list>(valObj))
             {
@@ -167,6 +158,7 @@ public:
                 data.add(Exiv2::Iptcdatum(iptcKey, val.get()));
             }
         }
+        // Save all changes without affecting other keys
         image_->setIptcData(data);
         image_->writeMetadata();
     }

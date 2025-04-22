@@ -16,15 +16,23 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QSplitter,
     QDialog,
-    QComboBox,  
+    QComboBox,
 )
-from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont, QTextCursor
+from PySide6.QtGui import (
+    QPixmap,
+    QIcon,
+    QStandardItemModel,
+    QStandardItem,
+    QFont,
+    QTextCursor,
+)
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer, QThread, Signal
 import hashlib
 from PIL import Image
 from simple_photo_meta import iptc_tags
 from simple_photo_meta.exiv2bind import Exiv2Bind
+
 
 class TagDatabase:
     def __init__(self, db_path="tags.db"):
@@ -75,7 +83,10 @@ class TagDatabase:
     def add_tag(self, tag, tag_type):
         try:
             c = self.conn.cursor()
-            c.execute("INSERT OR IGNORE INTO tags (tag, tag_type) VALUES (?, ?)", (tag, tag_type))
+            c.execute(
+                "INSERT OR IGNORE INTO tags (tag, tag_type) VALUES (?, ?)",
+                (tag, tag_type),
+            )
             self.conn.commit()
         except Exception as e:
             print("Error inserting tag", tag, tag_type, e)
@@ -116,7 +127,10 @@ class TagDatabase:
         image_id = self.add_image(image_path)
         c = self.conn.cursor()
         # Remove all existing tag associations for this image for this tag_type
-        c.execute("DELETE FROM image_tags WHERE image_id IN (SELECT images.id FROM images WHERE images.path=?) AND tag_id IN (SELECT id FROM tags WHERE tag_type=?)", (image_path, tag_type))
+        c.execute(
+            "DELETE FROM image_tags WHERE image_id IN (SELECT images.id FROM images WHERE images.path=?) AND tag_id IN (SELECT id FROM tags WHERE tag_type=?)",
+            (image_path, tag_type),
+        )
         # Add new tags
         for tag in tags:
             self.add_tag(tag, tag_type)
@@ -131,7 +145,9 @@ class TagDatabase:
     def get_tags(self, tag_type=None):
         c = self.conn.cursor()
         if tag_type:
-            c.execute("SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,))
+            c.execute(
+                "SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,)
+            )
         else:
             c.execute("SELECT tag FROM tags ORDER BY tag ASC")
         return [row[0] for row in c.fetchall()]
@@ -141,7 +157,7 @@ class TagDatabase:
         if not tags:
             if tag_type:
                 # Return images that do NOT have any tags of this tag_type
-                query = '''
+                query = """
                     SELECT i.path FROM images i
                     WHERE i.id NOT IN (
                         SELECT it.image_id FROM image_tags it
@@ -149,7 +165,7 @@ class TagDatabase:
                         WHERE t.tag_type = ?
                     )
                     ORDER BY i.path ASC
-                '''
+                """
                 c.execute(query, (tag_type,))
                 return [row[0] for row in c.fetchall()]
             else:
@@ -204,7 +220,9 @@ class TagDatabase:
         row = c.fetchone()
         return row[0] if row else 0
 
-    def get_images_in_folder_paginated(self, folder_path, page, page_size, tags=None, tag_type=None):
+    def get_images_in_folder_paginated(
+        self, folder_path, page, page_size, tags=None, tag_type=None
+    ):
         c = self.conn.cursor()
         offset = page * page_size
         if tags:
@@ -264,10 +282,12 @@ class TagDatabase:
         row = c.fetchone()
         return row[0] if row else 0
 
-    def get_untagged_images_of_type_in_folder_paginated(self, folder_path, page, page_size, tag_type):
+    def get_untagged_images_of_type_in_folder_paginated(
+        self, folder_path, page, page_size, tag_type
+    ):
         c = self.conn.cursor()
         offset = page * page_size
-        query = '''
+        query = """
             SELECT i.path FROM images i
             WHERE i.path LIKE ? AND i.id NOT IN (
                 SELECT it.image_id FROM image_tags it
@@ -275,20 +295,28 @@ class TagDatabase:
                 WHERE t.tag_type = ?
             )
             ORDER BY i.path ASC LIMIT ? OFFSET ?
-        '''
-        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), tag_type, page_size, offset))
+        """
+        c.execute(
+            query,
+            (
+                os.path.join(os.path.abspath(folder_path), "%"),
+                tag_type,
+                page_size,
+                offset,
+            ),
+        )
         return [row[0] for row in c.fetchall()]
 
     def get_untagged_image_count_of_type_in_folder(self, folder_path, tag_type):
         c = self.conn.cursor()
-        query = '''
+        query = """
             SELECT COUNT(*) FROM images i
             WHERE i.path LIKE ? AND i.id NOT IN (
                 SELECT it.image_id FROM image_tags it
                 JOIN tags t ON t.id = it.tag_id
                 WHERE t.tag_type = ?
             )
-        '''
+        """
         c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), tag_type))
         row = c.fetchone()
         return row[0] if row else 0
@@ -348,23 +376,21 @@ class ScanWorker(QThread):
                 for fname in files:
                     if fname.lower().endswith(supported):
                         fpath = os.path.join(root, fname)
-                        result = subprocess.run(
-                            ["exiv2", "-pi", fpath], capture_output=True, text=True
-                        )
-                        if result.returncode != 0:
-                            continue
-                        # For each IPTC tag type, collect and store tags
-                        for tag_info in iptc_tags.iptc_writable_tags:
-                            tag_type = tag_info['tag']
-                            tags = []
-                            for line in result.stdout.splitlines():
-                                if f"Iptc.Application2.{tag_type}" in line:
-                                    parts = re.split(r"\s{2,}", line.strip())
-                                    if len(parts) >= 4:
-                                        value = parts[-1].strip()
-                                        if self.is_valid_tag(value):
-                                            tags.append(value)
-                            db.set_image_tags(fpath, tags, tag_type)
+                        try:
+                            meta = Exiv2Bind(fpath)
+                            result = meta.to_dict()
+                            iptc_data = result.get("iptc", {})
+                            for field in iptc_tags.iptc_writabable_fields_list:
+                                tags = []
+                                for result_field, result_tag in iptc_data.items():
+                                    if result_field == field:
+                                        if isinstance(result_tag, list):
+                                            tags.extend(result_tag)
+                                        else:
+                                            tags.append(result_tag)
+                                db.set_image_tags(fpath, tags, field)
+                        except Exception as e:
+                            print(f"Error: {e}")
         finally:
             self.scan_finished.emit()
 
@@ -482,6 +508,8 @@ class IPTCEditor(QMainWindow):
         self.list_view.setMinimumHeight(250)
         self.list_view.setMinimumWidth(250)
         self.list_view.clicked.connect(self.image_selected)
+        # Add pressed signal to always trigger preview, even if already selected
+        self.list_view.pressed.connect(self.image_selected)
         # Add context menu policy and handler for right-click
         self.list_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_view.customContextMenuRequested.connect(
@@ -593,9 +621,9 @@ class IPTCEditor(QMainWindow):
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
-            self.iptc_tag_dropdown.addItem(tag['name'], tag)
-            self.iptc_tag_dropdown.setItemData(i, tag['description'], Qt.ToolTipRole)
-            if tag['tag'] == 'Keywords':
+            self.iptc_tag_dropdown.addItem(tag["name"], tag)
+            self.iptc_tag_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
+            if tag["tag"] == "Keywords":
                 keyword_index = i
         self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
         right_panel.addWidget(self.iptc_tag_dropdown)
@@ -629,7 +657,7 @@ class IPTCEditor(QMainWindow):
         else:
             text = self.search_bar.toPlainText().strip()
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-            tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+            tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
             if not tags:
                 if tag_type:
                     total_images = self.db.get_untagged_image_count_of_type_in_folder(
@@ -640,7 +668,9 @@ class IPTCEditor(QMainWindow):
                         self.folder_path
                     )
             else:
-                total_images = self.db.get_image_count_in_folder(self.folder_path, tags, tag_type)
+                total_images = self.db.get_image_count_in_folder(
+                    self.folder_path, tags, tag_type
+                )
             self.total_pages = (
                 (total_images - 1) // self.page_size + 1 if total_images > 0 else 1
             )
@@ -658,7 +688,7 @@ class IPTCEditor(QMainWindow):
             self.show_current_page()
 
     def next_page(self):
-        if self.current_page < self.total_pages - 1:
+        if self.current_page < self.total_pages:
             self.current_page += 1
             self.show_current_page()
 
@@ -672,7 +702,7 @@ class IPTCEditor(QMainWindow):
             return
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
         if not tags:
             if tag_type:
                 page_items = self.db.get_untagged_images_of_type_in_folder_paginated(
@@ -718,7 +748,7 @@ class IPTCEditor(QMainWindow):
         index = self.list_view.indexAt(pos)
         if not index.isValid():
             return
-        # Retrieve full path from item data
+        # Only show the filename, do not change selection or call image_selected
         model = self.list_view.model()
         item = model.itemFromIndex(index)
         fpath = item.data(Qt.UserRole + 1)
@@ -728,6 +758,8 @@ class IPTCEditor(QMainWindow):
             msg.setText(os.path.basename(fpath))
             self.style_dialog(msg)
             msg.exec()
+        # Optionally, clear focus to avoid selection issues
+        self.list_view.clearFocus()
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -737,7 +769,9 @@ class IPTCEditor(QMainWindow):
             # Only scan if not previously scanned
             if not self.db.was_directory_scanned(folder):
                 self.show_loading_dialog("Scanning for images and tags...")
-                self.worker = ScanWorker(folder, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag)
+                self.worker = ScanWorker(
+                    folder, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag
+                )
                 self.worker.scan_finished.connect(self.on_scan_finished)
                 self.worker.start()
             else:
@@ -757,25 +791,30 @@ class IPTCEditor(QMainWindow):
         if not self.current_image_path:
             return True
         raw_input = self.iptc_text_edit.toPlainText().strip()
-        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
-        multi_valued = self.selected_iptc_tag.get('multi_valued', False) if self.selected_iptc_tag else False
-        if not raw_input:
-            self.db.set_image_tags(self.current_image_path, [], tag_type)
-            result = subprocess.run(
-                ["exiv2", "-M", f"del Iptc.Application2.{tag_type}", self.current_image_path],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0 and show_dialogs:
+        tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        )
+        multi_valued = (
+            self.selected_iptc_tag.get("multi_valued", False)
+            if self.selected_iptc_tag
+            else False
+        )
+        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
+        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
+        try:
+            meta = Exiv2Bind(self.current_image_path)
+            meta.from_dict({"iptc": {tag_type: []}})
+        except Exception as e:
+            if show_dialogs:
                 msg = QMessageBox(self)
                 msg.setIcon(QMessageBox.Critical)
                 msg.setWindowTitle("exiv2 Error")
-                msg.setText(f"Failed to delete IPTC tag {tag_type}:\n{result.stderr}")
+                msg.setText(f"Failed to delete IPTC tag {tag_type}:\n{e}")
                 self.style_dialog(msg)
                 msg.exec()
+        if not raw_input:
+            self.db.set_image_tags(self.current_image_path, [], tag_type)
             return True
-        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
-        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         if invalid_tags:
             if show_dialogs:
                 msg = QMessageBox(self)
@@ -787,29 +826,25 @@ class IPTCEditor(QMainWindow):
                 self.style_dialog(msg)
                 msg.exec()
             return False
-        subprocess.run(
-            ["exiv2", "-M", f"del Iptc.Application2.{tag_type}", self.current_image_path],
-            capture_output=True,
-            text=True,
-        )
-        cmd = ["exiv2"]
-        if multi_valued:
-            for kw in keywords:
-                cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{kw}\""])
-            self.db.set_image_tags(self.current_image_path, keywords, tag_type)
-        else:
-            # For single-valued tags, only use the last value entered
-            single_value = keywords[-1] if keywords else ""
-            cmd.extend(["-M", f"add Iptc.Application2.{tag_type} \"{single_value}\""])
-            self.db.set_image_tags(self.current_image_path, [single_value] if single_value else [], tag_type)
-        cmd.append(self.current_image_path)
-        add_result = subprocess.run(cmd, capture_output=True, text=True)
-        if add_result.returncode != 0:
+        try:
+            if multi_valued:
+                meta.from_dict({"iptc": {tag_type: keywords}})
+                self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+            else:
+                # For single-valued tags, only use the last value entered
+                single_value = keywords[-1] if keywords else ""
+                meta.from_dict({"iptc": {tag_type: [single_value]}})
+                self.db.set_image_tags(
+                    self.current_image_path,
+                    [single_value] if single_value else [],
+                    tag_type,
+                )
+        except Exception as e:
             if show_dialogs:
                 msg = QMessageBox(self)
                 msg.setIcon(QMessageBox.Critical)
                 msg.setWindowTitle("exiv2 Error")
-                msg.setText(f"Failed to write IPTC tag {tag_type}:\n{add_result.stderr}")
+                msg.setText(f"Failed to write IPTC tag {tag_type}:\n{e}")
                 self.style_dialog(msg)
                 msg.exec()
             return True
@@ -817,11 +852,13 @@ class IPTCEditor(QMainWindow):
     def remove_unused_tags_from_db(self):
         c = self.db.conn.cursor()
         # Remove tag-image associations for tags not present in any image
-        c.execute("""
+        c.execute(
+            """
             DELETE FROM tags WHERE id NOT IN (
                 SELECT tag_id FROM image_tags
             )
-        """)
+        """
+        )
         self.db.conn.commit()
 
     def maybe_save_unsaved_changes(self):
@@ -834,9 +871,7 @@ class IPTCEditor(QMainWindow):
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Question)
             msg.setWindowTitle("Save Changes?")
-            msg.setText(
-                "You have unsaved changes to the tags. Save before switching?"
-            )
+            msg.setText("You have unsaved changes to the tags. Save before switching?")
             msg.setStandardButtons(
                 QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
             )
@@ -869,7 +904,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.clear()  # Explicitly clear input field before setting new tags
         self.extract_keywords()
         # Always update the input field, even if there are no tags
-        if hasattr(self, 'cleaned_keywords') and self.cleaned_keywords:
+        if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
             self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
         else:
             self.iptc_text_edit.setPlainText("")
@@ -914,9 +949,15 @@ class IPTCEditor(QMainWindow):
 
                     transform = QTransform().rotate(self._preview_rotation_angle)
                     pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
+            # Use default size if label size is not set
+            label_width = self.image_label.width()
+            label_height = self.image_label.height()
+            if label_width < 10 or label_height < 10:
+                label_width = 600
+                label_height = 400
             pixmap = pixmap.scaled(
-                self.image_label.width(),
-                self.image_label.height(),
+                label_width,
+                label_height,
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
@@ -931,7 +972,7 @@ class IPTCEditor(QMainWindow):
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
-        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
         self.all_tags = self.db.get_tags(tag_type)
         self.update_tags_list_widget(self.all_tags)
 
@@ -946,7 +987,7 @@ class IPTCEditor(QMainWindow):
 
     def update_tags_search(self):
         # Get search text, filter tags, and update the list widget
-        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else None
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
         if not hasattr(self, "all_tags") or not self.all_tags:
             self.all_tags = self.db.get_tags(tag_type)
         search_text = self.tags_search_bar.toPlainText().strip().lower()
@@ -970,22 +1011,27 @@ class IPTCEditor(QMainWindow):
 
     def extract_keywords(self):
         # Extract tags for the selected tag type from exiv2 output.
-        result = subprocess.run(
-            ["exiv2", "-pi", self.current_image_path], capture_output=True, text=True
+        tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
         )
-        if result.returncode != 0:
-            print("Error reading IPTC data:", result.stderr)
+        try:
+            meta = Exiv2Bind(self.current_image_path)
+            result = meta.to_dict()
+            tags = []
+            iptc_data = result.get("iptc", {})
+            for result_field, result_tag in iptc_data.items():
+                if result_field == tag_type:
+                    if isinstance(result_tag, list):
+                        tags.extend(result_tag)
+                    elif isinstance(result_tag, str):
+                        tags.append(result_tag)
+            # Remove empty strings and strip whitespace
+            tags = [t.strip() for t in tags if t and t.strip()]
+        except Exception as e:
+            print("Error reading IPTC data:", e)
             self.cleaned_keywords = []
             return
-        keywords = []
-        tag_type = self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'
-        for line in result.stdout.splitlines():
-            if f"Iptc.Application2.{tag_type}" in line:
-                parts = re.split(r"\s{2,}", line.strip())
-                if len(parts) >= 4:
-                    keyword_value = parts[-1].strip()
-                    keywords.append(keyword_value)
-        self.cleaned_keywords = keywords
+        self.cleaned_keywords = tags
 
     def is_valid_tag(self, tag):
         # Only allow alphanumeric and dashes
@@ -1040,7 +1086,9 @@ class IPTCEditor(QMainWindow):
         # Remove missing images from DB before rescanning
         self.db.remove_missing_images(self.folder_path)
         # Pass db_path instead of db instance, and use the correct attribute
-        self.worker = ScanWorker(self.folder_path, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag)
+        self.worker = ScanWorker(
+            self.folder_path, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag
+        )
         self.worker.scan_finished.connect(self.on_scan_finished)
         self.worker.start()
 
@@ -1084,7 +1132,11 @@ class IPTCEditor(QMainWindow):
             # Revert dropdown to previous index if cancelled
             self.iptc_tag_dropdown.blockSignals(True)
             for i in range(self.iptc_tag_dropdown.count()):
-                if self.iptc_tag_dropdown.itemData(i)['tag'] == (self.selected_iptc_tag['tag'] if self.selected_iptc_tag else 'Keywords'):
+                if self.iptc_tag_dropdown.itemData(i)["tag"] == (
+                    self.selected_iptc_tag["tag"]
+                    if self.selected_iptc_tag
+                    else "Keywords"
+                ):
                     self.iptc_tag_dropdown.setCurrentIndex(i)
                     break
             self.iptc_tag_dropdown.blockSignals(False)
@@ -1093,11 +1145,17 @@ class IPTCEditor(QMainWindow):
         self.load_previous_tags()
         self.update_search()
         self.update_tags_search()
+        # Always update the preview pane for the current image and tag type
         if self.current_image_path:
             self.extract_keywords()
-            self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+            if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
+                self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+            else:
+                self.iptc_text_edit.setPlainText("")
             self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
-            self.display_image(self.current_image_path)
+        else:
+            self.iptc_text_edit.setPlainText("")
+            self.last_loaded_keywords = ""
 
 
 def main():
