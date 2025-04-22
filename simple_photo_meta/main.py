@@ -24,7 +24,7 @@ from PySide6.QtCore import QTimer, QThread, Signal
 import hashlib
 from PIL import Image
 from simple_photo_meta import iptc_tags
-
+from simple_photo_meta.exiv2bind import Exiv2Bind
 
 class TagDatabase:
     def __init__(self, db_path="tags.db"):

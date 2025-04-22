@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d448ac25307cabd29842b76e1727adf4bcb93372641605fe18fdf16080e1ba99"
+            "sha256": "58c62a46884b1f9e9e7e7ee48b688ad186725ff27c86512c66a346bea7a5eb72"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -104,6 +104,14 @@
             "markers": "python_version >= '3.9'",
             "version": "==11.2.1"
         },
+        "pybind11": {
+            "hashes": [
+                "sha256:237c41e29157b962835d356b370ededd57594a26d5894a795960f0047cb5caf5",
+                "sha256:ba6af10348c12b24e92fa086b39cfba0eff619b61ac77c406167d813b096d39a"
+            ],
+            "markers": "python_version >= '3.7'",
+            "version": "==2.13.6"
+        },
         "pyside6": {
             "hashes": [
                 "sha256:0103e5d161696db40d75bfbf4e4b7d4f3372903c1b400c4e3379377b62c50290",
@@ -148,6 +156,10 @@
             ],
             "markers": "python_version < '3.14' and python_version >= '3.9'",
             "version": "==6.9.0"
+        },
+        "simple-photo-meta": {
+            "editable": true,
+            "file": "."
         }
     },
     "develop": {

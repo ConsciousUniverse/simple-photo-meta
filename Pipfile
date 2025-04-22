@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 pyside6 = "*"
 pillow = "*"
+simple-photo-meta = {file = ".", editable = true}
 
 [dev-packages]
 setuptools = "*"
