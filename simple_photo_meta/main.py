@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QSplitter,
     QDialog,
-    QComboBox,  # <-- Add QComboBox
+    QComboBox,  
 )
 from PySide6.QtGui import QPixmap, QIcon, QStandardItemModel, QStandardItem, QFont, QTextCursor
 from PySide6.QtCore import Qt

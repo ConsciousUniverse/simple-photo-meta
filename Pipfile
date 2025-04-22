@@ -11,6 +11,8 @@ pillow = "*"
 setuptools = "*"
 build = "*"
 wheel = "*"
+nuitka = "*"
+pybind11 = "*"
 
 [requires]
 python_version = "3.13"
