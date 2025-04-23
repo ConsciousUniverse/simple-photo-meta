@@ -572,6 +572,7 @@ class IPTCEditor(QMainWindow):
         iptc_layout.addWidget(self.iptc_text_edit)
         center_splitter.addWidget(iptc_widget)
         center_splitter.setSizes([600, 200])
+        self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
 
         main_layout.addWidget(center_splitter, 2)
 
@@ -595,10 +596,14 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.itemClicked.connect(self.tag_clicked)
         self.tags_list_widget.setStyleSheet(
             """
+            QListWidget {
+                font-weight: bold;
+            }
             QListWidget::item {
                 background: skyblue;
                 color: black;
                 font-size: 16pt;
+                font-weight: bold;
                 margin-bottom: 7px;
                 border-radius: 6px;
                 padding: 4px 8px;
@@ -790,6 +795,7 @@ class IPTCEditor(QMainWindow):
     def save_tags_to_file_and_db(self, show_dialogs=False):
         if not self.current_image_path:
             return True
+        # Always get plain text for saving
         raw_input = self.iptc_text_edit.toPlainText().strip()
         tag_type = (
             self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
@@ -905,10 +911,14 @@ class IPTCEditor(QMainWindow):
         self.extract_keywords()
         # Always update the input field, even if there are no tags
         if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
-            self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+            self.set_tag_input_html(self.cleaned_keywords)
         else:
-            self.iptc_text_edit.setPlainText("")
-        self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
+            self.set_tag_input_html([])
+        self.last_loaded_keywords = (
+            "\n".join(self.cleaned_keywords)
+            if hasattr(self, "cleaned_keywords")
+            else ""
+        )
         self.load_previous_tags()
         self.update_tags_search()
 
@@ -999,14 +1009,17 @@ class IPTCEditor(QMainWindow):
 
     def tag_clicked(self, item):
         tag = item.text()
-        self.iptc_text_edit.setFocus()
-        cursor = self.iptc_text_edit.textCursor()
-        if self.iptc_text_edit.toPlainText().strip():
-            tag_to_insert = "\n" + tag
+        # Insert tag at the end of the input (plain text, then update HTML)
+        if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
+            tags = self.cleaned_keywords + [tag]
         else:
-            tag_to_insert = tag
+            tags = [tag]
+        self.set_tag_input_html(tags)
+        self.cleaned_keywords = tags
+        self.iptc_text_edit.setFocus()
+        # Move cursor to end
+        cursor = self.iptc_text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)
-        cursor.insertText(tag_to_insert)
         self.iptc_text_edit.setTextCursor(cursor)
 
     def extract_keywords(self):
@@ -1149,13 +1162,40 @@ class IPTCEditor(QMainWindow):
         if self.current_image_path:
             self.extract_keywords()
             if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
-                self.iptc_text_edit.setPlainText("\n".join(self.cleaned_keywords))
+                self.set_tag_input_html(self.cleaned_keywords)
             else:
-                self.iptc_text_edit.setPlainText("")
-            self.last_loaded_keywords = self.iptc_text_edit.toPlainText().strip()
+                self.set_tag_input_html([])
+            self.last_loaded_keywords = (
+                "\n".join(self.cleaned_keywords)
+                if hasattr(self, "cleaned_keywords")
+                else ""
+            )
         else:
-            self.iptc_text_edit.setPlainText("")
+            self.set_tag_input_html([])
             self.last_loaded_keywords = ""
+
+    def set_tag_input_html(self, tags):
+        if not tags:
+            self.iptc_text_edit.clear()
+            self.iptc_text_edit.setStyleSheet("QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }")
+            return
+        # Set plain text, one tag per line
+        text = "\n".join(tags)
+        self.iptc_text_edit.blockSignals(True)
+        self.iptc_text_edit.setPlainText(text)
+        self.iptc_text_edit.blockSignals(False)
+        self.iptc_text_edit.setStyleSheet("QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }")
+        # Move cursor to end
+        cursor = self.iptc_text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.iptc_text_edit.setTextCursor(cursor)
+
+    def on_tag_input_text_changed(self):
+        # Get plain text, split into lines, and re-apply HTML styling
+        text = self.iptc_text_edit.toPlainText()
+        tags = text.split("\n")
+        self.set_tag_input_html(tags)
+        self.cleaned_keywords = [t for t in tags if t.strip()]
 
 
 def main():
