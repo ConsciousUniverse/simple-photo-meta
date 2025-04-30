@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, sqlite3, subprocess, re
+from appdirs import user_data_dir
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -35,9 +36,21 @@ from simple_photo_meta.exiv2bind import Exiv2Bind
 
 
 class TagDatabase:
-    def __init__(self, db_path="tags.db"):
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
+    """
+    Note: Tags DB created at platform default:
+    Platform | Database location
+    macOS | ~/Library/Application Support/SPM/tags.db
+    Linux | ~/.local/share/SPM/tags.db
+    Windows | %LOCALAPPDATA%\SPM\tags.db
+    """
+
+    def __init__(self):
+        appname = "SimplePhotoMeta"
+        appauthor = "Zaziork"
+        db_dir = user_data_dir(appname, appauthor)
+        os.makedirs(db_dir, exist_ok=True)
+        self.db_path = os.path.join(db_dir, "spm_tags.db")
+        self.conn = sqlite3.connect(self.db_path)
         self._create_table()
 
     def _create_table(self):
@@ -367,7 +380,7 @@ class ScanWorker(QThread):
     def run(self):
         try:
             # Create a new TagDatabase instance in this thread
-            db = TagDatabase(self.db_path)
+            db = TagDatabase()
             supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
             for root, dirs, files in os.walk(self.folder_path):
                 # Skip .thumbnails directories
@@ -1177,14 +1190,18 @@ class IPTCEditor(QMainWindow):
     def set_tag_input_html(self, tags):
         if not tags:
             self.iptc_text_edit.clear()
-            self.iptc_text_edit.setStyleSheet("QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }")
+            self.iptc_text_edit.setStyleSheet(
+                "QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+            )
             return
         # Set plain text, one tag per line
         text = "\n".join(tags)
         self.iptc_text_edit.blockSignals(True)
         self.iptc_text_edit.setPlainText(text)
         self.iptc_text_edit.blockSignals(False)
-        self.iptc_text_edit.setStyleSheet("QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }")
+        self.iptc_text_edit.setStyleSheet(
+            "QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+        )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)

@@ -1,0 +1,38 @@
+THIRD PARTY LICENSES
+====================
+
+simple-photo-meta (main project)
+-------------------------------
+License: GNU General Public License v3.0 (GPLv3)
+See: LICENSE file in this repository
+
+C/C++ Bundled Dependencies
+--------------------------
+
+inih (INIReader.h, ini_parser.cpp, ini.h, etc.)
+- License: BSD 3-Clause ("New BSD License")
+- SPDX identifier: BSD-3-Clause
+- See: https://github.com/benhoyt/inih
+
+exiv2 (linked as static library)
+- License: GNU General Public License v2.0 or later (GPLv2+), or GNU General Public License v3.0 (GPLv3), or GNU Lesser General Public License v3.0 (LGPLv3)
+- See: https://www.exiv2.org/
+
+Python Dependencies
+-------------------
+
+Pillow
+- License: Historical Permission Notice and Disclaimer (HPND)
+- See: https://pypi.org/project/Pillow/
+
+PySide6, PySide6-Addons, PySide6-Essentials, shiboken6
+- License: GNU Lesser General Public License v3.0 (LGPLv3), GNU General Public License v2.0 (GPLv2), or GNU General Public License v3.0 (GPLv3)
+- See: https://pypi.org/project/PySide6/
+
+pybind11
+- License: BSD 3-Clause
+- See: https://pypi.org/project/pybind11/
+
+Notes:
+- For full license texts, see the LICENSE file in this repository and the respective project homepages.
+- Some dependencies (e.g., Qt via PySide6) may be available under commercial licenses; this project uses the open source (LGPL/GPL) versions.
