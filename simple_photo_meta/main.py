@@ -441,6 +441,10 @@ class IPTCEditor(QMainWindow):
         self.selected_iptc_tag = None  # <-- Store selected tag dict
         # Create or open the SQLite database
         self.db = TagDatabase()
+        self.setStyleSheet("background-color: #222222;")
+        # Set gold background and army green font for all QPushButton widgets
+        button_css = "QPushButton { background-color: gold; color: #4B5320; font-weight: bold; border-radius: 6px; } QPushButton:pressed { background-color: #e6c200; }"
+        self.setStyleSheet(self.styleSheet() + "\n" + button_css)
 
         self.create_widgets()
         self.load_previous_tags()
@@ -528,6 +532,7 @@ class IPTCEditor(QMainWindow):
         self.list_view.customContextMenuRequested.connect(
             self.show_image_filename_context_menu
         )
+        self.list_view.setStyleSheet("QListView { background: skyblue; }")
         left_panel.addWidget(self.list_view)
 
         # Pagination controls
@@ -557,7 +562,7 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here")
         self.image_label.setFont(font)
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: gray;")
+        self.image_label.setStyleSheet("background-color: skyblue;")
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -591,6 +596,7 @@ class IPTCEditor(QMainWindow):
 
         # RIGHT PANEL: tags list (not split)
         right_panel = QVBoxLayout()
+        right_panel.setContentsMargins(8, 8, 8, 8)
         right_panel.addWidget(QLabel("Tags:"))
 
         # Add tag search bar before anything that uses it
@@ -611,25 +617,31 @@ class IPTCEditor(QMainWindow):
             """
             QListWidget {
                 font-weight: bold;
+                padding: 16px 48px 16px 28px; /* Even more right padding for gap near scrollbar */
             }
             QListWidget::item {
                 background: skyblue;
                 color: black;
                 font-size: 12pt;
                 font-weight: bold;
-                margin-bottom: 7px;
                 border-radius: 6px;
-                padding: 4px 8px;
-                min-height: 32px;
+                padding: 6px 14px;
+                min-height: 36px;
+                max-height: 36px;
+                min-width: 40px;
+                max-width: 160px;
                 white-space: pre-wrap;
             }
             QListWidget::item:selected {
                 background: #87ceeb;
                 color: yellow;
             }
-        """
+            """
         )
         self.tags_list_widget.setWordWrap(True)
+        self.tags_list_widget.setSpacing(8)
+        self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
+        self.tags_list_widget.setViewportMargins(0, 0, 18, 0)  # Was 32, now 18
         right_panel.addWidget(self.tags_list_widget)
 
         # IPTC Application2 Tag Dropdown
@@ -655,6 +667,49 @@ class IPTCEditor(QMainWindow):
 
         self._preview_rotation_angle = 0
         self._preview_image_cache = None
+
+        # Set background color for all input fields (search bars and tag input) to match tag blue
+        skyblue_css = "background: skyblue; color: black; font-size: 12pt; font-weight: bold;"
+        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
+        self.tags_search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
+        self.iptc_text_edit.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
+
+        # Olive green: #808000
+        button_style = (
+            "QPushButton { background-color: gold; color: #808000 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; } "
+            "QPushButton:hover { background-color: #ffe066; } "
+            "QPushButton:pressed { background-color: #e6c200; }"
+        )
+        self.btn_select_folder.setStyleSheet(button_style)
+        self.btn_scan_directory.setStyleSheet(button_style)
+        self.btn_prev.setStyleSheet(button_style)
+        self.btn_next.setStyleSheet(button_style)
+        self.btn_rotate_left.setStyleSheet(button_style)
+        self.btn_rotate_right.setStyleSheet(button_style)
+
+        # Gold scrollbar for tag list and thumbnail list
+        scrollbar_style = (
+            "QScrollBar:vertical {"
+            "    background: transparent;"
+            "    width: 16px;"
+            "    margin: 0px 0px 0px 0px;"
+            "    border-radius: 8px;"
+            "}"
+            "QScrollBar::handle:vertical {"
+            "    background: gold;"
+            "    min-height: 24px;"
+            "    border-radius: 8px;"
+            "}"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            "    background: none;"
+            "    height: 0px;"
+            "}"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+            "    background: none;"
+            "}"
+        )
+        self.tags_list_widget.setStyleSheet(self.tags_list_widget.styleSheet() + scrollbar_style)
+        self.list_view.setStyleSheet(self.list_view.styleSheet() + scrollbar_style)
 
     def rotate_left(self):
         if self.current_image_path:
@@ -913,7 +968,7 @@ class IPTCEditor(QMainWindow):
         if not self.maybe_save_unsaved_changes():
             return  # Don't switch images
         selected_index = index.row()
-        if selected_index < 0 or selected_index >= len(self.image_list):
+        if (selected_index < 0 or selected_index >= len(self.image_list)):
             return
         # Always get the image path after maybe_save_unsaved_changes
         image_path = self.image_list[selected_index]
@@ -946,13 +1001,11 @@ class IPTCEditor(QMainWindow):
                 import io
 
                 pil_img = Image.open(path)
-                # Always use first frame for multi-page TIFFs
                 if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
                     pil_img.seek(0)
                 max_dim = 2000
                 if pil_img.width > max_dim or pil_img.height > max_dim:
                     pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
-                # Apply rotation if needed
                 if (
                     hasattr(self, "_preview_rotation_angle")
                     and self._preview_rotation_angle
@@ -969,22 +1022,34 @@ class IPTCEditor(QMainWindow):
                     and self._preview_rotation_angle
                 ):
                     from PySide6.QtGui import QTransform
-
                     transform = QTransform().rotate(self._preview_rotation_angle)
                     pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
-            # Use default size if label size is not set
             label_width = self.image_label.width()
             label_height = self.image_label.height()
             if label_width < 10 or label_height < 10:
                 label_width = 600
                 label_height = 400
-            pixmap = pixmap.scaled(
-                label_width,
-                label_height,
+            margin = 16  # Set your desired margin here
+            # Calculate max size for the image
+            max_img_width = max(1, label_width - 2 * margin)
+            max_img_height = max(1, label_height - 2 * margin)
+            scaled_pixmap = pixmap.scaled(
+                max_img_width,
+                max_img_height,
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
-            self.image_label.setPixmap(pixmap)
+            # Create a new pixmap with the label size and fill with background color
+            final_pixmap = QPixmap(label_width, label_height)
+            from PySide6.QtGui import QPainter, QColor
+            final_pixmap.fill(QColor("skyblue"))
+            painter = QPainter(final_pixmap)
+            # Center the image
+            x = (label_width - scaled_pixmap.width()) // 2
+            y = (label_height - scaled_pixmap.height()) // 2
+            painter.drawPixmap(x, y, scaled_pixmap)
+            painter.end()
+            self.image_label.setPixmap(final_pixmap)
         except Exception as e:
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Critical)
@@ -1106,7 +1171,7 @@ class IPTCEditor(QMainWindow):
         confirm_box.setDefaultButton(QMessageBox.No)
         self.style_dialog(confirm_box)
         confirm = confirm_box.exec()
-        if confirm != QMessageBox.Yes:
+        if (confirm != QMessageBox.Yes):
             return
         self.show_loading_dialog()
         # Remove missing images from DB before rescanning
