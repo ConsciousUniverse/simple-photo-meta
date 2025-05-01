@@ -670,6 +670,8 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown = QComboBox()
         self.iptc_tag_dropdown.setFont(self.font())
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
+        # Set gold text color for dropdown
+        self.iptc_tag_dropdown.setStyleSheet("QComboBox { color: gold; } QComboBox QAbstractItemView { color: gold; }")
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
@@ -694,7 +696,11 @@ class IPTCEditor(QMainWindow):
         skyblue_css = "background: skyblue; color: black; font-size: 12pt; font-weight: bold;"
         self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
         self.tags_search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
-        self.iptc_text_edit.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
+        # Only increase font size for the tag input pane
+        tag_input_font = QFont()
+        tag_input_font.setPointSize(18)
+        self.iptc_text_edit.setFont(tag_input_font)
+        self.iptc_text_edit.setStyleSheet("QTextEdit { background: skyblue; color: black; font-weight: bold; }")
 
         # Olive green: #808000
         button_style = (
@@ -1277,8 +1283,11 @@ class IPTCEditor(QMainWindow):
     def set_tag_input_html(self, tags):
         if not tags:
             self.iptc_text_edit.clear()
+            tag_input_font = QFont()
+            tag_input_font.setPointSize(18)
+            self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                "QTextEdit { background: #0d2356; color: white; font-size: 12px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+                "QTextEdit { background: #0d2356; color: white; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
             )
             return
         # Set plain text, one tag per line
@@ -1286,8 +1295,11 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.blockSignals(True)
         self.iptc_text_edit.setPlainText(text)
         self.iptc_text_edit.blockSignals(False)
+        tag_input_font = QFont()
+        tag_input_font.setPointSize(18)
+        self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: #0d2356; color: white; font-size: 12px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+            "QTextEdit { background: #0d2356; color: white; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
