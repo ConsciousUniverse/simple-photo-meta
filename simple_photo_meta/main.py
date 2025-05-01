@@ -157,7 +157,7 @@ class TagDatabase:
 
     def get_tags(self, tag_type=None):
         c = self.conn.cursor()
-        if tag_type:
+        if (tag_type):
             c.execute(
                 "SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,)
             )
@@ -480,6 +480,27 @@ class IPTCEditor(QMainWindow):
         msg_box.exec()
 
     def create_widgets(self):
+        # Define scrollbar_style at the very top so it is available everywhere in this method
+        scrollbar_style = (
+            "QScrollBar:vertical {"
+            "    background: transparent;"
+            "    width: 16px;"
+            "    margin: 0px 0px 0px 0px;"
+            "    border-radius: 8px;"
+            "}"
+            "QScrollBar::handle:vertical {"
+            "    background: gold;"
+            "    min-height: 24px;"
+            "    border-radius: 8px;"
+            "}"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            "    background: none;"
+            "    height: 0px;"
+            "}"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+            "    background: none;"
+            "}"
+        )
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
@@ -617,7 +638,7 @@ class IPTCEditor(QMainWindow):
             """
             QListWidget {
                 font-weight: bold;
-                padding: 16px 48px 16px 28px; /* Even more right padding for gap near scrollbar */
+                padding: 16px 0px 16px 28px; /* Remove right padding */
             }
             QListWidget::item {
                 background: skyblue;
@@ -637,11 +658,12 @@ class IPTCEditor(QMainWindow):
                 color: yellow;
             }
             """
+            + scrollbar_style
         )
         self.tags_list_widget.setWordWrap(True)
         self.tags_list_widget.setSpacing(8)
         self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
-        self.tags_list_widget.setViewportMargins(0, 0, 18, 0)  # Was 32, now 18
+        self.tags_list_widget.setViewportMargins(0, 0, 0, 0)  # Remove right viewport margin
         right_panel.addWidget(self.tags_list_widget)
 
         # IPTC Application2 Tag Dropdown
