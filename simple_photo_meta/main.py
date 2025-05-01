@@ -482,7 +482,7 @@ class IPTCEditor(QMainWindow):
 
         # Set global font size
         font = QFont()
-        font.setPointSize(16)
+        font.setPointSize(12)
         self.setFont(font)
         central_widget.setFont(font)
 
@@ -615,7 +615,7 @@ class IPTCEditor(QMainWindow):
             QListWidget::item {
                 background: skyblue;
                 color: black;
-                font-size: 16pt;
+                font-size: 12pt;
                 font-weight: bold;
                 margin-bottom: 7px;
                 border-radius: 6px;
@@ -1191,7 +1191,7 @@ class IPTCEditor(QMainWindow):
         if not tags:
             self.iptc_text_edit.clear()
             self.iptc_text_edit.setStyleSheet(
-                "QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+                "QTextEdit { background: #0d2356; color: white; font-size: 12px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
             )
             return
         # Set plain text, one tag per line
@@ -1200,7 +1200,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setPlainText(text)
         self.iptc_text_edit.blockSignals(False)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: #0d2356; color: white; font-size: 22px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+            "QTextEdit { background: #0d2356; color: white; font-size: 12px; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
