@@ -442,7 +442,8 @@ class IPTCEditor(QMainWindow):
         self.selected_iptc_tag = None  # <-- Store selected tag dict
         # Create or open the SQLite database
         self.db = TagDatabase()
-        self.setStyleSheet("background-color: #222222;")
+        # Change window background to dark olive green
+        self.setStyleSheet("background-color: #232d18;")
         # Set gold background and army green font for all QPushButton widgets
         button_css = "QPushButton { background-color: gold; color: #4B5320; font-weight: bold; border-radius: 6px; } QPushButton:pressed { background-color: #e6c200; }"
         self.setStyleSheet(self.styleSheet() + "\n" + button_css)
