@@ -693,7 +693,7 @@ class IPTCEditor(QMainWindow):
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = "background: skyblue; color: black; font-size: 12pt; font-weight: bold;"
+        skyblue_css = "background: skyblue; color: black; font-size: 16pt; font-weight: bold;"
         self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
         self.tags_search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
         # Only increase font size for the tag input pane
