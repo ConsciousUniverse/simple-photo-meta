@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QDialog,
     QComboBox,
+    QSizePolicy,  # <-- Add this import
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -503,24 +504,20 @@ class IPTCEditor(QMainWindow):
         )
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
 
-        # Set global font size
-        font = QFont()
-        font.setPointSize(12)
-        self.setFont(font)
-        central_widget.setFont(font)
+        # Use a QSplitter for user-adjustable left pane
+        main_splitter = QSplitter(Qt.Horizontal)
 
         # LEFT PANEL: folder and image list
         left_panel = QVBoxLayout()
         self.btn_select_folder = QPushButton("Select Folder")
-        self.btn_select_folder.setFont(font)
+        self.btn_select_folder.setFont(self.font())
         self.btn_select_folder.clicked.connect(self.select_folder)
         self.btn_scan_directory = QPushButton("Scan Directory")
-        self.btn_scan_directory.setFont(font)
+        self.btn_scan_directory.setFont(self.font())
         self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
-        self.search_bar.setFont(font)
+        self.search_bar.setFont(self.font())
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.search_bar.setPlaceholderText("Search by tag(s)...")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
@@ -535,16 +532,18 @@ class IPTCEditor(QMainWindow):
 
         # Thumbnails list
         self.list_view = QListView()
-        self.list_view.setFont(font)
+        self.list_view.setFont(self.font())
         self.list_view.setViewMode(QListView.IconMode)
+        # Increase icon size for two-abreast layout
         self.list_view.setIconSize(QPixmap(175, 175).size())
         self.list_view.setResizeMode(QListView.Adjust)
-        self.list_view.setSpacing(7)  # Changed from 10 to 7
+        self.list_view.setSpacing(14)  # Increased spacing for two columns
         self.list_view.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_view.setMovement(QListView.Static)
         self.list_view.setUniformItemSizes(True)
         self.list_view.setMinimumHeight(250)
-        self.list_view.setMinimumWidth(250)
+        # Remove fixed width constraints so it expands with the splitter
+        self.list_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.list_view.clicked.connect(self.image_selected)
         # Add pressed signal to always trigger preview, even if already selected
         self.list_view.pressed.connect(self.image_selected)
@@ -559,13 +558,13 @@ class IPTCEditor(QMainWindow):
         # Pagination controls
         self.pagination_layout = QHBoxLayout()
         self.btn_prev = QPushButton("Previous")
-        self.btn_prev.setFont(font)
+        self.btn_prev.setFont(self.font())
         self.btn_prev.clicked.connect(self.prev_page)
         self.btn_next = QPushButton("Next")
-        self.btn_next.setFont(font)
+        self.btn_next.setFont(self.font())
         self.btn_next.clicked.connect(self.next_page)
         self.page_label = QLabel()
-        self.page_label.setFont(font)
+        self.page_label.setFont(self.font())
         self.pagination_layout.addWidget(self.btn_prev)
         self.pagination_layout.addWidget(self.page_label)
         self.pagination_layout.addWidget(self.btn_next)
@@ -574,14 +573,17 @@ class IPTCEditor(QMainWindow):
         # Add left panel to main layout
         left_panel_widget = QWidget()
         left_panel_widget.setLayout(left_panel)
-        main_layout.addWidget(left_panel_widget, 1)
+        # Remove fixed/minimum width so user can resize
+        left_panel_widget.setMinimumWidth(100)
+        left_panel_widget.setMaximumWidth(16777215)
+        main_splitter.addWidget(left_panel_widget)
 
         # CENTER PANEL: image display and IPTC metadata editor in a vertical splitter
         center_splitter = QSplitter(Qt.Vertical)
 
         # Canvas for image display (expandable)
         self.image_label = QLabel("Image preview will appear here")
-        self.image_label.setFont(font)
+        self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: skyblue;")
         self.image_label.setMinimumHeight(400)
@@ -589,8 +591,8 @@ class IPTCEditor(QMainWindow):
         rotate_controls = QHBoxLayout()
         self.btn_rotate_left = QPushButton("⟲ Rotate Left")
         self.btn_rotate_right = QPushButton("⟳ Rotate Right")
-        self.btn_rotate_left.setFont(font)
-        self.btn_rotate_right.setFont(font)
+        self.btn_rotate_left.setFont(self.font())
+        self.btn_rotate_right.setFont(self.font())
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         rotate_controls.addWidget(self.btn_rotate_left)
@@ -607,13 +609,13 @@ class IPTCEditor(QMainWindow):
         iptc_layout = QVBoxLayout(iptc_widget)
         iptc_layout.setContentsMargins(0, 0, 0, 0)
         self.iptc_text_edit = QTextEdit()
-        self.iptc_text_edit.setFont(font)
+        self.iptc_text_edit.setFont(self.font())
         iptc_layout.addWidget(self.iptc_text_edit)
         center_splitter.addWidget(iptc_widget)
         center_splitter.setSizes([600, 200])
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
 
-        main_layout.addWidget(center_splitter, 2)
+        main_splitter.addWidget(center_splitter)
 
         # RIGHT PANEL: tags list (not split)
         right_panel = QVBoxLayout()
@@ -687,7 +689,12 @@ class IPTCEditor(QMainWindow):
 
         right_panel_widget = QWidget()
         right_panel_widget.setLayout(right_panel)
-        main_layout.addWidget(right_panel_widget, 1)
+        main_splitter.addWidget(right_panel_widget)
+
+        # Add the splitter to the main layout
+        layout = QHBoxLayout(central_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(main_splitter)
 
         self._preview_rotation_angle = 0
         self._preview_image_cache = None
