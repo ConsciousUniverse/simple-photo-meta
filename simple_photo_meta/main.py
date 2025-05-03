@@ -428,6 +428,34 @@ class CustomMessageDialog(QDialog):
         self.adjustSize()
 
 
+class CustomPopupDialog(QDialog):
+    def __init__(self, parent=None, title="", message="", icon: QPixmap = None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+        # Icon and text row
+        row = QHBoxLayout()
+        if icon:
+            icon_label = QLabel()
+            icon_label.setPixmap(icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            icon_label.setContentsMargins(12, 12, 12, 12)
+            row.addWidget(icon_label, alignment=Qt.AlignTop)
+        text_label = QLabel(message)
+        text_label.setWordWrap(True)
+        text_label.setContentsMargins(12, 12, 12, 12)
+        text_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        row.addWidget(text_label)
+        layout.addLayout(row)
+        btn = QPushButton("OK")
+        btn.clicked.connect(self.accept)
+        btn.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+        layout.addWidget(btn, alignment=Qt.AlignRight)
+        self.setMinimumWidth(420)
+        self.setMinimumHeight(160)
+        self.setStyleSheet("QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }")
+        self.adjustSize()
+
+
 class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -455,6 +483,7 @@ class IPTCEditor(QMainWindow):
         """
         Apply minimum size and padding to dialogs for better readability, and set background/text color for Linux compatibility.
         Also set button text color to gold.
+        For QMessageBox, do not force fixed size—let it autosize, but ensure word wrap and margins.
         """
         dialog.setMinimumWidth(min_width)
         dialog.setMinimumHeight(min_height)
@@ -462,11 +491,26 @@ class IPTCEditor(QMainWindow):
         dialog.setStyleSheet(
             f"QLabel {{ padding: {padding}px; background: #232d18; color: gold; }} "
             f"QDialog {{ background: #232d18; color: gold; }} "
-            f"QMessageBox {{ background: #232d18; color: gold; }} "
+            f"QMessageBox {{ background: #232d18; color: gold; min-width: {min_width}px; min-height: {min_height}px; }} "
             f"QPushButton {{ background-color: gold; color: #232d18 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; }} "
             f"QPushButton:hover {{ background-color: #e6c200; }} "
             f"QPushButton:pressed {{ background-color: #c9a800; }} "
         )
+        # If it's a QMessageBox, set word wrap and margins for the label and icon, but do not force fixed size
+        from PySide6.QtWidgets import QMessageBox, QLabel
+        if isinstance(dialog, QMessageBox):
+            dialog.setMinimumWidth(max(min_width, 380))
+            dialog.setMinimumHeight(max(min_height, 120))
+            layout = dialog.layout()
+            if layout:
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    widget = item.widget()
+                    if isinstance(widget, QLabel):
+                        widget.setWordWrap(True)
+                        widget.setContentsMargins(24, 18, 24, 18)
+                        if widget.pixmap() is not None:
+                            widget.setContentsMargins(24, 24, 24, 24)
 
     def show_auto_close_message(
         self, title, message, icon=QMessageBox.Information, timeout=1000
@@ -488,6 +532,57 @@ class IPTCEditor(QMainWindow):
         # Set the timer to automatically close the message box.
         QTimer.singleShot(timeout, msg_box.close)
         msg_box.exec()
+
+    def show_custom_popup(self, title, message, icon: QPixmap = None):
+        dlg = CustomPopupDialog(self, title, message, icon)
+        dlg.exec()
+
+    def show_custom_confirm(self, title, message, yes_text="Yes", no_text="No", cancel_text=None, icon: QPixmap = None):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        layout = QVBoxLayout(dlg)
+        row = QHBoxLayout()
+        if icon:
+            icon_label = QLabel()
+            icon_label.setPixmap(icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            icon_label.setContentsMargins(12, 12, 12, 12)
+            row.addWidget(icon_label, alignment=Qt.AlignTop)
+        text_label = QLabel(message)
+        text_label.setWordWrap(True)
+        text_label.setContentsMargins(12, 12, 12, 12)
+        row.addWidget(text_label)
+        layout.addLayout(row)
+        btn_row = QHBoxLayout()
+        btn_yes = QPushButton(yes_text)
+        btn_no = QPushButton(no_text)
+        btn_yes.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+        btn_no.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+        btn_row.addWidget(btn_yes)
+        btn_row.addWidget(btn_no)
+        if cancel_text:
+            btn_cancel = QPushButton(cancel_text)
+            btn_cancel.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+            btn_row.addWidget(btn_cancel)
+        layout.addLayout(btn_row)
+        result = {"value": None}
+        def yes():
+            result["value"] = "yes"
+            dlg.accept()
+        def no():
+            result["value"] = "no"
+            dlg.accept()
+        def cancel():
+            result["value"] = "cancel"
+            dlg.reject()
+        btn_yes.clicked.connect(yes)
+        btn_no.clicked.connect(no)
+        if cancel_text:
+            btn_cancel.clicked.connect(cancel)
+        dlg.setMinimumWidth(420)
+        dlg.setMinimumHeight(160)
+        dlg.setStyleSheet("QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }")
+        dlg.exec()
+        return result["value"]
 
     def create_widgets(self):
         # Define scrollbar_style at the very top so it is available everywhere in this method
@@ -528,7 +623,7 @@ class IPTCEditor(QMainWindow):
         self.search_bar = QTextEdit()
         self.search_bar.setFont(self.font())
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.search_bar.setPlaceholderText("Search by tag(s)...")
+        self.search_bar.setPlaceholderText("ENTER TAGS(S) TO SEARCH IMAGES FOR ...")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
 
         self.search_debounce_timer = QTimer()
@@ -594,7 +689,7 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: skyblue;")
+        self.image_label.setStyleSheet("background-color: skyblue; border-radius: 16px; border: none;")
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -629,13 +724,12 @@ class IPTCEditor(QMainWindow):
         # RIGHT PANEL: tags list (not split)
         right_panel = QVBoxLayout()
         right_panel.setContentsMargins(8, 8, 8, 8)
-        right_panel.addWidget(QLabel("Tags:"))
 
         # Add tag search bar before anything that uses it
         self.tags_search_bar = QTextEdit()
         self.tags_search_bar.setFont(self.font())
         self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.tags_search_bar.setPlaceholderText("Search tags...")
+        self.tags_search_bar.setPlaceholderText("ENTER TAGS TO SEARCH LIST FOR ...")
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
 
@@ -706,7 +800,7 @@ class IPTCEditor(QMainWindow):
 
         # Add the splitter to the main layout
         layout = QHBoxLayout(central_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(18, 18, 18, 18)  # left, top, right, bottom
         layout.addWidget(main_splitter)
 
         self._preview_rotation_angle = 0
@@ -714,7 +808,7 @@ class IPTCEditor(QMainWindow):
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
         skyblue_css = (
-            "background: skyblue; color: black; font-size: 16pt; font-weight: bold;"
+            "background: skyblue; color: black; font-size: 16pt; font-weight: bold; border-radius: 12px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         )
         # Make search input font slightly smaller
         search_font = QFont()
@@ -730,7 +824,18 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: skyblue; color: black; font-weight: bold; }"
+            "QTextEdit { background: skyblue; color: black; font-weight: bold; border-radius: 12px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }"
+        )
+        # Style QListWidget (tags_list_widget) for rounded corners
+        self.tags_list_widget.setStyleSheet(
+            self.tags_list_widget.styleSheet() +
+            "QListWidget { border-radius: 12px; border: none; } "
+            "QListWidget::item { border-radius: 8px; } "
+        )
+        # Style QComboBox (iptc_tag_dropdown) for rounded corners
+        self.iptc_tag_dropdown.setStyleSheet(
+            "QComboBox { color: gold; border-radius: 12px; border: none; padding: 6px; background: #232d18; } "
+            "QComboBox QAbstractItemView { color: gold; border-radius: 12px; background: #232d18; } "
         )
 
         button_style = (
@@ -881,17 +986,11 @@ class IPTCEditor(QMainWindow):
         index = self.list_view.indexAt(pos)
         if not index.isValid():
             return
-        # Only show the filename, do not change selection or call image_selected
         model = self.list_view.model()
         item = model.itemFromIndex(index)
         fpath = item.data(Qt.UserRole + 1)
         if fpath:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Filename")
-            msg.setText(os.path.basename(fpath))
-            self.style_dialog(msg)
-            msg.exec()
-        # Optionally, clear focus to avoid selection issues
+            self.show_custom_popup("Filename", os.path.basename(fpath))
         self.list_view.clearFocus()
 
     def select_folder(self):
@@ -940,25 +1039,13 @@ class IPTCEditor(QMainWindow):
             meta.from_dict({"iptc": {tag_type: []}})
         except Exception as e:
             if show_dialogs:
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Critical)
-                msg.setWindowTitle("exiv2 Error")
-                msg.setText(f"Failed to delete IPTC tag {tag_type}:\n{e}")
-                self.style_dialog(msg)
-                msg.exec()
+                self.show_custom_popup("exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}")
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
             return True
         if invalid_tags:
             if show_dialogs:
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Critical)
-                msg.setWindowTitle("Invalid Tag(s)")
-                msg.setText(
-                    f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only."
-                )
-                self.style_dialog(msg)
-                msg.exec()
+                self.show_custom_popup("Invalid Tag(s)", f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
             return False
         try:
             if multi_valued:
@@ -975,12 +1062,7 @@ class IPTCEditor(QMainWindow):
                 )
         except Exception as e:
             if show_dialogs:
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Critical)
-                msg.setWindowTitle("exiv2 Error")
-                msg.setText(f"Failed to write IPTC tag {tag_type}:\n{e}")
-                self.style_dialog(msg)
-                msg.exec()
+                self.show_custom_popup("exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}")
             return True
 
     def remove_unused_tags_from_db(self):
@@ -1002,25 +1084,20 @@ class IPTCEditor(QMainWindow):
             and self.current_image_path is not None
             and current_input != self.last_loaded_keywords
         ):
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Question)
-            msg.setWindowTitle("Save Changes?")
-            msg.setText("You have unsaved changes to the tags. Save before switching?")
-            msg.setStandardButtons(
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            result = self.show_custom_confirm(
+                "Save Changes?",
+                "You have unsaved changes to the tags. Save before switching?",
+                yes_text="Yes", no_text="No", cancel_text="Cancel"
             )
-            msg.setDefaultButton(QMessageBox.Yes)
-            self.style_dialog(msg)
-            reply = msg.exec()
-            if reply == QMessageBox.Cancel:
-                return False  # Cancel the action
-            elif reply == QMessageBox.Yes:
+            if result == "cancel":
+                return False
+            elif result == "yes":
                 save_result = self.save_tags_to_file_and_db(show_dialogs=True)
                 if save_result is False:
-                    return False  # Validation failed, do not proceed
-                return True  # Save succeeded, proceed
-            elif reply == QMessageBox.No:
-                return True  # Discard changes, proceed
+                    return False
+                return True
+            elif result == "no":
+                return True
         return True
 
     def image_selected(self, index):
@@ -1113,12 +1190,7 @@ class IPTCEditor(QMainWindow):
             painter.end()
             self.image_label.setPixmap(final_pixmap)
         except Exception as e:
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Critical)
-            msg.setWindowTitle("Error")
-            msg.setText(f"Could not open image: {e}\nType: {type(e)}")
-            self.style_dialog(msg)
-            msg.exec()
+            self.show_custom_popup("Error", f"Could not open image: {e}\nType: {type(e)}")
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
@@ -1223,17 +1295,12 @@ class IPTCEditor(QMainWindow):
             dlg.exec()
             return
         # Confirmation dialog before scanning
-        confirm_box = QMessageBox(self)
-        confirm_box.setIcon(QMessageBox.Question)
-        confirm_box.setWindowTitle("Confirm Scan")
-        confirm_box.setText(
-            f"Are you sure you want to scan the directory?\n\n{self.folder_path}"
+        result = self.show_custom_confirm(
+            "Confirm Scan",
+            f"Are you sure you want to scan the directory?\n\n{self.folder_path}",
+            yes_text="Yes", no_text="No"
         )
-        confirm_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        confirm_box.setDefaultButton(QMessageBox.No)
-        self.style_dialog(confirm_box)
-        confirm = confirm_box.exec()
-        if confirm != QMessageBox.Yes:
+        if result != "yes":
             return
         self.show_loading_dialog()
         # Remove missing images from DB before rescanning
