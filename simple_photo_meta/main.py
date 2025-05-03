@@ -703,7 +703,7 @@ class IPTCEditor(QMainWindow):
         rotate_controls.addWidget(self.btn_rotate_right)
         image_widget = QWidget()
         image_layout = QVBoxLayout(image_widget)
-        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.setContentsMargins(0, 8, 0, 0)  # Reduced top margin for better alignment
         image_layout.addWidget(self.image_label)
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
@@ -1177,12 +1177,19 @@ class IPTCEditor(QMainWindow):
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
-            # Create a new pixmap with the label size and fill with background color
+            # Create a transparent pixmap for rounded corners
             final_pixmap = QPixmap(label_width, label_height)
-            from PySide6.QtGui import QPainter, QColor
+            final_pixmap.fill(Qt.transparent)
+            from PySide6.QtGui import QPainter, QColor, QPainterPath
 
-            final_pixmap.fill(QColor("skyblue"))
             painter = QPainter(final_pixmap)
+            radius = 16
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, label_width, label_height, radius, radius)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setClipPath(path)
+            # Fill background with skyblue inside rounded rect
+            painter.fillPath(path, QColor("skyblue"))
             # Center the image
             x = (label_width - scaled_pixmap.width()) // 2
             y = (label_height - scaled_pixmap.height()) // 2
