@@ -158,7 +158,7 @@ class TagDatabase:
 
     def get_tags(self, tag_type=None):
         c = self.conn.cursor()
-        if (tag_type):
+        if tag_type:
             c.execute(
                 "SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,)
             )
@@ -454,13 +454,19 @@ class IPTCEditor(QMainWindow):
     def style_dialog(self, dialog, min_width=380, min_height=120, padding=18):
         """
         Apply minimum size and padding to dialogs for better readability, and set background/text color for Linux compatibility.
+        Also set button text color to gold.
         """
         dialog.setMinimumWidth(min_width)
         dialog.setMinimumHeight(min_height)
-        # Set background to dark olive green and text to gold
-        dialog.setStyleSheet(f"QLabel {{ padding: {padding}px; background: #232d18; color: gold; }} "
-                             f"QDialog {{ background: #232d18; color: gold; }} "
-                             f"QMessageBox {{ background: #232d18; color: gold; }} ")
+        # Set background to dark olive green and text to gold, and dialog button text to gold
+        dialog.setStyleSheet(
+            f"QLabel {{ padding: {padding}px; background: #232d18; color: gold; }} "
+            f"QDialog {{ background: #232d18; color: gold; }} "
+            f"QMessageBox {{ background: #232d18; color: gold; }} "
+            f"QPushButton {{ background-color: gold; color: #232d18 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; }} "
+            f"QPushButton:hover {{ background-color: #e6c200; }} "
+            f"QPushButton:pressed {{ background-color: #c9a800; }} "
+        )
 
     def show_auto_close_message(
         self, title, message, icon=QMessageBox.Information, timeout=1000
@@ -668,7 +674,9 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setWordWrap(True)
         self.tags_list_widget.setSpacing(8)
         self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
-        self.tags_list_widget.setViewportMargins(0, 0, 0, 0)  # Remove right viewport margin
+        self.tags_list_widget.setViewportMargins(
+            0, 0, 0, 0
+        )  # Remove right viewport margin
         right_panel.addWidget(self.tags_list_widget)
 
         # IPTC Application2 Tag Dropdown
@@ -676,7 +684,9 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown.setFont(self.font())
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
         # Set gold text color for dropdown
-        self.iptc_tag_dropdown.setStyleSheet("QComboBox { color: gold; } QComboBox QAbstractItemView { color: gold; }")
+        self.iptc_tag_dropdown.setStyleSheet(
+            "QComboBox { color: gold; } QComboBox QAbstractItemView { color: gold; }"
+        )
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
@@ -703,20 +713,30 @@ class IPTCEditor(QMainWindow):
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = "background: skyblue; color: black; font-size: 16pt; font-weight: bold;"
-        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
-        self.tags_search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css}}}")
+        skyblue_css = (
+            "background: skyblue; color: black; font-size: 16pt; font-weight: bold;"
+        )
+        # Make search input font slightly smaller
+        search_font = QFont()
+        search_font.setPointSize(13)
+        self.search_bar.setFont(search_font)
+        self.tags_search_bar.setFont(search_font)
+        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: 13pt;}}")
+        self.tags_search_bar.setStyleSheet(
+            f"QTextEdit {{{skyblue_css} font-size: 13pt;}}"
+        )
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
-        self.iptc_text_edit.setStyleSheet("QTextEdit { background: skyblue; color: black; font-weight: bold; }")
+        self.iptc_text_edit.setStyleSheet(
+            "QTextEdit { background: skyblue; color: black; font-weight: bold; }"
+        )
 
-        # Olive green: #808000
         button_style = (
-            "QPushButton { background-color: gold; color: #808000 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; } "
-            "QPushButton:hover { background-color: #ffe066; } "
-            "QPushButton:pressed { background-color: #e6c200; }"
+            "QPushButton { background-color: gold; color: #232d18 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; } "
+            "QPushButton:hover { background-color: #e6c200; color: #232d18 !important; } "  # Slightly darker gold on hover
+            "QPushButton:pressed { background-color: #c9a800; color: #232d18 !important; }"  # Even darker on press
         )
         self.btn_select_folder.setStyleSheet(button_style)
         self.btn_scan_directory.setStyleSheet(button_style)
@@ -746,7 +766,9 @@ class IPTCEditor(QMainWindow):
             "    background: none;"
             "}"
         )
-        self.tags_list_widget.setStyleSheet(self.tags_list_widget.styleSheet() + scrollbar_style)
+        self.tags_list_widget.setStyleSheet(
+            self.tags_list_widget.styleSheet() + scrollbar_style
+        )
         self.list_view.setStyleSheet(self.list_view.styleSheet() + scrollbar_style)
 
     def rotate_left(self):
@@ -1006,7 +1028,7 @@ class IPTCEditor(QMainWindow):
         if not self.maybe_save_unsaved_changes():
             return  # Don't switch images
         selected_index = index.row()
-        if (selected_index < 0 or selected_index >= len(self.image_list)):
+        if selected_index < 0 or selected_index >= len(self.image_list):
             return
         # Always get the image path after maybe_save_unsaved_changes
         image_path = self.image_list[selected_index]
@@ -1060,6 +1082,7 @@ class IPTCEditor(QMainWindow):
                     and self._preview_rotation_angle
                 ):
                     from PySide6.QtGui import QTransform
+
                     transform = QTransform().rotate(self._preview_rotation_angle)
                     pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
             label_width = self.image_label.width()
@@ -1080,6 +1103,7 @@ class IPTCEditor(QMainWindow):
             # Create a new pixmap with the label size and fill with background color
             final_pixmap = QPixmap(label_width, label_height)
             from PySide6.QtGui import QPainter, QColor
+
             final_pixmap.fill(QColor("skyblue"))
             painter = QPainter(final_pixmap)
             # Center the image
@@ -1209,7 +1233,7 @@ class IPTCEditor(QMainWindow):
         confirm_box.setDefaultButton(QMessageBox.No)
         self.style_dialog(confirm_box)
         confirm = confirm_box.exec()
-        if (confirm != QMessageBox.Yes):
+        if confirm != QMessageBox.Yes:
             return
         self.show_loading_dialog()
         # Remove missing images from DB before rescanning
