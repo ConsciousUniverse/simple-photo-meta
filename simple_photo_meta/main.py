@@ -453,12 +453,14 @@ class IPTCEditor(QMainWindow):
 
     def style_dialog(self, dialog, min_width=380, min_height=120, padding=18):
         """
-        Apply minimum size and padding to dialogs for better readability, without forcing text color.
+        Apply minimum size and padding to dialogs for better readability, and set background/text color for Linux compatibility.
         """
         dialog.setMinimumWidth(min_width)
         dialog.setMinimumHeight(min_height)
-        # Only apply padding to QLabel, do not set color
-        dialog.setStyleSheet(f"QLabel {{ padding: {padding}px; }}")
+        # Set background to dark olive green and text to gold
+        dialog.setStyleSheet(f"QLabel {{ padding: {padding}px; background: #232d18; color: gold; }} "
+                             f"QDialog {{ background: #232d18; color: gold; }} "
+                             f"QMessageBox {{ background: #232d18; color: gold; }} ")
 
     def show_auto_close_message(
         self, title, message, icon=QMessageBox.Information, timeout=1000

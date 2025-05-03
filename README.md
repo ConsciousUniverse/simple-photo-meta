@@ -67,8 +67,8 @@ Simple Photo Meta is licensed under the GPLv3. See the [LICENSE](LICENSE) file f
 
 ## Current Version
 
-v1.0.8-beta+5209aab
+v1.0.9-beta+363d3bd
 
 ## Author
 
-Dan Bright - [GitHub](https://github.com/consciousuniverse), <github@bright.contact>, with considerable assistance from Github Copilot (GPT-4.1).
+Dan Bright - [GitHub](https://github.com/consciousuniverse), <github@danbright.uk>, with considerable assistance from Github Copilot (GPT-4.1).
