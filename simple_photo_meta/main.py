@@ -689,7 +689,7 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: skyblue; border-radius: 16px; border: none;")
+        self.image_label.setStyleSheet("background-color: skyblue; color:  #232d18; border-radius: 16px; border: none;")
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -759,8 +759,8 @@ class IPTCEditor(QMainWindow):
                 white-space: pre-wrap;
             }
             QListWidget::item:selected {
-                background: #87ceeb;
-                color: yellow;
+                background: gold;
+                color: #232d18;
             }
             """
             + scrollbar_style
@@ -1395,7 +1395,7 @@ class IPTCEditor(QMainWindow):
             tag_input_font.setPointSize(18)
             self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                "QTextEdit { background: #0d2356; color: white; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+                "QTextEdit { background: skyblue; color: black; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
             )
             return
         # Set plain text, one tag per line
@@ -1407,7 +1407,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: #0d2356; color: white; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+            "QTextEdit { background: skyblue; color: black; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
