@@ -23,13 +23,13 @@ This is an Alpha version of this software, and as such is made available for tes
 
 ## Installation & Quick Start
 
-If you simply want to test the softare, there are alpha versions of a DMG (for MacOS with Apple Silicon) and an AppImage (for Linux systems) available - see Releases.
+If you simply want to test the software, there are alpha versions of a DMG (for MacOS with Apple Silicon) and an AppImage (for Linux systems) available - see Releases.
 
 If you're a developer who wishes to modify the code, you know what to do :)
 
 ## Screenshots
 
-![alt text](image-1.png)
+![alt text](assets/image-1.png)
 
 ## License
 
@@ -37,7 +37,7 @@ Simple Photo Meta is licensed under the GPLv3. See the [LICENSE](LICENSE) file f
 
 ## Current Version
 
-v0.1.5-alpha+4670aae
+v0.1.8-alpha+638ac6c
 
 ## Author
 
