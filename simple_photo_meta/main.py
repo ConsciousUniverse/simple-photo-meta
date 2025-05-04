@@ -467,7 +467,7 @@ class CustomPopupDialog(QDialog):
 class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("IPTC Editor")
+        self.setWindowTitle("Simple Photo Meta (alpha)")
         self.resize(1920, 1080)  # Set initial window size to 1920px wide
         self.folder_path = ""
         self.image_list = []
@@ -846,18 +846,14 @@ class IPTCEditor(QMainWindow):
         # ======================================================== #
         # INFORMATIONAL BANNER
         # Remove or comment out this section to remove!
-        # Add information banner at the top (easy to remove)
-        self.info_banner = QLabel(
-            "IMPORTANT: THIS IS ALPHA SOFTWARE. PLEASE ENSURE IMAGES ARE BACKED UP TO AVOID DATA LOSS OR CORRUPTION IN THE EVENT OF SOFTWARE BUGS."
-        )
-        self.info_banner.setStyleSheet(
-            f"background: skyblue; color: #232d18; font-weight: bold; font-size: 15pt; padding: 12px; border-radius: {self.corner_radius - 4}"
-        )
+        self.info_banner = QLabel("IMPORTANT: This is alpha software. Ensure images are backed up to prevent data loss or damage in the event of software bugs.")
+        self.info_banner.setStyleSheet("background: orange; color: #232d18; font-weight: bold; font-size: 13pt; padding: 8px 0px; border-radius: 8px;")
         self.info_banner.setAlignment(Qt.AlignCenter)
-        # Add a small left/right margin using a container widget and layout
+        self.info_banner.setWordWrap(True)
+        # Add a small left/right AND top margin using a container widget and layout, but let the banner fill the width
         banner_container = QWidget()
         banner_layout = QHBoxLayout()
-        banner_layout.setContentsMargins(12, 0, 12, 0)  # left, top, right, bottom
+        banner_layout.setContentsMargins(8, 12, 8, 0)  # left, top, right, bottom
         banner_layout.addWidget(self.info_banner)
         banner_container.setLayout(banner_layout)
         main_vlayout.addWidget(banner_container)
