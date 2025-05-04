@@ -476,6 +476,9 @@ class IPTCEditor(QMainWindow):
         button_css = "QPushButton { background-color: gold; color: #4B5320; font-weight: bold; border-radius: 6px; } QPushButton:pressed { background-color: #e6c200; }"
         self.setStyleSheet(self.styleSheet() + "\n" + button_css)
 
+        # Set a single variable for consistent corner radius across all UI elements
+        self.corner_radius = 16
+
         self.create_widgets()
         self.load_previous_tags()
 
@@ -656,7 +659,7 @@ class IPTCEditor(QMainWindow):
         self.list_view.customContextMenuRequested.connect(
             self.show_image_filename_context_menu
         )
-        self.list_view.setStyleSheet("QListView { background: skyblue; }")
+        self.list_view.setStyleSheet(f"QListView {{ background: skyblue; border-radius: {self.corner_radius}px; }}")
         left_panel.addWidget(self.list_view)
 
         # Pagination controls
@@ -689,7 +692,8 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: skyblue; color:  #232d18; border-radius: 16px; border: none;")
+        # Use the shared corner radius for the image preview panel
+        self.image_label.setStyleSheet(f"background-color: skyblue; color:  #232d18; border-radius: {self.corner_radius}px; border: none;")
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -808,7 +812,7 @@ class IPTCEditor(QMainWindow):
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
         skyblue_css = (
-            "background: skyblue; color: black; font-size: 16pt; font-weight: bold; border-radius: 12px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+            f"background: skyblue; color: black; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         )
         # Make search input font slightly smaller
         search_font = QFont()
@@ -824,24 +828,24 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: skyblue; color: black; font-weight: bold; border-radius: 12px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }"
+            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet() +
-            "QListWidget { border-radius: 12px; border: none; } "
-            "QListWidget::item { border-radius: 8px; } "
+            f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: none; }} "
+            f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
         self.iptc_tag_dropdown.setStyleSheet(
-            "QComboBox { color: gold; border-radius: 12px; border: none; padding: 6px; background: #232d18; } "
-            "QComboBox QAbstractItemView { color: gold; border-radius: 12px; background: #232d18; } "
+            f"QComboBox {{ color: gold; border-radius: {self.corner_radius - 4}px; border: none; padding: 6px; background: #232d18; }} "
+            f"QComboBox QAbstractItemView {{ color: gold; border-radius: {self.corner_radius - 4}px; background: #232d18; }} "
         )
 
         button_style = (
-            "QPushButton { background-color: gold; color: #232d18 !important; font-weight: bold; border-radius: 6px; padding: 6px 18px; } "
-            "QPushButton:hover { background-color: #e6c200; color: #232d18 !important; } "  # Slightly darker gold on hover
-            "QPushButton:pressed { background-color: #c9a800; color: #232d18 !important; }"  # Even darker on press
+            f"QPushButton {{ background-color: gold; color: #232d18 !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; padding: 6px 18px; }} "
+            f"QPushButton:hover {{ background-color: #e6c200; color: #232d18 !important; }} "
+            f"QPushButton:pressed {{ background-color: #c9a800; color: #232d18 !important; }}"
         )
         self.btn_select_folder.setStyleSheet(button_style)
         self.btn_scan_directory.setStyleSheet(button_style)
@@ -1183,7 +1187,7 @@ class IPTCEditor(QMainWindow):
             from PySide6.QtGui import QPainter, QColor, QPainterPath
 
             painter = QPainter(final_pixmap)
-            radius = 16
+            radius = self.corner_radius  # Use the shared corner radius
             path = QPainterPath()
             path.addRoundedRect(0, 0, label_width, label_height, radius, radius)
             painter.setRenderHint(QPainter.Antialiasing)
@@ -1407,7 +1411,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            "QTextEdit { background: skyblue; color: black; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }"
+            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
