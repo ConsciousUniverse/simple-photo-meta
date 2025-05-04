@@ -437,22 +437,30 @@ class CustomPopupDialog(QDialog):
         row = QHBoxLayout()
         if icon:
             icon_label = QLabel()
-            icon_label.setPixmap(icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            icon_label.setPixmap(
+                icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
             icon_label.setContentsMargins(12, 12, 12, 12)
             row.addWidget(icon_label, alignment=Qt.AlignTop)
         text_label = QLabel(message)
         text_label.setWordWrap(True)
         text_label.setContentsMargins(12, 12, 12, 12)
-        text_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        text_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         row.addWidget(text_label)
         layout.addLayout(row)
         btn = QPushButton("OK")
         btn.clicked.connect(self.accept)
-        btn.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+        btn.setStyleSheet(
+            "background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;"
+        )
         layout.addWidget(btn, alignment=Qt.AlignRight)
         self.setMinimumWidth(420)
         self.setMinimumHeight(160)
-        self.setStyleSheet("QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }")
+        self.setStyleSheet(
+            "QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }"
+        )
         self.adjustSize()
 
 
@@ -501,6 +509,7 @@ class IPTCEditor(QMainWindow):
         )
         # If it's a QMessageBox, set word wrap and margins for the label and icon, but do not force fixed size
         from PySide6.QtWidgets import QMessageBox, QLabel
+
         if isinstance(dialog, QMessageBox):
             dialog.setMinimumWidth(max(min_width, 380))
             dialog.setMinimumHeight(max(min_height, 120))
@@ -540,14 +549,24 @@ class IPTCEditor(QMainWindow):
         dlg = CustomPopupDialog(self, title, message, icon)
         dlg.exec()
 
-    def show_custom_confirm(self, title, message, yes_text="Yes", no_text="No", cancel_text=None, icon: QPixmap = None):
+    def show_custom_confirm(
+        self,
+        title,
+        message,
+        yes_text="Yes",
+        no_text="No",
+        cancel_text=None,
+        icon: QPixmap = None,
+    ):
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
         layout = QVBoxLayout(dlg)
         row = QHBoxLayout()
         if icon:
             icon_label = QLabel()
-            icon_label.setPixmap(icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            icon_label.setPixmap(
+                icon.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
             icon_label.setContentsMargins(12, 12, 12, 12)
             row.addWidget(icon_label, alignment=Qt.AlignTop)
         text_label = QLabel(message)
@@ -558,32 +577,44 @@ class IPTCEditor(QMainWindow):
         btn_row = QHBoxLayout()
         btn_yes = QPushButton(yes_text)
         btn_no = QPushButton(no_text)
-        btn_yes.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
-        btn_no.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+        btn_yes.setStyleSheet(
+            "background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;"
+        )
+        btn_no.setStyleSheet(
+            "background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;"
+        )
         btn_row.addWidget(btn_yes)
         btn_row.addWidget(btn_no)
         if cancel_text:
             btn_cancel = QPushButton(cancel_text)
-            btn_cancel.setStyleSheet("background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;")
+            btn_cancel.setStyleSheet(
+                "background-color: gold; color: #232d18; font-weight: bold; border-radius: 6px; padding: 6px 18px;"
+            )
             btn_row.addWidget(btn_cancel)
         layout.addLayout(btn_row)
         result = {"value": None}
+
         def yes():
             result["value"] = "yes"
             dlg.accept()
+
         def no():
             result["value"] = "no"
             dlg.accept()
+
         def cancel():
             result["value"] = "cancel"
             dlg.reject()
+
         btn_yes.clicked.connect(yes)
         btn_no.clicked.connect(no)
         if cancel_text:
             btn_cancel.clicked.connect(cancel)
         dlg.setMinimumWidth(420)
         dlg.setMinimumHeight(160)
-        dlg.setStyleSheet("QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }")
+        dlg.setStyleSheet(
+            "QDialog { background: #232d18; color: gold; } QLabel { color: gold; font-size: 13pt; }"
+        )
         dlg.exec()
         return result["value"]
 
@@ -659,7 +690,9 @@ class IPTCEditor(QMainWindow):
         self.list_view.customContextMenuRequested.connect(
             self.show_image_filename_context_menu
         )
-        self.list_view.setStyleSheet(f"QListView {{ background: skyblue; border-radius: {self.corner_radius}px; }}")
+        self.list_view.setStyleSheet(
+            f"QListView {{ background: skyblue; border-radius: {self.corner_radius}px; }}"
+        )
         left_panel.addWidget(self.list_view)
 
         # Pagination controls
@@ -689,11 +722,13 @@ class IPTCEditor(QMainWindow):
         center_splitter = QSplitter(Qt.Vertical)
 
         # Canvas for image display (expandable)
-        self.image_label = QLabel("Image preview will appear here")
+        self.image_label = QLabel("Image preview will appear here ...")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
         # Use the shared corner radius for the image preview panel
-        self.image_label.setStyleSheet(f"background-color: skyblue; color:  #232d18; border-radius: {self.corner_radius}px; border: none;")
+        self.image_label.setStyleSheet(
+            f"background-color: skyblue; color:  #232d18; border-radius: {self.corner_radius}px; border: none;"
+        )
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -707,7 +742,9 @@ class IPTCEditor(QMainWindow):
         rotate_controls.addWidget(self.btn_rotate_right)
         image_widget = QWidget()
         image_layout = QVBoxLayout(image_widget)
-        image_layout.setContentsMargins(0, 8, 0, 0)  # Reduced top margin for better alignment
+        image_layout.setContentsMargins(
+            0, 8, 0, 0
+        )  # Reduced top margin for better alignment
         image_layout.addWidget(self.image_label)
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
@@ -802,18 +839,43 @@ class IPTCEditor(QMainWindow):
         right_panel_widget.setLayout(right_panel)
         main_splitter.addWidget(right_panel_widget)
 
-        # Add the splitter to the main layout
-        layout = QHBoxLayout(central_widget)
-        layout.setContentsMargins(18, 18, 18, 18)  # left, top, right, bottom
+        # Create the main vertical layout for the window
+        main_vlayout = QVBoxLayout()
+        main_vlayout.setContentsMargins(0, 0, 0, 0)
+
+        # ======================================================== #
+        # INFORMATIONAL BANNER
+        # Remove or comment out this section to remove!
+        # Add information banner at the top (easy to remove)
+        self.info_banner = QLabel(
+            "IMPORTANT: THIS IS ALPHA SOFTWARE. PLEASE ENSURE IMAGES ARE BACKED UP TO AVOID DATA LOSS OR CORRUPTION IN THE EVENT OF SOFTWARE BUGS."
+        )
+        self.info_banner.setStyleSheet(
+            f"background: skyblue; color: #232d18; font-weight: bold; font-size: 15pt; padding: 12px; border-radius: {self.corner_radius - 4}"
+        )
+        self.info_banner.setAlignment(Qt.AlignCenter)
+        # Add a small left/right margin using a container widget and layout
+        banner_container = QWidget()
+        banner_layout = QHBoxLayout()
+        banner_layout.setContentsMargins(12, 0, 12, 0)  # left, top, right, bottom
+        banner_layout.addWidget(self.info_banner)
+        banner_container.setLayout(banner_layout)
+        main_vlayout.addWidget(banner_container)
+        # ======================================================== #
+
+        # Add the splitter to a horizontal layout
+        layout = QHBoxLayout()
+        layout.setContentsMargins(18, 18, 18, 18)
         layout.addWidget(main_splitter)
+        main_vlayout.addLayout(layout)
+        # Set the main layout ONCE at the end
+        central_widget.setLayout(main_vlayout)
 
         self._preview_rotation_angle = 0
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = (
-            f"background: skyblue; color: black; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
-        )
+        skyblue_css = f"background: skyblue; color: black; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         # Make search input font slightly smaller
         search_font = QFont()
         search_font.setPointSize(13)
@@ -832,8 +894,8 @@ class IPTCEditor(QMainWindow):
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
-            self.tags_list_widget.styleSheet() +
-            f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: none; }} "
+            self.tags_list_widget.styleSheet()
+            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: none; }} "
             f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
@@ -1043,13 +1105,18 @@ class IPTCEditor(QMainWindow):
             meta.from_dict({"iptc": {tag_type: []}})
         except Exception as e:
             if show_dialogs:
-                self.show_custom_popup("exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}")
+                self.show_custom_popup(
+                    "exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}"
+                )
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
             return True
         if invalid_tags:
             if show_dialogs:
-                self.show_custom_popup("Invalid Tag(s)", f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.")
+                self.show_custom_popup(
+                    "Invalid Tag(s)",
+                    f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
+                )
             return False
         try:
             if multi_valued:
@@ -1066,7 +1133,9 @@ class IPTCEditor(QMainWindow):
                 )
         except Exception as e:
             if show_dialogs:
-                self.show_custom_popup("exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}")
+                self.show_custom_popup(
+                    "exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}"
+                )
             return True
 
     def remove_unused_tags_from_db(self):
@@ -1091,7 +1160,9 @@ class IPTCEditor(QMainWindow):
             result = self.show_custom_confirm(
                 "Save Changes?",
                 "You have unsaved changes to the tags. Save before switching?",
-                yes_text="Yes", no_text="No", cancel_text="Cancel"
+                yes_text="Yes",
+                no_text="No",
+                cancel_text="Cancel",
             )
             if result == "cancel":
                 return False
@@ -1201,7 +1272,9 @@ class IPTCEditor(QMainWindow):
             painter.end()
             self.image_label.setPixmap(final_pixmap)
         except Exception as e:
-            self.show_custom_popup("Error", f"Could not open image: {e}\nType: {type(e)}")
+            self.show_custom_popup(
+                "Error", f"Could not open image: {e}\nType: {type(e)}"
+            )
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
@@ -1309,7 +1382,8 @@ class IPTCEditor(QMainWindow):
         result = self.show_custom_confirm(
             "Confirm Scan",
             f"Are you sure you want to scan the directory?\n\n{self.folder_path}",
-            yes_text="Yes", no_text="No"
+            yes_text="Yes",
+            no_text="No",
         )
         if result != "yes":
             return
