@@ -23,43 +23,13 @@ This is an Alpha version of this software, and as such is made available for tes
 
 ## Installation & Quick Start
 
-1. **Install system dependencies** (required for image metadata editing):
+If you simply want to test the softare, there are alpha versions of a DMG (for MacOS with Apple Silicon) and an AppImage (for Linux systems) available - see Releases.
 
-   On macOS (with Homebrew):
-
-   ```sh
-   brew install exiv2
-   pip3 install PySide6
-   ```
-
-   On Ubuntu:
-
-   ```sh
-   sudo apt update
-   sudo apt install exiv2 python3-pip python3-pyside6
-   ```
-
-2. **Install Python dependencies**:
-
-   ```sh
-   pip install -r requirements.txt
-   ```
-
-3. **Install the app** (from the project root):
-
-   ```sh
-   pip install .
-   ```
-
-4. **Run the app**:
-
-   ```sh
-   simple-photo-meta
-   ```
+If you're a developer who wishes to modify the code, you know what to do :)
 
 ## Screenshots
 
-Coming soon ...
+![alt text](image-1.png)
 
 ## License
 
@@ -67,7 +37,7 @@ Simple Photo Meta is licensed under the GPLv3. See the [LICENSE](LICENSE) file f
 
 ## Current Version
 
-v0.1.4-alpha+160c3e4
+v0.1.5-alpha+4670aae
 
 ## Author
 
