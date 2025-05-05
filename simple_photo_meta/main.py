@@ -1383,19 +1383,8 @@ class IPTCEditor(QMainWindow):
         self.update_tags_list_widget(filtered)
 
     def tag_clicked(self, item):
-        tag = item.text()
-        # Insert tag at the end of the input (plain text, then update HTML)
-        if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
-            tags = self.cleaned_keywords + [tag]
-        else:
-            tags = [tag]
-        self.set_tag_input_html(tags)
-        self.cleaned_keywords = tags
-        self.iptc_text_edit.setFocus()
-        # Move cursor to end
-        cursor = self.iptc_text_edit.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.iptc_text_edit.setTextCursor(cursor)
+        # Do nothing when a tag is clicked (only the Add button should add the tag)
+        pass
 
     def extract_keywords(self):
         # Extract tags for the selected tag type from exiv2 output.
