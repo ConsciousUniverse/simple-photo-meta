@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QComboBox,
     QSizePolicy,
-    QStyle,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -896,11 +895,10 @@ class IPTCEditor(QMainWindow):
         # ======================================================== #
 
         # Add the splitter to a horizontal layout
-        layout = QHBoxLayout()
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.addWidget(main_splitter)
-        main_vlayout.addLayout(layout)
-        # Set the main layout ONCE at the end
+        # place splitter directly and stretch
+        main_vlayout.setStretch(0, 0)
+        main_vlayout.addWidget(main_splitter)
+        main_vlayout.setStretch(1, 1)
         central_widget.setLayout(main_vlayout)
 
         self._preview_rotation_angle = 0
