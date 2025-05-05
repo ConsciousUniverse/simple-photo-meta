@@ -744,10 +744,34 @@ class IPTCEditor(QMainWindow):
         # Add save button (icon) between rotate buttons
         self.btn_save_tags = QPushButton()
         self.btn_save_tags.setToolTip("Save tags for this image")
-        self.btn_save_tags.setFixedSize(36, 36)
-        # Use standard save (floppy disk) icon
-        self.btn_save_tags.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.btn_save_tags.setIconSize(self.btn_save_tags.size() * 0.8)
+        self.btn_save_tags.setFixedSize(26, 26)
+        # Create a monotone (black) floppy disk icon for contrast
+        icon_size = 18
+        pixmap = QPixmap(icon_size, icon_size)
+        pixmap.fill(Qt.transparent)
+        from PySide6.QtGui import QPainter, QColor, QPen
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        dark = QColor("#232d18")  # dark olive/black for contrast
+        # Draw floppy body
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(dark)
+        painter.drawRect(2, 2, icon_size-4, icon_size-4)
+        # Draw floppy notch
+        painter.setBrush(QColor("#bdbdbd"))  # light gray notch
+        painter.drawRect(icon_size-7, 2, 5, 7)
+        # Draw floppy label
+        painter.setBrush(QColor("white"))
+        painter.drawRect(4, 4, icon_size-8, 5)
+        # Draw floppy line (write-protect slot)
+        pen = QPen(QColor("#bdbdbd"))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.drawLine(6, icon_size-5, icon_size-6, icon_size-5)
+        painter.end()
+        icon = QIcon(pixmap)
+        self.btn_save_tags.setIcon(icon)
+        self.btn_save_tags.setIconSize(pixmap.size())
         self.btn_save_tags.setStyleSheet("QPushButton { background-color: gold; border-radius: 8px; } QPushButton:hover { background-color: #e6c200; } QPushButton:pressed { background-color: #c9a800; }")
         self.btn_save_tags.clicked.connect(lambda: self.save_tags_and_notify(force=True))
         rotate_controls.addWidget(self.btn_save_tags)
