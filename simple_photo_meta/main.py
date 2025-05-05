@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QListWidget,
+    QListWidgetItem,
     QLabel,
     QTextEdit,
     QPushButton,
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QDialog,
     QComboBox,
-    QSizePolicy,  # <-- Add this import
+    QSizePolicy,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -1279,13 +1280,93 @@ class IPTCEditor(QMainWindow):
         self.update_tags_list_widget(self.all_tags)
 
     def update_tags_list_widget(self, tags):
-        # Sort tags alphabetically before displaying
-        sorted_tags = sorted(tags, key=lambda t: t.lower())
+        # Clear the list and add custom widgets for each tag
         self.tags_list_widget.clear()
-        self.tags_list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tags_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
         self.tags_list_widget.setEnabled(True)
-        for tag in sorted_tags:
-            self.tags_list_widget.addItem(tag)
+        for tag in sorted(tags, key=lambda t: t.lower()):
+            item = QListWidgetItem()
+            widget = QWidget()
+            widget.setStyleSheet("background: skyblue; border-radius: 8px;")
+            layout = QHBoxLayout()
+            layout.setContentsMargins(4, 2, 4, 2)
+            # Tag label
+            tag_label = QLabel(tag)
+            tag_label.setStyleSheet("font-weight: bold; font-size: 12pt; color: black; padding: 2px 8px;")
+            tag_label.setWordWrap(True)
+            tag_label.setMinimumWidth(0)
+            tag_label.setMaximumWidth(470)  # Limit width to allow wrapping
+            layout.addWidget(tag_label)
+            layout.addStretch(1)  # Push buttons to the right
+            # Add button
+            btn_add = QPushButton("Add")
+            btn_add.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: gold;
+                    color: #232d18;
+                    font-weight: bold;
+                    border-radius: 6px;
+                    padding: 2px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #e6c200;
+                }
+                QPushButton:pressed {
+                    background-color: #c9a800;
+                }
+                """
+            )
+            btn_add.setFixedHeight(28)
+            btn_add.clicked.connect(lambda checked, t=tag: self.add_tag_to_input(t))
+            layout.addWidget(btn_add)
+            # Remove (X) button
+            btn_remove = QPushButton("Delete")
+            btn_remove.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #8B0000;
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 6px;
+                    padding: 2px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #700000;
+                }
+                QPushButton:pressed {
+                    background-color: #5A0000;
+                }
+                """
+            )
+            btn_remove.setFixedHeight(28)
+            btn_remove.clicked.connect(lambda checked, t=tag: self.remove_tag_from_db(t))
+            layout.addWidget(btn_remove)
+            widget.setLayout(layout)
+            self.tags_list_widget.addItem(item)
+            self.tags_list_widget.setItemWidget(item, widget)
+
+    def add_tag_to_input(self, tag):
+        # Insert tag at the end of the input (plain text, then update HTML)
+        if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
+            tags = self.cleaned_keywords + [tag]
+        else:
+            tags = [tag]
+        self.set_tag_input_html(tags)
+        self.cleaned_keywords = tags
+        self.iptc_text_edit.setFocus()
+        # Move cursor to end
+        cursor = self.iptc_text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.iptc_text_edit.setTextCursor(cursor)
+
+    def remove_tag_from_db(self, tag):
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        c = self.db.conn.cursor()
+        c.execute("DELETE FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
+        self.db.conn.commit()
+        self.load_previous_tags()
+        self.update_tags_search()
 
     def update_tags_search(self):
         # Get search text, filter tags, and update the list widget
