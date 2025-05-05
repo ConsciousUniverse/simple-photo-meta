@@ -1158,7 +1158,7 @@ class IPTCEditor(QMainWindow):
         )
         self.db.conn.commit()
 
-    def maybe_save_unsaved_changes(self):
+    def handle_unsaved_changes(self):
         current_input = self.iptc_text_edit.toPlainText().strip()
         if (
             hasattr(self, "last_loaded_keywords")
@@ -1184,12 +1184,12 @@ class IPTCEditor(QMainWindow):
         return True
 
     def image_selected(self, index):
-        if not self.maybe_save_and_notify():
+        if not self.handle_save_events():
             return  # Don't switch images
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
             return
-        # Always get the image path after maybe_save_unsaved_changes
+        # Always get the image path after handle_unsaved_changes
         image_path = self.image_list[selected_index]
         self.current_image_path = image_path
         self._preview_rotation_angle = 0
@@ -1490,7 +1490,7 @@ class IPTCEditor(QMainWindow):
 
     def on_iptc_tag_changed(self, index):
         # Prompt to save unsaved changes before switching tag type
-        if not self.maybe_save_and_notify():
+        if not self.handle_save_events():
             # Revert dropdown to previous index if cancelled
             self.iptc_tag_dropdown.blockSignals(True)
             for i in range(self.iptc_tag_dropdown.count()):
@@ -1556,7 +1556,7 @@ class IPTCEditor(QMainWindow):
         self.set_tag_input_html(tags)
         self.cleaned_keywords = [t for t in tags if t.strip()]
 
-    def maybe_save_and_notify(self):
+    def handle_save_events(self):
         """
         Unified save handler for switching images/tag types. Only saves if there are unsaved changes and user chooses Yes.
         Returns True if save succeeded or not needed, False if cancelled or failed.
