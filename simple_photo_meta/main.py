@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QComboBox,
     QSizePolicy,
+    QStyle,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -740,6 +741,16 @@ class IPTCEditor(QMainWindow):
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         rotate_controls.addWidget(self.btn_rotate_left)
+        # Add save button (icon) between rotate buttons
+        self.btn_save_tags = QPushButton()
+        self.btn_save_tags.setToolTip("Save tags for this image")
+        self.btn_save_tags.setFixedSize(36, 36)
+        # Use standard save (floppy disk) icon
+        self.btn_save_tags.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.btn_save_tags.setIconSize(self.btn_save_tags.size() * 0.8)
+        self.btn_save_tags.setStyleSheet("QPushButton { background-color: gold; border-radius: 8px; } QPushButton:hover { background-color: #e6c200; } QPushButton:pressed { background-color: #c9a800; }")
+        self.btn_save_tags.clicked.connect(lambda: self.save_tags_and_notify(force=True))
+        rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
         image_widget = QWidget()
         image_layout = QVBoxLayout(image_widget)
@@ -1173,8 +1184,7 @@ class IPTCEditor(QMainWindow):
         return True
 
     def image_selected(self, index):
-        # Prompt to save unsaved changes before switching images
-        if not self.maybe_save_unsaved_changes():
+        if not self.maybe_save_and_notify():
             return  # Don't switch images
         selected_index = index.row()
         if selected_index < 0 or selected_index >= len(self.image_list):
@@ -1295,7 +1305,7 @@ class IPTCEditor(QMainWindow):
             tag_label.setStyleSheet("font-weight: bold; font-size: 12pt; color: black; padding: 2px 8px;")
             tag_label.setWordWrap(True)
             tag_label.setMinimumWidth(0)
-            tag_label.setMaximumWidth(470)  # Limit width to allow wrapping
+            tag_label.setMaximumWidth(180)  # Limit width to allow wrapping
             layout.addWidget(tag_label)
             layout.addStretch(1)  # Push buttons to the right
             # Add button
@@ -1320,28 +1330,6 @@ class IPTCEditor(QMainWindow):
             btn_add.setFixedHeight(28)
             btn_add.clicked.connect(lambda checked, t=tag: self.add_tag_to_input(t))
             layout.addWidget(btn_add)
-            # Remove (X) button
-            btn_remove = QPushButton("Delete")
-            btn_remove.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: #8B0000;
-                    color: white;
-                    font-weight: bold;
-                    border-radius: 6px;
-                    padding: 2px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #700000;
-                }
-                QPushButton:pressed {
-                    background-color: #5A0000;
-                }
-                """
-            )
-            btn_remove.setFixedHeight(28)
-            btn_remove.clicked.connect(lambda checked, t=tag: self.remove_tag_from_db(t))
-            layout.addWidget(btn_remove)
             widget.setLayout(layout)
             self.tags_list_widget.addItem(item)
             self.tags_list_widget.setItemWidget(item, widget)
@@ -1359,14 +1347,6 @@ class IPTCEditor(QMainWindow):
         cursor = self.iptc_text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)
         self.iptc_text_edit.setTextCursor(cursor)
-
-    def remove_tag_from_db(self, tag):
-        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
-        c = self.db.conn.cursor()
-        c.execute("DELETE FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
-        self.db.conn.commit()
-        self.load_previous_tags()
-        self.update_tags_search()
 
     def update_tags_search(self):
         # Get search text, filter tags, and update the list widget
@@ -1510,7 +1490,7 @@ class IPTCEditor(QMainWindow):
 
     def on_iptc_tag_changed(self, index):
         # Prompt to save unsaved changes before switching tag type
-        if not self.maybe_save_unsaved_changes():
+        if not self.maybe_save_and_notify():
             # Revert dropdown to previous index if cancelled
             self.iptc_tag_dropdown.blockSignals(True)
             for i in range(self.iptc_tag_dropdown.count()):
@@ -1575,6 +1555,102 @@ class IPTCEditor(QMainWindow):
         tags = text.split("\n")
         self.set_tag_input_html(tags)
         self.cleaned_keywords = [t for t in tags if t.strip()]
+
+    def maybe_save_and_notify(self):
+        """
+        Unified save handler for switching images/tag types. Only saves if there are unsaved changes and user chooses Yes.
+        Returns True if save succeeded or not needed, False if cancelled or failed.
+        """
+        current_input = self.iptc_text_edit.toPlainText().strip()
+        if (
+            hasattr(self, "last_loaded_keywords")
+            and self.current_image_path is not None
+            and current_input != self.last_loaded_keywords
+        ):
+            result = self.show_custom_confirm(
+                "Save Changes?",
+                "You have unsaved changes to the tags. Save before switching?",
+                yes_text="Yes",
+                no_text="No",
+                cancel_text="Cancel",
+            )
+            if result == "cancel":
+                return False
+            elif result == "yes":
+                return self.save_tags_and_notify(force=True)
+            elif result == "no":
+                return True
+        # No unsaved changes, just allow switch
+        return True
+
+    def save_tags_and_notify(self, force=False):
+        """
+        Save tags, update tag list/database, and show success/failure dialog.
+        If force=True, always attempt save (used for save button).
+        Returns True if save succeeded or not needed, False if failed.
+        """
+        if not self.current_image_path:
+            return True
+        raw_input = self.iptc_text_edit.toPlainText().strip()
+        tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        )
+        multi_valued = (
+            self.selected_iptc_tag.get("multi_valued", False)
+            if self.selected_iptc_tag
+            else False
+        )
+        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
+        invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
+        if not raw_input and not force:
+            # No changes to save
+            return True
+        try:
+            meta = Exiv2Bind(self.current_image_path)
+            meta.from_dict({"iptc": {tag_type: []}})
+        except Exception as e:
+            self.show_custom_popup(
+                "exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}"
+            )
+            return False
+        if not raw_input:
+            self.db.set_image_tags(self.current_image_path, [], tag_type)
+            self.load_previous_tags()
+            self.update_tags_search()
+            self.last_loaded_keywords = ""
+            self.show_auto_close_message("Tags Saved", "Tags have been saved successfully.", timeout=1200)
+            return True
+        if invalid_tags:
+            self.show_custom_popup(
+                "Invalid Tag(s)",
+                f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
+            )
+            return False
+        try:
+            if multi_valued:
+                meta.from_dict({"iptc": {tag_type: keywords}})
+                self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+            else:
+                single_value = keywords[-1] if keywords else ""
+                meta.from_dict({"iptc": {tag_type: [single_value]}})
+                self.db.set_image_tags(
+                    self.current_image_path,
+                    [single_value] if single_value else [],
+                    tag_type,
+                )
+            # Add new tags to tag DB and update tag list
+            for tag in keywords:
+                self.db.add_tag(tag, tag_type)
+            self.load_previous_tags()
+            self.update_tags_search()
+            self.last_loaded_keywords = raw_input
+            self.show_auto_close_message("Tags Saved", "Tags have been saved successfully.", timeout=1200)
+            return True
+        except Exception as e:
+            self.show_custom_popup(
+                "exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}"
+            )
+            return False
 
 
 def main():
