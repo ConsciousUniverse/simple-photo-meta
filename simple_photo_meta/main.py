@@ -828,11 +828,10 @@ class IPTCEditor(QMainWindow):
                 font-weight: bold;
                 border-radius: 6px;
                 padding: 6px 14px;
-                min-height: 36px;
-                max-height: 36px;
-                min-width: 40px;
-                max-width: 160px;
+                min-height: 5em;
+                max-height: 7em;
                 white-space: pre-wrap;
+                border: 1px solid gold;
             }
             QListWidget::item:selected {
                 background: gold;
@@ -1326,8 +1325,8 @@ class IPTCEditor(QMainWindow):
             tag_label = QLabel(tag)
             tag_label.setStyleSheet("font-weight: bold; font-size: 12pt; color: black; padding: 2px 8px;")
             tag_label.setWordWrap(True)
-            tag_label.setMinimumWidth(0)
-            tag_label.setMaximumWidth(180)  # Limit width to allow wrapping
+            tag_label.setMinimumWidth(350)
+            tag_label.setMaximumWidth(550)  # Limit width to allow wrapping
             layout.addWidget(tag_label)
             layout.addStretch(1)  # Push buttons to the right
             # Add button
