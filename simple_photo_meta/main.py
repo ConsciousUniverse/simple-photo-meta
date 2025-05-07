@@ -42,17 +42,17 @@ COLOR_GOLD = "gold"
 COLOR_GOLD_HOVER = "#e6c200"
 COLOR_GOLD_PRESSED = "#c9a800"
 COLOR_ARMY_GREEN = "#4B5320"
-COLOR_SKYBLUE = "skyblue"
+COLOR_PAPER = "#FFFACD"  # Lightish paper yellow
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
 COLOR_GRAY = "#bdbdbd"
-COLOR_TAG_LIST_BG = COLOR_SKYBLUE
+COLOR_TAG_LIST_BG = COLOR_PAPER
 COLOR_TAG_LIST_TEXT = COLOR_BLACK
 COLOR_TAG_LIST_SELECTED_BG = COLOR_GOLD
 COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_OLIVE
 COLOR_INPUT_TEXT = COLOR_BLACK
-COLOR_INPUT_BG = COLOR_SKYBLUE
+COLOR_INPUT_BG = COLOR_PAPER
 COLOR_INPUT_BORDER = COLOR_GOLD
 COLOR_DIALOG_BG = COLOR_BG_DARK_OLIVE
 COLOR_DIALOG_TEXT = COLOR_GOLD
@@ -60,7 +60,7 @@ COLOR_DIALOG_BTN_BG = COLOR_GOLD
 COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_OLIVE
 COLOR_INFO_BANNER_BG = COLOR_ORANGE
 COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_IMAGE_PREVIEW_BG = COLOR_SKYBLUE
+COLOR_IMAGE_PREVIEW_BG = COLOR_PAPER
 COLOR_IMAGE_PREVIEW_BORDER = COLOR_GOLD
 COLOR_IMAGE_PREVIEW_TEXT = COLOR_BG_DARK_OLIVE
 COLOR_COMBOBOX_BG = COLOR_BG_DARK_OLIVE
@@ -731,7 +731,7 @@ class IPTCEditor(QMainWindow):
             self.show_image_filename_context_menu
         )
         self.list_view.setStyleSheet(
-            f"QListView {{ background: {COLOR_SKYBLUE}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; }}" + scrollbar_style
+            f"QListView {{ background: {COLOR_PAPER}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; }}" + scrollbar_style
         )
         left_panel.addWidget(self.list_view)
 
@@ -951,7 +951,7 @@ class IPTCEditor(QMainWindow):
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = f"background: {COLOR_SKYBLUE}; color: {COLOR_BLACK}; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+        skyblue_css = f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         # Make search input font slightly smaller
         search_font = QFont()
         search_font.setPointSize(13)
@@ -966,7 +966,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: {COLOR_SKYBLUE}; color: {COLOR_BLACK}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
