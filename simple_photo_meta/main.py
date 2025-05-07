@@ -61,7 +61,7 @@ COLOR_IMAGE_PREVIEW_TEXT = COLOR_GOLD
 
 # Tag input pane
 COLOR_TAG_INPUT_BG = COLOR_PAPER
-COLOR_TAG_INPUT_TEXT = COLOR_BLACK
+COLOR_TAG_INPUT_TEXT = COLOR_BG_DARK_OLIVE
 COLOR_TAG_INPUT_BORDER = COLOR_GOLD
 
 # Tag list widget
@@ -73,7 +73,7 @@ COLOR_TAG_LIST_BORDER = COLOR_GOLD
 COLOR_TAG_LIST_ITEM_BORDER = COLOR_GOLD
 
 # Tag label in tag list
-COLOR_TAG_LABEL_TEXT = COLOR_BLACK
+COLOR_TAG_LABEL_TEXT = COLOR_BG_DARK_OLIVE
 
 # Tag add button in tag list
 COLOR_TAG_ADD_BTN_BG = COLOR_GOLD
@@ -759,6 +759,8 @@ class IPTCEditor(QMainWindow):
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.search_bar.setPlaceholderText("ENTER TAGS(S) TO SEARCH IMAGES FOR ...")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
+        self.search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.search_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.search_debounce_timer = QTimer()
         self.search_debounce_timer.setSingleShot(True)
@@ -924,6 +926,8 @@ class IPTCEditor(QMainWindow):
         self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.tags_search_bar.setPlaceholderText("ENTER TAGS TO SEARCH LIST FOR ...")
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
+        self.tags_search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tags_search_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         right_panel.addWidget(self.tags_search_bar)
 
         # Create tags_list_widget early so it's available for other methods
