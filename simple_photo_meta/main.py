@@ -73,7 +73,7 @@ COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
 FONT_SIZE_DEFAULT = 13
-FONT_SIZE_TAG_INPUT = 18
+FONT_SIZE_TAG_INPUT = 16
 FONT_SIZE_TAG_LIST = 12
 FONT_SIZE_INFO_BANNER = 13
 FONT_SIZE_TAG_LABEL = 12
@@ -742,7 +742,7 @@ class IPTCEditor(QMainWindow):
             self.show_image_filename_context_menu
         )
         self.list_view.setStyleSheet(
-            f"QListView {{ background: {COLOR_PAPER}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; }}" + scrollbar_style
+            f"QListView {{ background: {COLOR_PAPER}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; padding: 16px; }}" + scrollbar_style
         )
         left_panel.addWidget(self.list_view)
 
@@ -894,8 +894,8 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setSpacing(8)
         self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
         self.tags_list_widget.setViewportMargins(
-            0, 0, 0, 0
-        )  # Remove right viewport margin
+            0, 0, 0, 0  # Remove right viewport margin
+        )
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet()
             + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; }} "
