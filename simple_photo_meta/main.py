@@ -741,7 +741,15 @@ class IPTCEditor(QMainWindow):
             f"}}"
         )
         central_widget = QWidget()
+        central_widget.setContentsMargins(0,0,0,0)
         self.setCentralWidget(central_widget)
+
+        # === BEGIN: Wrap all widgets in a single outer QWidget ===
+        outer_container = QWidget()
+        outer_container.setStyleSheet("padding-bottom: 11px;")
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_container.setLayout(outer_layout)
 
         # Use a QSplitter for user-adjustable left pane
         main_splitter = QSplitter(Qt.Horizontal)
@@ -814,6 +822,7 @@ class IPTCEditor(QMainWindow):
 
         # Add left panel to main layout
         left_panel_widget = QWidget()
+        left_panel_widget.setContentsMargins(0,0,0,0)
         left_panel_widget.setLayout(left_panel)
         # Remove fixed/minimum width so user can resize
         left_panel_widget.setMinimumWidth(100)
@@ -886,6 +895,7 @@ class IPTCEditor(QMainWindow):
 
         # --- Tag Input Pane with persistent rounded corners and matching width ---
         iptc_input_container = QWidget()
+        iptc_input_container.setContentsMargins(0,0,0,0)
         iptc_input_container.setObjectName("IptcInputContainer")
         iptc_input_container.setStyleSheet(
             f"""
@@ -904,7 +914,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit = QTextEdit()
         self.iptc_text_edit.setFont(self.font())
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;}}"
         )
         iptc_layout.addWidget(self.iptc_text_edit)
         # Ensure the container expands horizontally to match the image preview
@@ -978,34 +988,6 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown = QComboBox()
         self.iptc_tag_dropdown.setFont(self.font())
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
-        # Set gold text color for dropdown
-        self.iptc_tag_dropdown.setStyleSheet(
-            f"""
-            QComboBox {{
-                color: {COLOR_COMBOBOX_TEXT};
-                border-radius: {self.corner_radius - 4}px;
-                border: 2px solid {COLOR_COMBOBOX_BORDER};
-                padding: 6px;
-                background: {COLOR_COMBOBOX_BG};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-            }}
-            QComboBox QAbstractItemView {{
-                color: {COLOR_COMBOBOX_TEXT};
-                border-radius: {self.corner_radius - 4}px;
-                background: {COLOR_COMBOBOX_BG};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 32px;
-                border-top-right-radius: {self.corner_radius - 4}px;
-                border-bottom-right-radius: {self.corner_radius - 4}px;
-                border: none;
-                background: transparent;
-            }}
-            """
-        )
         right_panel.addWidget(self.iptc_tag_dropdown)
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
@@ -1021,13 +1003,9 @@ class IPTCEditor(QMainWindow):
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
 
         right_panel_widget = QWidget()
+        right_panel_widget.setContentsMargins(0, 0, 0, 0)  # Add margin (left, top, right, bottom)
         right_panel_widget.setLayout(right_panel)
         main_splitter.addWidget(right_panel_widget)
-
-        # Create the main vertical layout for the window
-        main_vlayout = QVBoxLayout()
-        # Add a small bottom margin to the main layout for footer padding
-        main_vlayout.setContentsMargins(0, 0, 0, 12)  # left, top, right, bottom
 
         # ======================================================== #
         # INFORMATIONAL BANNER
@@ -1044,15 +1022,19 @@ class IPTCEditor(QMainWindow):
         banner_layout.setContentsMargins(8, 12, 8, 0)  # left, top, right, bottom
         banner_layout.addWidget(self.info_banner)
         banner_container.setLayout(banner_layout)
-        main_vlayout.addWidget(banner_container)
+        # Instead of adding to main_vlayout, add to outer_layout
+        outer_layout.addWidget(banner_container)
         # ======================================================== #
 
-        # Add the splitter to a horizontal layout
-        # place splitter directly and stretch
-        main_vlayout.setStretch(0, 0)
-        main_vlayout.addWidget(main_splitter)
-        main_vlayout.setStretch(1, 1)
-        central_widget.setLayout(main_vlayout)
+        # Add the splitter to the outer layout
+        outer_layout.addWidget(main_splitter)
+        # === END: All widgets are now inside outer_container ===
+
+        # Set the outer_container as the only child of the central widget
+        central_layout = QVBoxLayout()
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.addWidget(outer_container)
+        central_widget.setLayout(central_layout)
 
         self._preview_rotation_angle = 0
         self._preview_image_cache = None
