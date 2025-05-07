@@ -71,6 +71,17 @@ COLOR_SCROLLBAR_BORDER = COLOR_GOLD
 COLOR_SCROLLBAR_WIDTH = "16px"
 COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
 
+# === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
+FONT_SIZE_DEFAULT = 13
+FONT_SIZE_TAG_INPUT = 18
+FONT_SIZE_TAG_LIST = 12
+FONT_SIZE_INFO_BANNER = 13
+FONT_SIZE_TAG_LABEL = 12
+FONT_SIZE_TAG_LIST_ITEM = 12
+FONT_SIZE_COMBOBOX = 13
+FONT_SIZE_BUTTON = 13
+FONT_SIZE_POPUP = 13
+
 
 class TagDatabase:
     """
@@ -500,7 +511,7 @@ class CustomPopupDialog(QDialog):
         self.setMinimumWidth(420)
         self.setMinimumHeight(160)
         self.setStyleSheet(
-            f"QDialog {{ background: {COLOR_DIALOG_BG}; color: {COLOR_DIALOG_TEXT}; }} QLabel {{ color: {COLOR_DIALOG_TEXT}; font-size: 13pt; }}"
+            f"QDialog {{ background: {COLOR_DIALOG_BG}; color: {COLOR_DIALOG_TEXT}; }} QLabel {{ color: {COLOR_DIALOG_TEXT}; font-size: {FONT_SIZE_POPUP}pt; }}"
         )
         self.adjustSize()
 
@@ -654,7 +665,7 @@ class IPTCEditor(QMainWindow):
         dlg.setMinimumWidth(420)
         dlg.setMinimumHeight(160)
         dlg.setStyleSheet(
-            f"QDialog {{ background: {COLOR_DIALOG_BG}; color: {COLOR_DIALOG_TEXT}; }} QLabel {{ color: {COLOR_DIALOG_TEXT}; font-size: 13pt; }}"
+            f"QDialog {{ background: {COLOR_DIALOG_BG}; color: {COLOR_DIALOG_TEXT}; }} QLabel {{ color: {COLOR_DIALOG_TEXT}; font-size: {FONT_SIZE_POPUP}pt; }}"
         )
         dlg.exec()
         return result["value"]
@@ -863,7 +874,7 @@ class IPTCEditor(QMainWindow):
             QListWidget::item {{
                 background: {COLOR_TAG_LIST_BG};
                 color: {COLOR_TAG_LIST_TEXT};
-                font-size: 12pt;
+                font-size: {FONT_SIZE_TAG_LIST}pt;
                 font-weight: bold;
                 border-radius: 6px;
                 padding: 6px 14px;
@@ -898,7 +909,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
         # Set gold text color for dropdown
         self.iptc_tag_dropdown.setStyleSheet(
-            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; }} QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; }}"
+            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; font-size: {FONT_SIZE_COMBOBOX}pt; }} QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; font-size: {FONT_SIZE_COMBOBOX}pt; }}"
         )
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
@@ -927,7 +938,7 @@ class IPTCEditor(QMainWindow):
         # Remove or comment out this section to remove!
         self.info_banner = QLabel("IMPORTANT: This is alpha software. Ensure images are backed up to prevent data loss or damage in the event of software bugs.")
         self.info_banner.setStyleSheet(
-            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; font-weight: bold; font-size: 13pt; padding: 8px 0px; border-radius: 8px;"
+            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; font-weight: bold; font-size: {FONT_SIZE_INFO_BANNER}pt; padding: 8px 0px; border-radius: 8px;"
         )
         self.info_banner.setAlignment(Qt.AlignCenter)
         self.info_banner.setWordWrap(True)
@@ -951,22 +962,22 @@ class IPTCEditor(QMainWindow):
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: 16pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+        skyblue_css = f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         # Make search input font slightly smaller
         search_font = QFont()
-        search_font.setPointSize(13)
+        search_font.setPointSize(FONT_SIZE_DEFAULT)
         self.search_bar.setFont(search_font)
         self.tags_search_bar.setFont(search_font)
-        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: 13pt;}}")
+        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_DEFAULT}pt;}}")
         self.tags_search_bar.setStyleSheet(
-            f"QTextEdit {{{skyblue_css} font-size: 13pt;}}"
+            f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_DEFAULT}pt;}}"
         )
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
-        tag_input_font.setPointSize(18)
+        tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
@@ -976,12 +987,12 @@ class IPTCEditor(QMainWindow):
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
         self.iptc_tag_dropdown.setStyleSheet(
-            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; border: none; padding: 6px; background: {COLOR_COMBOBOX_BG}; }} "
-            f"QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; background: {COLOR_COMBOBOX_BG}; }} "
+            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; border: none; padding: 6px; background: {COLOR_COMBOBOX_BG}; font-size: {FONT_SIZE_COMBOBOX}pt; }} "
+            f"QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; background: {COLOR_COMBOBOX_BG}; font-size: {FONT_SIZE_COMBOBOX}pt; }} "
         )
 
         button_style = (
-            f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_DIALOG_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; padding: 6px 18px; }} "
+            f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_DIALOG_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
             f"QPushButton:hover {{ background-color: {COLOR_GOLD_HOVER}; color: {COLOR_DIALOG_BTN_TEXT} !important; }} "
             f"QPushButton:pressed {{ background-color: {COLOR_GOLD_PRESSED}; color: {COLOR_DIALOG_BTN_TEXT} !important; }}"
         )
@@ -1370,7 +1381,7 @@ class IPTCEditor(QMainWindow):
             layout.setContentsMargins(4, 2, 4, 2)
             # Tag label
             tag_label = QLabel(tag)
-            tag_label.setStyleSheet(f"font-weight: bold; font-size: 12pt; color: {COLOR_TAG_LIST_TEXT}; padding: 2px 8px;")
+            tag_label.setStyleSheet(f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LIST_TEXT}; padding: 2px 8px;")
             tag_label.setWordWrap(True)
             tag_label.setMinimumWidth(250)
             tag_label.setMaximumWidth(300)  # Limit width to allow wrapping
@@ -1386,6 +1397,7 @@ class IPTCEditor(QMainWindow):
                     font-weight: bold;
                     border-radius: 6px;
                     padding: 2px 10px;
+                    font-size: {FONT_SIZE_TAG_LIST_ITEM}pt;
                 }}
                 QPushButton:hover {{
                     background-color: {COLOR_GOLD_HOVER};
@@ -1584,10 +1596,10 @@ class IPTCEditor(QMainWindow):
         if not tags:
             self.iptc_text_edit.clear()
             tag_input_font = QFont()
-            tag_input_font.setPointSize(18)
+            tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
             self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; }}"
+                f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
             )
             return
         # Set plain text, one tag per line
@@ -1596,10 +1608,10 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setPlainText(text)
         self.iptc_text_edit.blockSignals(False)
         tag_input_font = QFont()
-        tag_input_font.setPointSize(18)
+        tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
