@@ -37,40 +37,88 @@ from simple_photo_meta import iptc_tags
 from simple_photo_meta.exiv2bind import Exiv2Bind
 
 # === COLOUR VARIABLES (ALL COLOURS DEFINED HERE) ===
+
+# Base palette
 COLOR_BG_DARK_OLIVE = "#232d18"
 COLOR_GOLD = "gold"
 COLOR_GOLD_HOVER = "#e6c200"
 COLOR_GOLD_PRESSED = "#c9a800"
 COLOR_ARMY_GREEN = "#4B5320"
-COLOR_PAPER = "#FFFACD"  # Lightish paper yellow
+COLOR_PAPER = "#FFFACD"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
 COLOR_GRAY = "#bdbdbd"
+
+# Thumbnails pane
+COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_OLIVE
+COLOR_THUMB_LIST_PANE_BORDER = COLOR_GOLD
+
+# Image preview
+COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_OLIVE
+COLOR_IMAGE_PREVIEW_BORDER = COLOR_GOLD
+COLOR_IMAGE_PREVIEW_TEXT = COLOR_GOLD
+
+# Tag input pane
+COLOR_TAG_INPUT_BG = COLOR_PAPER
+COLOR_TAG_INPUT_TEXT = COLOR_BLACK
+COLOR_TAG_INPUT_BORDER = COLOR_GOLD
+
+# Tag list widget
 COLOR_TAG_LIST_BG = COLOR_PAPER
 COLOR_TAG_LIST_TEXT = COLOR_BLACK
 COLOR_TAG_LIST_SELECTED_BG = COLOR_GOLD
 COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_INPUT_TEXT = COLOR_BLACK
-COLOR_INPUT_BG = COLOR_PAPER
-COLOR_INPUT_BORDER = COLOR_GOLD
+COLOR_TAG_LIST_BORDER = COLOR_GOLD
+COLOR_TAG_LIST_ITEM_BORDER = COLOR_GOLD
+
+# Tag label in tag list
+COLOR_TAG_LABEL_TEXT = COLOR_BLACK
+
+# Tag add button in tag list
+COLOR_TAG_ADD_BTN_BG = COLOR_GOLD
+COLOR_TAG_ADD_BTN_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_TAG_ADD_BTN_BORDER = COLOR_GOLD
+COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
+COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
+
+# Search bars (thumbs and tags)
+COLOR_SEARCH_INPUT_BG = COLOR_PAPER
+COLOR_SEARCH_INPUT_TEXT = COLOR_BLACK
+COLOR_SEARCH_INPUT_BORDER = COLOR_GOLD
+
+# Pagination controls
+COLOR_PAGINATION_BTN_BG = COLOR_GOLD
+COLOR_PAGINATION_BTN_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_PAGINATION_BTN_BORDER = COLOR_GOLD
+COLOR_PAGINATION_BTN_BG_HOVER = COLOR_GOLD_HOVER
+COLOR_PAGINATION_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
+
+# Info banner
+COLOR_INFO_BANNER_BG = COLOR_ORANGE
+COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_INFO_BANNER_BORDER = COLOR_GOLD
+
+# Dialogs
 COLOR_DIALOG_BG = COLOR_BG_DARK_OLIVE
 COLOR_DIALOG_TEXT = COLOR_GOLD
 COLOR_DIALOG_BTN_BG = COLOR_GOLD
 COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_INFO_BANNER_BG = COLOR_ORANGE
-COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_OLIVE
-COLOR_IMAGE_PREVIEW_BORDER = COLOR_GOLD
-COLOR_IMAGE_PREVIEW_TEXT = COLOR_GOLD
+COLOR_DIALOG_BTN_BORDER = COLOR_GOLD
+COLOR_DIALOG_BTN_BG_HOVER = COLOR_GOLD_HOVER
+COLOR_DIALOG_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
+
+# Combobox
 COLOR_COMBOBOX_BG = COLOR_BG_DARK_OLIVE
 COLOR_COMBOBOX_TEXT = COLOR_GOLD
+COLOR_COMBOBOX_BORDER = COLOR_GOLD
+
+# Scrollbars
 COLOR_SCROLLBAR_BG = "transparent"
 COLOR_SCROLLBAR_HANDLE = COLOR_GOLD
 COLOR_SCROLLBAR_BORDER = COLOR_GOLD
 COLOR_SCROLLBAR_WIDTH = "16px"
 COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
-COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_OLIVE
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
 FONT_SIZE_DEFAULT = 13
@@ -743,7 +791,7 @@ class IPTCEditor(QMainWindow):
             self.show_image_filename_context_menu
         )
         self.list_view.setStyleSheet(
-            f"QListView {{ background: {COLOR_THUMB_LIST_PANE_BG}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; padding: 16px; }}" + scrollbar_style
+            f"QListView {{ background: {COLOR_THUMB_LIST_PANE_BG}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_THUMB_LIST_PANE_BORDER}; padding: 16px; }}" + scrollbar_style
         )
         left_panel.addWidget(self.list_view)
 
@@ -821,7 +869,7 @@ class IPTCEditor(QMainWindow):
         icon = QIcon(pixmap)
         self.btn_save_tags.setIcon(icon)
         self.btn_save_tags.setIconSize(pixmap.size())
-        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_GOLD}; border-radius: 8px; }} QPushButton:hover {{ background-color: {COLOR_GOLD_HOVER}; }} QPushButton:pressed {{ background-color: {COLOR_GOLD_PRESSED}; }}")
+        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }}")
         self.btn_save_tags.clicked.connect(lambda: self.save_tags_and_notify(force=True))
         rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
@@ -840,9 +888,9 @@ class IPTCEditor(QMainWindow):
         iptc_input_container.setStyleSheet(
             f"""
             QWidget#IptcInputContainer {{
-                background: {COLOR_PAPER};
+                background: {COLOR_TAG_INPUT_BG};
                 border-radius: {self.corner_radius - 4}px;
-                border: 1px solid {COLOR_GOLD};
+                border: 1px solid {COLOR_TAG_INPUT_BORDER};
                 margin-left: 0px;
                 margin-right: 0px;
                 margin-bottom: 12px;
@@ -854,7 +902,7 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit = QTextEdit()
         self.iptc_text_edit.setFont(self.font())
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_BLACK}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         iptc_layout.addWidget(self.iptc_text_edit)
         # Ensure the container expands horizontally to match the image preview
@@ -900,7 +948,7 @@ class IPTCEditor(QMainWindow):
                 min-height: 6em;
                 max-height: 7em;
                 white-space: pre-wrap;
-                border: 1px solid {COLOR_TAG_LIST_SELECTED_BG};
+                border: 1px solid {COLOR_TAG_LIST_ITEM_BORDER};
             }}
             QListWidget::item:selected {{
                 background: {COLOR_TAG_LIST_SELECTED_BG};
@@ -917,7 +965,7 @@ class IPTCEditor(QMainWindow):
         )
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet()
-            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; }} "
+            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
             f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         right_panel.addWidget(self.tags_list_widget)
@@ -957,7 +1005,7 @@ class IPTCEditor(QMainWindow):
         # Remove or comment out this section to remove!
         self.info_banner = QLabel("IMPORTANT: This is alpha software. Ensure images are backed up to prevent data loss or damage in the event of software bugs.")
         self.info_banner.setStyleSheet(
-            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; font-weight: bold; font-size: {FONT_SIZE_INFO_BANNER}pt; padding: 8px 0px; border-radius: 8px;"
+            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; font-weight: bold; font-size: {FONT_SIZE_INFO_BANNER}pt; padding: 8px 0px; border-radius: 8px; border: 2px solid {COLOR_INFO_BANNER_BORDER};"
         )
         self.info_banner.setAlignment(Qt.AlignCenter)
         self.info_banner.setWordWrap(True)
@@ -982,8 +1030,8 @@ class IPTCEditor(QMainWindow):
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
         skyblue_css = (
-            f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; "
-            f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_GOLD}; "
+            f"background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; "
+            f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; "
             f"padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         )
         # Make search input font slightly smaller
@@ -1000,12 +1048,12 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_BLACK}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet()
-            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; }} "
+            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
             f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
@@ -1015,9 +1063,9 @@ class IPTCEditor(QMainWindow):
         )
 
         button_style = (
-            f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_DIALOG_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
-            f"QPushButton:hover {{ background-color: {COLOR_GOLD_HOVER}; color: {COLOR_DIALOG_BTN_TEXT} !important; }} "
-            f"QPushButton:pressed {{ background-color: {COLOR_GOLD_PRESSED}; color: {COLOR_DIALOG_BTN_TEXT} !important; }}"
+            f"QPushButton {{ background-color: {COLOR_PAGINATION_BTN_BG}; color: {COLOR_PAGINATION_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
+            f"QPushButton:hover {{ background-color: {COLOR_PAGINATION_BTN_BG_HOVER}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }} "
+            f"QPushButton:pressed {{ background-color: {COLOR_PAGINATION_BTN_BG_PRESSED}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }}"
         )
         self.btn_select_folder.setStyleSheet(button_style)
         self.btn_scan_directory.setStyleSheet(button_style)
@@ -1404,7 +1452,7 @@ class IPTCEditor(QMainWindow):
             layout.setContentsMargins(4, 2, 4, 2)
             # Tag label
             tag_label = QLabel(tag)
-            tag_label.setStyleSheet(f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LIST_TEXT}; padding: 2px 8px;")
+            tag_label.setStyleSheet(f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LABEL_TEXT}; padding: 2px 8px;")
             tag_label.setWordWrap(True)
             tag_label.setMinimumWidth(250)
             tag_label.setMaximumWidth(300)  # Limit width to allow wrapping
@@ -1415,18 +1463,18 @@ class IPTCEditor(QMainWindow):
             btn_add.setStyleSheet(
                 f"""
                 QPushButton {{
-                    background-color: {COLOR_GOLD};
-                    color: {COLOR_DIALOG_BTN_TEXT};
+                    background-color: {COLOR_TAG_ADD_BTN_BG};
+                    color: {COLOR_TAG_ADD_BTN_TEXT};
                     font-weight: bold;
                     border-radius: 6px;
                     padding: 2px 10px;
                     font-size: {FONT_SIZE_TAG_LIST_ITEM}pt;
                 }}
                 QPushButton:hover {{
-                    background-color: {COLOR_GOLD_HOVER};
+                    background-color: {COLOR_TAG_ADD_BTN_BG_HOVER};
                 }}
                 QPushButton:pressed {{
-                    background-color: {COLOR_GOLD_PRESSED};
+                    background-color: {COLOR_TAG_ADD_BTN_BG_PRESSED};
                 }}
                 """
             )
@@ -1622,7 +1670,7 @@ class IPTCEditor(QMainWindow):
             tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
             self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
             )
             return
         # Set plain text, one tag per line
@@ -1634,7 +1682,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
