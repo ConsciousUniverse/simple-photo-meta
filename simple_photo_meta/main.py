@@ -1175,6 +1175,7 @@ class IPTCEditor(QMainWindow):
             if self.current_page < 0:
                 self.current_page = 0
         self.page_label.setText(f"Page {self.current_page + 1} / {self.total_pages}")
+        self.page_label.setStyleSheet(f"color: {COLOR_PAPER}")
         self.btn_prev.setEnabled(self.current_page > 0)
         self.btn_next.setEnabled(self.current_page < self.total_pages - 1)
 
