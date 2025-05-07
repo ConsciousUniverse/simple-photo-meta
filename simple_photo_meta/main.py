@@ -60,9 +60,9 @@ COLOR_DIALOG_BTN_BG = COLOR_GOLD
 COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_OLIVE
 COLOR_INFO_BANNER_BG = COLOR_ORANGE
 COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_IMAGE_PREVIEW_BG = COLOR_PAPER
+COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_OLIVE
 COLOR_IMAGE_PREVIEW_BORDER = COLOR_GOLD
-COLOR_IMAGE_PREVIEW_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_IMAGE_PREVIEW_TEXT = COLOR_GOLD
 COLOR_COMBOBOX_BG = COLOR_BG_DARK_OLIVE
 COLOR_COMBOBOX_TEXT = COLOR_GOLD
 COLOR_SCROLLBAR_BG = "transparent"
@@ -70,6 +70,7 @@ COLOR_SCROLLBAR_HANDLE = COLOR_GOLD
 COLOR_SCROLLBAR_BORDER = COLOR_GOLD
 COLOR_SCROLLBAR_WIDTH = "16px"
 COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
+COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_OLIVE
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
 FONT_SIZE_DEFAULT = 13
@@ -742,7 +743,7 @@ class IPTCEditor(QMainWindow):
             self.show_image_filename_context_menu
         )
         self.list_view.setStyleSheet(
-            f"QListView {{ background: {COLOR_PAPER}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; padding: 16px; }}" + scrollbar_style
+            f"QListView {{ background: {COLOR_THUMB_LIST_PANE_BG}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_GOLD}; padding: 16px; }}" + scrollbar_style
         )
         left_panel.addWidget(self.list_view)
 
@@ -776,7 +777,6 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here ...")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
-        # Use the shared corner radius for the image preview panel
         self.image_label.setStyleSheet(
             f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color:  {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_IMAGE_PREVIEW_BORDER};"
         )
@@ -834,16 +834,35 @@ class IPTCEditor(QMainWindow):
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
 
-        # Container for IPTC text edit
-        iptc_widget = QWidget()
-        iptc_layout = QVBoxLayout(iptc_widget)
+        # --- Tag Input Pane with persistent rounded corners and matching width ---
+        iptc_input_container = QWidget()
+        iptc_input_container.setObjectName("IptcInputContainer")
+        iptc_input_container.setStyleSheet(
+            f"""
+            QWidget#IptcInputContainer {{
+                background: {COLOR_PAPER};
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_GOLD};
+                margin-left: 0px;
+                margin-right: 0px;
+                margin-bottom: 12px;
+            }}
+            """
+        )
+        iptc_layout = QVBoxLayout(iptc_input_container)
         iptc_layout.setContentsMargins(0, 0, 0, 0)
         self.iptc_text_edit = QTextEdit()
         self.iptc_text_edit.setFont(self.font())
+        self.iptc_text_edit.setStyleSheet(
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_BLACK}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+        )
         iptc_layout.addWidget(self.iptc_text_edit)
-        center_splitter.addWidget(iptc_widget)
+        # Ensure the container expands horizontally to match the image preview
+        iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        center_splitter.addWidget(iptc_input_container)
         center_splitter.setSizes([600, 200])
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
+        # --- end tag input pane wrap ---
 
         main_splitter.addWidget(center_splitter)
 
@@ -977,7 +996,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_GOLD}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_BLACK}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
@@ -1599,7 +1618,7 @@ class IPTCEditor(QMainWindow):
             tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
             self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
+                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
             )
             return
         # Set plain text, one tag per line
@@ -1611,7 +1630,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: {COLOR_INPUT_BG}; color: {COLOR_INPUT_TEXT}; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; font-size: {FONT_SIZE_TAG_INPUT}pt; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
