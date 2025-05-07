@@ -980,17 +980,42 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
         # Set gold text color for dropdown
         self.iptc_tag_dropdown.setStyleSheet(
-            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; font-size: {FONT_SIZE_COMBOBOX}pt; }} QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; font-size: {FONT_SIZE_COMBOBOX}pt; }}"
+            f"""
+            QComboBox {{
+                color: {COLOR_COMBOBOX_TEXT};
+                border-radius: {self.corner_radius - 4}px;
+                border: 2px solid {COLOR_COMBOBOX_BORDER};
+                padding: 6px;
+                background: {COLOR_COMBOBOX_BG};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {COLOR_COMBOBOX_TEXT};
+                border-radius: {self.corner_radius - 4}px;
+                background: {COLOR_COMBOBOX_BG};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+            """
         )
+        right_panel.addWidget(self.iptc_tag_dropdown)
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
-            self.iptc_tag_dropdown.addItem(tag["name"], tag)
+            display_name = tag["name"].upper()
+            self.iptc_tag_dropdown.addItem(display_name, tag)
             self.iptc_tag_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
             if tag["tag"] == "Keywords":
                 keyword_index = i
         self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
-        right_panel.addWidget(self.iptc_tag_dropdown)
         # Set initial value to 'Keywords' if present
         self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
@@ -1062,8 +1087,31 @@ class IPTCEditor(QMainWindow):
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
         self.iptc_tag_dropdown.setStyleSheet(
-            f"QComboBox {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; border: none; padding: 6px; background: {COLOR_COMBOBOX_BG}; font-size: {FONT_SIZE_COMBOBOX}pt; }} "
-            f"QComboBox QAbstractItemView {{ color: {COLOR_COMBOBOX_TEXT}; border-radius: {self.corner_radius - 4}px; background: {COLOR_COMBOBOX_BG}; font-size: {FONT_SIZE_COMBOBOX}pt; }} "
+            f"""
+            QComboBox {{
+                color: {COLOR_COMBOBOX_TEXT};
+                border-radius: {self.corner_radius - 4}px;
+                border: 2px solid {COLOR_COMBOBOX_BORDER};
+                padding: 6px;
+                background: {COLOR_COMBOBOX_BG};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {COLOR_COMBOBOX_TEXT};
+                border-radius: {self.corner_radius - 4}px;
+                background: {COLOR_COMBOBOX_BG};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+            """
         )
 
         button_style = (

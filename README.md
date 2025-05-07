@@ -37,7 +37,7 @@ Simple Photo Meta is licensed under the GPLv3. See the [LICENSE](LICENSE) file f
 
 ## Current Version
 
-v0.1.33-alpha+266965a
+v0.1.34-alpha+204357b
 
 ## Author
 
