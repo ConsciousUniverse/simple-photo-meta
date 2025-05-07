@@ -828,7 +828,7 @@ class IPTCEditor(QMainWindow):
                 font-weight: bold;
                 border-radius: 6px;
                 padding: 6px 14px;
-                min-height: 5em;
+                min-height: 6em;
                 max-height: 7em;
                 white-space: pre-wrap;
                 border: 1px solid gold;
@@ -880,7 +880,8 @@ class IPTCEditor(QMainWindow):
 
         # Create the main vertical layout for the window
         main_vlayout = QVBoxLayout()
-        main_vlayout.setContentsMargins(0, 0, 0, 0)
+        # Add a small bottom margin to the main layout for footer padding
+        main_vlayout.setContentsMargins(0, 0, 0, 12)  # left, top, right, bottom
 
         # ======================================================== #
         # INFORMATIONAL BANNER
@@ -1331,7 +1332,7 @@ class IPTCEditor(QMainWindow):
             tag_label.setStyleSheet("font-weight: bold; font-size: 12pt; color: black; padding: 2px 8px;")
             tag_label.setWordWrap(True)
             tag_label.setMinimumWidth(250)
-            tag_label.setMaximumWidth(350)  # Limit width to allow wrapping
+            tag_label.setMaximumWidth(300)  # Limit width to allow wrapping
             layout.addWidget(tag_label)
             layout.addStretch(1)  # Push buttons to the right
             # Add button
