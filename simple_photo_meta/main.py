@@ -692,7 +692,7 @@ class IPTCEditor(QMainWindow):
             self.show_image_filename_context_menu
         )
         self.list_view.setStyleSheet(
-            f"QListView {{ background: skyblue; border-radius: {self.corner_radius}px; }}"
+            f"QListView {{ background: skyblue; border-radius: {self.corner_radius}px; border: 1px solid gold; }}" + scrollbar_style
         )
         left_panel.addWidget(self.list_view)
 
@@ -728,7 +728,7 @@ class IPTCEditor(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         # Use the shared corner radius for the image preview panel
         self.image_label.setStyleSheet(
-            f"background-color: skyblue; color:  #232d18; border-radius: {self.corner_radius}px; border: none;"
+            f"background-color: skyblue; color:  #232d18; border-radius: {self.corner_radius}px; border: 1px solid gold;"
         )
         self.image_label.setMinimumHeight(400)
         # Add rotation controls below image_label
@@ -846,6 +846,11 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setViewportMargins(
             0, 0, 0, 0
         )  # Remove right viewport margin
+        self.tags_list_widget.setStyleSheet(
+            self.tags_list_widget.styleSheet()
+            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid gold; }} "
+            f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
+        )
         right_panel.addWidget(self.tags_list_widget)
 
         # IPTC Application2 Tag Dropdown
@@ -919,12 +924,12 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid gold; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet()
-            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: none; }} "
+            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid gold; }} "
             f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
@@ -949,8 +954,8 @@ class IPTCEditor(QMainWindow):
         scrollbar_style = (
             "QScrollBar:vertical {"
             "    background: transparent;"
-            "    width: 16px;"
-            "    margin: 0px 0px 0px 0px;"
+            "    width: 21px;"
+            "    margin: 0px 5px 0px 0px;"
             "    border-radius: 8px;"
             "}"
             "QScrollBar::handle:vertical {"
@@ -1325,8 +1330,8 @@ class IPTCEditor(QMainWindow):
             tag_label = QLabel(tag)
             tag_label.setStyleSheet("font-weight: bold; font-size: 12pt; color: black; padding: 2px 8px;")
             tag_label.setWordWrap(True)
-            tag_label.setMinimumWidth(350)
-            tag_label.setMaximumWidth(550)  # Limit width to allow wrapping
+            tag_label.setMinimumWidth(250)
+            tag_label.setMaximumWidth(350)  # Limit width to allow wrapping
             layout.addWidget(tag_label)
             layout.addStretch(1)  # Push buttons to the right
             # Add button
@@ -1552,7 +1557,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(18)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: skyblue; color: black; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1px solid gold; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
         )
         # Move cursor to end
         cursor = self.iptc_text_edit.textCursor()
