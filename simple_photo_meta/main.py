@@ -981,7 +981,11 @@ class IPTCEditor(QMainWindow):
         self._preview_image_cache = None
 
         # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: none; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+        skyblue_css = (
+            f"background: {COLOR_PAPER}; color: {COLOR_BLACK}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; "
+            f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_GOLD}; "
+            f"padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+        )
         # Make search input font slightly smaller
         search_font = QFont()
         search_font.setPointSize(FONT_SIZE_DEFAULT)
