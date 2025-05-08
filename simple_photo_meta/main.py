@@ -120,16 +120,20 @@ COLOR_SCROLLBAR_BORDER = COLOR_GOLD
 COLOR_SCROLLBAR_WIDTH = "16px"
 COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
 
+# Buttons
+SIZE_ADD_BUTTON_WIDTH = 75
+SIZE_ADD_BUTTON_HEIGHT = 45
+
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
-FONT_SIZE_DEFAULT = 13
-FONT_SIZE_TAG_INPUT = 16
+FONT_SIZE_DEFAULT = 12
+FONT_SIZE_TAG_INPUT = 12
 FONT_SIZE_TAG_LIST = 12
-FONT_SIZE_INFO_BANNER = 13
+FONT_SIZE_INFO_BANNER = 12
 FONT_SIZE_TAG_LABEL = 12
 FONT_SIZE_TAG_LIST_ITEM = 12
-FONT_SIZE_COMBOBOX = 13
-FONT_SIZE_BUTTON = 13
-FONT_SIZE_POPUP = 13
+FONT_SIZE_COMBOBOX = 12
+FONT_SIZE_BUTTON = 12
+FONT_SIZE_POPUP = 12
 
 
 class TagDatabase:
@@ -1513,7 +1517,7 @@ class IPTCEditor(QMainWindow):
                 }}
                 """
             )
-            btn_add.setMinimumSize(75,45)
+            btn_add.setMinimumSize(SIZE_ADD_BUTTON_WIDTH, SIZE_ADD_BUTTON_HEIGHT)
             btn_add.clicked.connect(lambda checked, t=tag: self.add_tag_to_input(t))
             layout.addWidget(btn_add)
             widget.setLayout(layout)
