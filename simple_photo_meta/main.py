@@ -943,7 +943,6 @@ class IPTCEditor(QMainWindow):
         # Create tags_list_widget early so it's available for other methods
         self.tags_list_widget = QListWidget()
         self.tags_list_widget.setFont(self.font())
-        self.tags_list_widget.setToolTip("Click on a tag to insert it into the input")
         # Use itemClicked instead of clicked for more reliable tag selection
         self.tags_list_widget.itemClicked.connect(self.tag_clicked)
         self.tags_list_widget.setStyleSheet(
@@ -1482,7 +1481,8 @@ class IPTCEditor(QMainWindow):
         for tag in sorted(tags, key=lambda t: t.lower()):
             item = QListWidgetItem()
             widget = QWidget()
-            widget.setStyleSheet(f"background: {COLOR_TAG_LIST_BG}; border-radius: 8px;")
+            # widget.setToolTip(tag)
+            widget.setStyleSheet(f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px;")
             layout = QHBoxLayout()
             layout.setContentsMargins(4, 2, 4, 2)
             # Tag label
@@ -1513,7 +1513,7 @@ class IPTCEditor(QMainWindow):
                 }}
                 """
             )
-            btn_add.setFixedHeight(28)
+            btn_add.setMinimumSize(75,45)
             btn_add.clicked.connect(lambda checked, t=tag: self.add_tag_to_input(t))
             layout.addWidget(btn_add)
             widget.setLayout(layout)
