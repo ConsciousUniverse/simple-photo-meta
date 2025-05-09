@@ -844,6 +844,9 @@ class IPTCEditor(QMainWindow):
             f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color:  {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_IMAGE_PREVIEW_BORDER};"
         )
         self.image_label.setMinimumHeight(400)
+        # Prevent QLabel from expanding to fit pixmap
+        self.image_label.setScaledContents(False)
+        self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
         self.btn_rotate_left = QPushButton("⟲ Rotate Left")
@@ -1447,7 +1450,7 @@ class IPTCEditor(QMainWindow):
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
-            # Create a transparent pixmap for rounded corners
+            # Always create the final_pixmap at the label's current size
             final_pixmap = QPixmap(label_width, label_height)
             final_pixmap.fill(Qt.transparent)
             from PySide6.QtGui import QPainter, QColor, QPainterPath
