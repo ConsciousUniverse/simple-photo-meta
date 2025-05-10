@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QDialog,
     QComboBox,
-    QSizePolicy,
+    QSizePolicy
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -29,8 +29,7 @@ from PySide6.QtGui import (
     QFont,
     QTextCursor,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QTimer, QThread, Signal
+from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer
 import hashlib
 from PIL import Image
 from simple_photo_meta import iptc_tags
@@ -868,43 +867,26 @@ class IPTCEditor(QMainWindow):
         # Add save button (icon) between rotate buttons
         self.btn_save_tags = QPushButton()
         self.btn_save_tags.setToolTip("Save tags for this image")
-        self.btn_save_tags.setFixedSize(26, 26)
-        # Create a monotone (black) floppy disk icon for contrast
+        # Use a standard checkmark icon from Qt for the save button, and center it vertically
+        from PySide6.QtWidgets import QApplication, QStyle
+        style = QApplication.instance().style() if QApplication.instance() else None
         icon_size = 18
-        pixmap = QPixmap(icon_size, icon_size)
-        pixmap.fill(Qt.transparent)
-        from PySide6.QtGui import QPainter, QColor, QPen
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        dark = QColor(COLOR_BG_DARK_OLIVE)  # dark olive/black for contrast
-        # Draw floppy body
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(dark)
-        painter.drawRect(2, 2, icon_size-4, icon_size-4)
-        # Draw floppy notch
-        painter.setBrush(QColor(COLOR_GRAY))  # light gray notch
-        painter.drawRect(icon_size-7, 2, 5, 7)
-        # Draw floppy label
-        painter.setBrush(QColor(COLOR_WHITE))
-        painter.drawRect(4, 4, icon_size-8, 5)
-        # Draw floppy line (write-protect slot)
-        pen = QPen(QColor(COLOR_GRAY))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        painter.drawLine(6, icon_size-5, icon_size-6, icon_size-5)
-        painter.end()
-        icon = QIcon(pixmap)
-        self.btn_save_tags.setIcon(icon)
-        self.btn_save_tags.setIconSize(pixmap.size())
-        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }}")
+        self.btn_save_tags.setFixedSize(icon_size + 6, icon_size + 6)  # Add padding for centering
+        if style:
+            icon = style.standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
+            self.btn_save_tags.setIcon(icon)
+            self.btn_save_tags.setIconSize(QSize(icon_size, icon_size))
+        else:
+            self.btn_save_tags.setText("✓")  # fallback
+        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }}")
         self.btn_save_tags.clicked.connect(lambda: self.save_tags_and_notify(force=True))
         rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
         image_widget = QWidget()
         image_layout = QVBoxLayout(image_widget)
         image_layout.setContentsMargins(
-            0, 8, 0, 0
-        )  # Reduced top margin for better alignment
+            0, 8, 0, 0  # Reduced top margin for better alignment
+        )
         image_layout.addWidget(self.image_label)
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
