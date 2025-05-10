@@ -573,7 +573,19 @@ class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Simple Photo Meta (alpha)")
-        self.resize(1920, 1080)  # Set initial window size to 1920px wide
+        # Dynamically set initial window size based on available screen size
+        from PySide6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        # Use 80% of available screen, but max 1200x800, min 800x600
+        if available:
+            width = min(int(available.width() * 0.8), 1200)
+            height = min(int(available.height() * 0.8), 800)
+            width = max(width, 800)
+            height = max(height, 600)
+            self.resize(width, height)
+        else:
+            self.resize(1200, 800)
         self.folder_path = ""
         self.image_list = []
         self.current_image_path = None
@@ -842,7 +854,7 @@ class IPTCEditor(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         # Restore border-radius in stylesheet for rounded corners (no border in CSS)
         self.image_label.setStyleSheet(
-            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;"
+            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin-bottom: 11px;"
         )
         self.image_label.setMinimumHeight(400)
         self.image_label.setScaledContents(True)
