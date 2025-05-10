@@ -852,7 +852,7 @@ class IPTCEditor(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         # Restore border-radius in stylesheet for rounded corners (no border in CSS)
         self.image_label.setStyleSheet(
-            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin-bottom: 11px;"
+            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin: 5px;"
         )
         self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
