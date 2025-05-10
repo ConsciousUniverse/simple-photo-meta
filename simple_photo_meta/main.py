@@ -586,6 +586,7 @@ class IPTCEditor(QMainWindow):
             self.resize(width, height)
         else:
             self.resize(1200, 800)
+        # Do NOT set minimum or maximum size for the main window, to allow maximize to work on all platforms
         self.folder_path = ""
         self.image_list = []
         self.current_image_path = None
@@ -840,9 +841,6 @@ class IPTCEditor(QMainWindow):
         left_panel_widget = QWidget()
         left_panel_widget.setContentsMargins(0,0,0,0)
         left_panel_widget.setLayout(left_panel)
-        # Remove fixed/minimum width so user can resize
-        left_panel_widget.setMinimumWidth(100)
-        left_panel_widget.setMaximumWidth(16777215)
         main_splitter.addWidget(left_panel_widget)
 
         # CENTER PANEL: image display and IPTC metadata editor in a vertical splitter
@@ -856,7 +854,6 @@ class IPTCEditor(QMainWindow):
         self.image_label.setStyleSheet(
             f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin-bottom: 11px;"
         )
-        self.image_label.setMinimumHeight(400)
         self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Add rotation controls below image_label
