@@ -840,12 +840,12 @@ class IPTCEditor(QMainWindow):
         self.image_label = QLabel("Image preview will appear here ...")
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
+        # Restore border-radius in stylesheet for rounded corners (no border in CSS)
         self.image_label.setStyleSheet(
-            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color:  {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_IMAGE_PREVIEW_BORDER};"
+            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;"
         )
         self.image_label.setMinimumHeight(400)
-        # Prevent QLabel from expanding to fit pixmap
-        self.image_label.setScaledContents(False)
+        self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
@@ -1453,26 +1453,61 @@ class IPTCEditor(QMainWindow):
             # Always create the final_pixmap at the label's current size
             final_pixmap = QPixmap(label_width, label_height)
             final_pixmap.fill(Qt.transparent)
-            from PySide6.QtGui import QPainter, QColor, QPainterPath
+            from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
 
             painter = QPainter(final_pixmap)
-            radius = self.corner_radius  # Use the shared corner radius
-            path = QPainterPath()
-            path.addRoundedRect(0, 0, label_width, label_height, radius, radius)
             painter.setRenderHint(QPainter.Antialiasing)
-            painter.setClipPath(path)
-            # Fill background with skyblue inside rounded rect
+            radius = self.corner_radius
+
+            # Draw background and border for the entire pane
+            path = QPainterPath()
+            # Use addRoundedRect for rounded corners and all edges
+            path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
             painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
-            # Center the image
+
+            pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
+
+            # Center and draw the image inside the pane
             x = (label_width - scaled_pixmap.width()) // 2
             y = (label_height - scaled_pixmap.height()) // 2
             painter.drawPixmap(x, y, scaled_pixmap)
+
             painter.end()
             self.image_label.setPixmap(final_pixmap)
         except Exception as e:
             self.show_custom_popup(
                 "Error", f"Could not open image: {e}\nType: {type(e)}"
             )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Always redraw the image and border at the new size to avoid artifacts
+        if self.current_image_path:
+            self.display_image(self.current_image_path)
+        else:
+            label_width = self.image_label.width()
+            label_height = self.image_label.height()
+            final_pixmap = QPixmap(label_width, label_height)
+            final_pixmap.fill(Qt.transparent)
+            from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
+
+            painter = QPainter(final_pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            radius = self.corner_radius
+            path = QPainterPath()
+            path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
+            painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
+            pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
+            painter.end()
+            self.image_label.setPixmap(final_pixmap)
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
