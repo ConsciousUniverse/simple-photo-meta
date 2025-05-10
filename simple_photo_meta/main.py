@@ -1004,25 +1004,6 @@ class IPTCEditor(QMainWindow):
         right_panel_widget.setLayout(right_panel)
         main_splitter.addWidget(right_panel_widget)
 
-        # ======================================================== #
-        # INFORMATIONAL BANNER
-        # Remove or comment out this section to remove!
-        self.info_banner = QLabel("IMPORTANT: This is alpha software. Ensure images are backed up to prevent data loss or damage in the event of software bugs.")
-        self.info_banner.setStyleSheet(
-            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; font-weight: bold; font-size: {FONT_SIZE_INFO_BANNER}pt; padding: 8px 0px; border-radius: 8px; border: 2px solid {COLOR_INFO_BANNER_BORDER};"
-        )
-        self.info_banner.setAlignment(Qt.AlignCenter)
-        self.info_banner.setWordWrap(True)
-        # Add a small left/right AND top margin using a container widget and layout, but let the banner fill the width
-        banner_container = QWidget()
-        banner_layout = QHBoxLayout()
-        banner_layout.setContentsMargins(8, 12, 8, 0)  # left, top, right, bottom
-        banner_layout.addWidget(self.info_banner)
-        banner_container.setLayout(banner_layout)
-        # Instead of adding to main_vlayout, add to outer_layout
-        outer_layout.addWidget(banner_container)
-        # ======================================================== #
-
         # Add the splitter to the outer layout
         outer_layout.addWidget(main_splitter)
         # === END: All widgets are now inside outer_container ===
