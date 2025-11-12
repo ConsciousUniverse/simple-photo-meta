@@ -31,9 +31,61 @@ from PySide6.QtGui import (
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer
 import hashlib
-from PIL import Image
+from PIL import Image, ImageOps
 from simple_photo_meta import iptc_tags
 from simple_photo_meta.exiv2bind import Exiv2Bind
+
+
+PREVIEW_CACHE_DIR_NAME = ".previews"
+DEFAULT_PREVIEW_MAX_EDGE = 2048
+
+
+def _preview_cache_path(image_path, edge_length):
+    folder = os.path.dirname(image_path)
+    cache_dir = os.path.join(folder, PREVIEW_CACHE_DIR_NAME)
+    os.makedirs(cache_dir, exist_ok=True)
+    hash_input = f"{os.path.abspath(image_path)}::{edge_length}"
+    hash_str = hashlib.sha256(hash_input.encode()).hexdigest()
+    return os.path.join(cache_dir, f"{hash_str}.jpg")
+
+
+def _preview_is_current(image_path, preview_path):
+    try:
+        return os.path.getmtime(preview_path) >= os.path.getmtime(image_path)
+    except OSError:
+        return False
+
+
+def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
+    preview_path = _preview_cache_path(image_path, edge_length)
+    if os.path.exists(preview_path) and _preview_is_current(image_path, preview_path):
+        return preview_path
+    try:
+        with Image.open(image_path) as img:
+            if hasattr(img, "n_frames") and img.n_frames > 1:
+                img.seek(0)
+            img = ImageOps.exif_transpose(img)
+            target_size = (edge_length, edge_length)
+            img.thumbnail(target_size, Image.LANCZOS)
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGB")
+            else:
+                img = img.convert("RGB")
+            img.save(preview_path, "JPEG", quality=90)
+        try:
+            mtime = os.path.getmtime(image_path)
+            os.utime(preview_path, (mtime, mtime))
+        except OSError:
+            pass
+        return preview_path
+    except Exception as exc:
+        print(f"Failed to prepare preview for {image_path}: {exc}")
+        try:
+            if os.path.exists(preview_path):
+                os.remove(preview_path)
+        except OSError:
+            pass
+        return None
 
 # === COLOUR VARIABLES (ALL COLOURS DEFINED HERE) ===
 
@@ -144,13 +196,25 @@ class TagDatabase:
     Windows | %LOCALAPPDATA%\SPM\tags.db
     """
 
-    def __init__(self):
+    def __init__(self, db_path=None):
         appname = "SimplePhotoMeta"
         appauthor = "Zaziork"
-        db_dir = user_data_dir(appname, appauthor)
-        os.makedirs(db_dir, exist_ok=True)
-        self.db_path = os.path.join(db_dir, "spm_tags.db")
-        self.conn = sqlite3.connect(self.db_path)
+        if db_path is None:
+            db_dir = user_data_dir(appname, appauthor)
+            os.makedirs(db_dir, exist_ok=True)
+            self.db_path = os.path.join(db_dir, "spm_tags.db")
+        else:
+            self.db_path = db_path
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+        # Allow longer wait times when the writer thread is active and enable WAL so readers are not blocked.
+        self.conn = sqlite3.connect(self.db_path, timeout=30)
+        try:
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.DatabaseError as pragma_err:
+            print(f"Warning: failed to configure SQLite pragmas: {pragma_err}")
         self._create_table()
 
     def _create_table(self):
@@ -213,7 +277,6 @@ class TagDatabase:
     def add_image(self, path):
         c = self.conn.cursor()
         c.execute("INSERT OR IGNORE INTO images (path) VALUES (?)", (path,))
-        self.conn.commit()
         c.execute("SELECT id FROM images WHERE path=?", (path,))
         row = c.fetchone()
         return row[0] if row else None
@@ -254,6 +317,51 @@ class TagDatabase:
                     (image_id, tag_id),
                 )
         self.conn.commit()
+
+    def bulk_update_image_tags(self, image_path, tags_by_type):
+        """Update all tag associations for an image in a single transaction."""
+        if tags_by_type is None:
+            tags_by_type = {}
+        with self.conn:
+            image_id = self.add_image(image_path)
+            if image_id is None:
+                image_id = self.get_image_id(image_path)
+            if image_id is None:
+                return
+            tag_types = list(tags_by_type.keys())
+            if tag_types:
+                placeholders = ",".join(["?"] * len(tag_types))
+                params = [image_path] + tag_types
+                self.conn.execute(
+                    f"""
+                    DELETE FROM image_tags
+                    WHERE image_id IN (SELECT id FROM images WHERE path=?)
+                    AND tag_id IN (
+                        SELECT id FROM tags WHERE tag_type IN ({placeholders})
+                    )
+                    """,
+                    params,
+                )
+            else:
+                self.conn.execute(
+                    "DELETE FROM image_tags WHERE image_id IN (SELECT id FROM images WHERE path=?)",
+                    (image_path,),
+                )
+            for tag_type, tags in tags_by_type.items():
+                for tag in tags:
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO tags (tag, tag_type) VALUES (?, ?)",
+                        (tag, tag_type),
+                    )
+                    row = self.conn.execute(
+                        "SELECT id FROM tags WHERE tag=? AND tag_type=?",
+                        (tag, tag_type),
+                    ).fetchone()
+                    if row:
+                        self.conn.execute(
+                            "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)",
+                            (image_id, row[0]),
+                        )
 
     def get_tags(self, tag_type=None):
         c = self.conn.cursor()
@@ -466,46 +574,101 @@ class TagDatabase:
         self.conn.commit()
         return removed
 
+    def close(self):
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+
 
 class ScanWorker(QThread):
-    scan_finished = Signal()
+    scan_finished = Signal(str, bool)
+    scan_progress = Signal(str, int)
+    batch_ready = Signal(str, int)
 
-    def __init__(self, folder_path, db_path, is_valid_tag, selected_iptc_tag):
+    def __init__(self, folder_path, db_path, batch_size=25):
         super().__init__()
         self.folder_path = folder_path
         self.db_path = db_path
-        self.selected_iptc_tag = selected_iptc_tag
-        self.is_valid_tag = is_valid_tag
+        self._batch_size = max(1, batch_size)
 
     def run(self):
+        processed = 0
+        cancelled = False
+        db = None
         try:
-            # Create a new TagDatabase instance in this thread
-            db = TagDatabase()
+            db = TagDatabase(self.db_path)
             supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
             for root, dirs, files in os.walk(self.folder_path):
-                # Skip .thumbnails directories
+                if self.isInterruptionRequested():
+                    cancelled = True
+                    break
                 if ".thumbnails" in dirs:
                     dirs.remove(".thumbnails")
                 for fname in files:
-                    if fname.lower().endswith(supported):
-                        fpath = os.path.join(root, fname)
-                        try:
-                            meta = Exiv2Bind(fpath)
-                            result = meta.to_dict()
-                            iptc_data = result.get("iptc", {})
-                            for field in iptc_tags.iptc_writabable_fields_list:
+                    if self.isInterruptionRequested():
+                        cancelled = True
+                        break
+                    if not fname.lower().endswith(supported):
+                        continue
+                    fpath = os.path.join(root, fname)
+                    try:
+                        meta = Exiv2Bind(fpath)
+                        result = meta.to_dict()
+                        iptc_data = result.get("iptc", {})
+                        tags_by_type = {}
+                        for field in iptc_tags.iptc_writabable_fields_list:
+                            value = iptc_data.get(field)
+                            if isinstance(value, list):
+                                tags = [tag for tag in value if tag]
+                            elif isinstance(value, str):
+                                tags = [value] if value else []
+                            else:
                                 tags = []
-                                for result_field, result_tag in iptc_data.items():
-                                    if result_field == field:
-                                        if isinstance(result_tag, list):
-                                            tags.extend(result_tag)
-                                        else:
-                                            tags.append(result_tag)
-                                db.set_image_tags(fpath, tags, field)
-                        except Exception as e:
-                            print(f"Error: {e}")
+                            tags_by_type[field] = tags
+                        db.bulk_update_image_tags(fpath, tags_by_type)
+                    except Exception as e:
+                        print(f"Error: {e}")
+                    processed += 1
+                    if processed == 1 or processed % self._batch_size == 0:
+                        self.batch_ready.emit(self.folder_path, processed)
+                        self.scan_progress.emit(self.folder_path, processed)
+                if cancelled:
+                    break
+        except Exception as err:
+            print(f"ScanWorker error: {err}")
         finally:
-            self.scan_finished.emit()
+            if db:
+                db.close()
+            if processed and (processed % self._batch_size):
+                self.batch_ready.emit(self.folder_path, processed)
+                self.scan_progress.emit(self.folder_path, processed)
+            self.scan_finished.emit(self.folder_path, not cancelled)
+
+
+class PreviewWorker(QThread):
+    preview_ready = Signal(str, str, int)
+    preview_failed = Signal(str, str, int)
+
+    def __init__(self, image_path, edge_length):
+        super().__init__()
+        self.image_path = image_path
+        self.edge_length = max(512, int(edge_length))
+
+    def run(self):
+        if self.isInterruptionRequested():
+            return
+        try:
+            preview_path = ensure_preview_image(self.image_path, self.edge_length)
+            if self.isInterruptionRequested() or not preview_path:
+                if not preview_path:
+                    self.preview_failed.emit(
+                        self.image_path, "Preview generation failed.", self.edge_length
+                    )
+                return
+            self.preview_ready.emit(self.image_path, preview_path, self.edge_length)
+        except Exception as exc:
+            self.preview_failed.emit(self.image_path, str(exc), self.edge_length)
 
 
 class CustomMessageDialog(QDialog):
@@ -595,6 +758,11 @@ class IPTCEditor(QMainWindow):
         self.selected_iptc_tag = None  # <-- Store selected tag dict
         # Create or open the SQLite database
         self.db = TagDatabase()
+        self.worker = None
+        self._active_scan_folder = None
+        self.preview_worker = None
+        self._active_preview_workers = set()
+        self._pending_preview_key = None
         self.setStyleSheet(f"background-color: {COLOR_BG_DARK_OLIVE};")
         button_css = (
             f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
@@ -607,6 +775,12 @@ class IPTCEditor(QMainWindow):
 
         self.create_widgets()
         self.load_previous_tags()
+        self._scan_refresh_timer = QTimer(self)
+        self._scan_refresh_timer.setSingleShot(True)
+        self._scan_refresh_timer.timeout.connect(self._refresh_view_after_scan)
+        self._scan_status_clear_timer = QTimer(self)
+        self._scan_status_clear_timer.setSingleShot(True)
+        self._scan_status_clear_timer.timeout.connect(self.clear_scan_status)
 
     def style_dialog(self, dialog, min_width=380, min_height=120, padding=18):
         """
@@ -640,6 +814,10 @@ class IPTCEditor(QMainWindow):
                         widget.setContentsMargins(24, 18, 24, 18)
                         if widget.pixmap() is not None:
                             widget.setContentsMargins(24, 24, 24, 24)
+
+    def _refresh_view_after_scan(self):
+        if self.folder_path:
+            self.show_current_page()
 
     def show_auto_close_message(
         self, title, message, icon=QMessageBox.Information, timeout=1000
@@ -793,6 +971,13 @@ class IPTCEditor(QMainWindow):
         left_panel.addWidget(self.btn_select_folder)
         left_panel.addWidget(self.btn_scan_directory)
         left_panel.addWidget(self.search_bar)
+        self.scan_status_label = QLabel()
+        self.scan_status_label.setFont(self.font())
+        self.scan_status_label.setStyleSheet(
+            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; border-radius: {self.corner_radius - 6}px; padding: 6px 12px;"
+        )
+        self.scan_status_label.setVisible(False)
+        left_panel.addWidget(self.scan_status_label)
 
         # Thumbnails list
         self.list_view = QListView()
@@ -1115,12 +1300,12 @@ class IPTCEditor(QMainWindow):
     def rotate_left(self):
         if self.current_image_path:
             self._preview_rotation_angle = (self._preview_rotation_angle - 90) % 360
-            self.display_image(self.current_image_path)
+            self._apply_rotation()
 
     def rotate_right(self):
         if self.current_image_path:
             self._preview_rotation_angle = (self._preview_rotation_angle + 90) % 360
-            self.display_image(self.current_image_path)
+            self._apply_rotation()
 
     def update_pagination(self):
         # Use the database to get the count of images in the current folder (with search tags)
@@ -1230,31 +1415,248 @@ class IPTCEditor(QMainWindow):
             self.show_custom_popup("Filename", os.path.basename(fpath))
         self.list_view.clearFocus()
 
+    def show_scan_status(self, message):
+        if not message:
+            self.clear_scan_status()
+            return
+        self._scan_status_clear_timer.stop()
+        self.scan_status_label.setText(message)
+        self.scan_status_label.setVisible(True)
+
+    def clear_scan_status(self):
+        self._scan_status_clear_timer.stop()
+        self.scan_status_label.clear()
+        self.scan_status_label.setVisible(False)
+
+    def cancel_active_scan(self):
+        if hasattr(self, "worker") and self.worker:
+            self.worker.requestInterruption()
+            if self.worker.isRunning():
+                self.worker.wait()
+            self.worker = None
+        self._active_scan_folder = None
+        self._scan_refresh_timer.stop()
+        self._scan_status_clear_timer.stop()
+
+    def cancel_preview_worker(self, wait=False):
+        for worker in list(self._active_preview_workers):
+            worker.requestInterruption()
+            if wait:
+                worker.wait()
+                self._on_preview_worker_finished(worker)
+        self.preview_worker = None
+        self._pending_preview_key = None
+
+    def _on_preview_worker_finished(self, worker):
+        if worker in self._active_preview_workers:
+            self._active_preview_workers.discard(worker)
+            worker.deleteLater()
+        if worker is self.preview_worker:
+            self.preview_worker = None
+
+    def start_directory_scan(self, folder_path, remove_missing=False):
+        if not folder_path:
+            return
+        self.cancel_active_scan()
+        self.cancel_preview_worker()
+        if remove_missing:
+            self.db.remove_missing_images(folder_path)
+        self._active_scan_folder = folder_path
+        self._scan_refresh_timer.stop()
+        worker = ScanWorker(folder_path, self.db.db_path)
+        worker.batch_ready.connect(self.on_scan_batch_ready)
+        worker.scan_progress.connect(self.on_scan_progress)
+        worker.scan_finished.connect(self.on_scan_finished)
+        self.worker = worker
+        worker.start()
+
+    def on_scan_progress(self, folder_path, processed):
+        if folder_path != self.folder_path:
+            return
+        if processed:
+            status = f"Scanning directory… Indexed {processed} images"
+        else:
+            status = "Scanning directory…"
+        self.show_scan_status(status)
+
+    def on_scan_batch_ready(self, folder_path, processed):
+        if folder_path != self.folder_path:
+            return
+        delay = 0 if processed <= self.page_size else 200
+        self._scan_refresh_timer.start(delay)
+
+    def _desired_preview_edge(self):
+        label_width = max(self.image_label.width(), 600)
+        label_height = max(self.image_label.height(), 400)
+        edge = max(label_width, label_height, 1024)
+        return min(max(edge, 512), DEFAULT_PREVIEW_MAX_EDGE)
+
+    def start_preview_loading(self, image_path):
+        if not image_path:
+            return
+        self.cancel_preview_worker()
+        self._preview_image_cache = None
+        edge = self._desired_preview_edge()
+        self._pending_preview_key = (image_path, edge)
+        preview_path = _preview_cache_path(image_path, edge)
+        if os.path.exists(preview_path) and _preview_is_current(image_path, preview_path):
+            pixmap = QPixmap(preview_path)
+            if not pixmap.isNull():
+                self._preview_image_cache = pixmap
+                self._pending_preview_key = None
+                self._apply_rotation()
+                return
+        self.image_label.setText("Loading preview…")
+        worker = PreviewWorker(image_path, edge)
+        worker.preview_ready.connect(self.on_preview_ready)
+        worker.preview_failed.connect(self.on_preview_failed)
+        worker.finished.connect(lambda: self._on_preview_worker_finished(worker))
+        self.preview_worker = worker
+        self._active_preview_workers.add(worker)
+        worker.start()
+
+    def on_preview_ready(self, image_path, preview_path, edge_length):
+        if image_path != self.current_image_path:
+            return
+        if self._pending_preview_key != (image_path, edge_length):
+            return
+        pixmap = QPixmap(preview_path)
+        if pixmap.isNull():
+            print(f"Preview decode failed for {image_path}. Falling back to full image.")
+            self._pending_preview_key = None
+            self._display_full_image_fallback(image_path)
+            return
+        self._pending_preview_key = None
+        self._preview_image_cache = pixmap
+        self._apply_rotation()
+
+    def on_preview_failed(self, image_path, error_message, edge_length):
+        if image_path != self.current_image_path:
+            return
+        if self._pending_preview_key != (image_path, edge_length):
+            return
+        self._pending_preview_key = None
+        if error_message:
+            print(f"Preview failed for {image_path}: {error_message}")
+        self._display_full_image_fallback(image_path)
+
+    def _display_full_image_fallback(self, image_path):
+        try:
+            pixmap = self._load_full_pixmap(image_path)
+        except Exception as exc:
+            self.show_custom_popup("Error", f"Could not open image: {exc}")
+            return
+        self._preview_image_cache = pixmap
+        self._apply_rotation()
+
+    def _load_full_pixmap(self, path):
+        FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
+        file_size = os.path.getsize(path)
+        ext = os.path.splitext(path)[1].lower()
+        if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff"]:
+            from PySide6.QtGui import QImage
+            import io
+
+            with Image.open(path) as pil_img:
+                if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
+                    pil_img.seek(0)
+                pil_img = ImageOps.exif_transpose(pil_img)
+                max_dim = max(self.image_label.width(), self.image_label.height(), 2000)
+                pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+            qimg = QImage.fromData(buf.getvalue())
+            pixmap = QPixmap.fromImage(qimg)
+        else:
+            pixmap = QPixmap(path)
+        if pixmap.isNull():
+            raise ValueError("Unable to decode image")
+        return pixmap
+
+    def _apply_rotation(self):
+        if not getattr(self, "_preview_image_cache", None):
+            return
+        pixmap = self._preview_image_cache
+        if getattr(self, "_preview_rotation_angle", 0):
+            from PySide6.QtGui import QTransform
+
+            transform = QTransform().rotate(self._preview_rotation_angle)
+            pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
+        self._render_pixmap_to_label(pixmap)
+
+    def _render_pixmap_to_label(self, pixmap):
+        if pixmap.isNull():
+            return
+        label_width = max(self.image_label.width(), 1)
+        label_height = max(self.image_label.height(), 1)
+        margin = 16
+        max_img_width = max(1, label_width - 2 * margin)
+        max_img_height = max(1, label_height - 2 * margin)
+        scaled_pixmap = pixmap.scaled(
+            max_img_width,
+            max_img_height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        final_pixmap = QPixmap(label_width, label_height)
+        final_pixmap.fill(Qt.transparent)
+        from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
+
+        painter = QPainter(final_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        radius = self.corner_radius
+        path = QPainterPath()
+        path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
+        painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
+        pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+        x = (label_width - scaled_pixmap.width()) // 2
+        y = (label_height - scaled_pixmap.height()) // 2
+        painter.drawPixmap(x, y, scaled_pixmap)
+        painter.end()
+        self.image_label.setPixmap(final_pixmap)
+
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
-        if folder:
-            self.folder_path = folder
-            self.current_page = 0
-            # Only scan if not previously scanned
-            if not self.db.was_directory_scanned(folder):
-                self.show_loading_dialog("Scanning for images and tags...")
-                self.worker = ScanWorker(
-                    folder, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag
-                )
-                self.worker.scan_finished.connect(self.on_scan_finished)
-                self.worker.start()
-            else:
-                self.update_pagination()
-                self.show_current_page()
+        if not folder:
+            return
+        self.cancel_active_scan()
+        self.cancel_preview_worker()
+        self.folder_path = folder
+        self.current_page = 0
+        self.image_list = []
+        self._scan_refresh_timer.stop()
+        self.list_view.setModel(QStandardItemModel())
+        self.update_pagination()
+        if not self.db.was_directory_scanned(folder):
+            self.show_scan_status("Scanning directory…")
+            self.start_directory_scan(folder)
+        else:
+            self.clear_scan_status()
+            self.show_current_page()
 
-    def on_scan_finished(self):
-        if self.folder_path:
-            self.db.mark_directory_scanned(self.folder_path)
-        self.hide_loading_dialog()
-        self.remove_unused_tags_from_db()
+    def on_scan_finished(self, folder_path, completed):
+        if folder_path != self.folder_path:
+            if completed:
+                self.db.mark_directory_scanned(folder_path)
+            return
+        self.worker = None
+        self._active_scan_folder = None
+        self._scan_refresh_timer.stop()
+        if completed:
+            self.db.mark_directory_scanned(folder_path)
+            self.remove_unused_tags_from_db()
+            self.show_scan_status("Scan complete.")
+        else:
+            self.show_scan_status("Scan cancelled.")
+        self._scan_status_clear_timer.start(1500)
         self.load_previous_tags()
         self.update_search()
-        self.update_tags_search()  # Refresh tag search after scan
+        self.update_tags_search()
+        self.show_current_page()
 
     def save_tags_to_file_and_db(self, show_dialogs=False):
         if not self.current_image_path:
@@ -1373,93 +1775,16 @@ class IPTCEditor(QMainWindow):
         self.update_tags_search()
 
     def display_image(self, path):
-        try:
-            FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
-            file_size = os.path.getsize(path)
-            ext = os.path.splitext(path)[1].lower()
-            if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff"]:
-                from PIL import Image
-                from PySide6.QtGui import QImage
-                import io
-
-                pil_img = Image.open(path)
-                if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
-                    pil_img.seek(0)
-                max_dim = 2000
-                if pil_img.width > max_dim or pil_img.height > max_dim:
-                    pil_img.thumbnail((max_dim, max_dim), Image.LANCZOS)
-                if (
-                    hasattr(self, "_preview_rotation_angle")
-                    and self._preview_rotation_angle
-                ):
-                    pil_img = pil_img.rotate(-self._preview_rotation_angle, expand=True)
-                buf = io.BytesIO()
-                pil_img.save(buf, format="PNG")
-                qimg = QImage.fromData(buf.getvalue())
-                pixmap = QPixmap.fromImage(qimg)
-            else:
-                pixmap = QPixmap(path)
-                if (
-                    hasattr(self, "_preview_rotation_angle")
-                    and self._preview_rotation_angle
-                ):
-                    from PySide6.QtGui import QTransform
-
-                    transform = QTransform().rotate(self._preview_rotation_angle)
-                    pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
-            label_width = self.image_label.width()
-            label_height = self.image_label.height()
-            if label_width < 10 or label_height < 10:
-                label_width = 600
-                label_height = 400
-            margin = 16  # Set your desired margin here
-            # Calculate max size for the image
-            max_img_width = max(1, label_width - 2 * margin)
-            max_img_height = max(1, label_height - 2 * margin)
-            scaled_pixmap = pixmap.scaled(
-                max_img_width,
-                max_img_height,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
-            )
-            # Always create the final_pixmap at the label's current size
-            final_pixmap = QPixmap(label_width, label_height)
-            final_pixmap.fill(Qt.transparent)
-            from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
-
-            painter = QPainter(final_pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)
-            radius = self.corner_radius
-
-            # Draw background and border for the entire pane
-            path = QPainterPath()
-            # Use addRoundedRect for rounded corners and all edges
-            path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
-            painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
-
-            pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawPath(path)
-
-            # Center and draw the image inside the pane
-            x = (label_width - scaled_pixmap.width()) // 2
-            y = (label_height - scaled_pixmap.height()) // 2
-            painter.drawPixmap(x, y, scaled_pixmap)
-
-            painter.end()
-            self.image_label.setPixmap(final_pixmap)
-        except Exception as e:
-            self.show_custom_popup(
-                "Error", f"Could not open image: {e}\nType: {type(e)}"
-            )
+        self.start_preview_loading(path)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Always redraw the image and border at the new size to avoid artifacts
         if self.current_image_path:
-            self.display_image(self.current_image_path)
+            if getattr(self, "_preview_image_cache", None):
+                self._apply_rotation()
+            else:
+                self.display_image(self.current_image_path)
         else:
             label_width = self.image_label.width()
             label_height = self.image_label.height()
@@ -1480,6 +1805,11 @@ class IPTCEditor(QMainWindow):
             painter.drawPath(path)
             painter.end()
             self.image_label.setPixmap(final_pixmap)
+
+    def closeEvent(self, event):
+        self.cancel_preview_worker(wait=True)
+        self.cancel_active_scan()
+        super().closeEvent(event)
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
@@ -1633,15 +1963,8 @@ class IPTCEditor(QMainWindow):
         )
         if result != "yes":
             return
-        self.show_loading_dialog()
-        # Remove missing images from DB before rescanning
-        self.db.remove_missing_images(self.folder_path)
-        # Pass db_path instead of db instance, and use the correct attribute
-        self.worker = ScanWorker(
-            self.folder_path, self.db.db_path, self.is_valid_tag, self.selected_iptc_tag
-        )
-        self.worker.scan_finished.connect(self.on_scan_finished)
-        self.worker.start()
+        self.show_scan_status("Rescanning directory…")
+        self.start_directory_scan(self.folder_path, remove_missing=True)
 
     def update_search(self):
         # Just reset to first page and update pagination/display
