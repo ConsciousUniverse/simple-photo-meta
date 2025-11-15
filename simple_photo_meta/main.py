@@ -938,6 +938,8 @@ class IPTCEditor(QMainWindow):
         # Set a single variable for consistent corner radius across all UI elements
         self.corner_radius = 16
 
+        self._tag_item_cache = {}
+        self._tag_order = []
         self.create_widgets()
         self.load_previous_tags()
         self._scan_refresh_timer = QTimer(self)
@@ -2020,6 +2022,20 @@ class IPTCEditor(QMainWindow):
             except OSError:
                 self._preview_log_path = None
 
+    def _log_save_event(self, message, level="info"):
+        prefix = "[Save]"
+        if level == "warning":
+            print(f"{prefix} WARNING: {message}")
+        else:
+            print(f"{prefix} {message}")
+        if getattr(self, "_preview_log_path", None):
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
+            except OSError:
+                self._preview_log_path = None
+
     def _format_duration_message(self, image_path, message):
         start = self._preview_timers.pop(image_path, None)
         if start is None:
@@ -2352,52 +2368,100 @@ class IPTCEditor(QMainWindow):
             f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags in {elapsed:.3f}s",
         )
 
+    def _find_tag_insert_index(self, tag):
+        """Return the sorted insert position for a tag in the cached order."""
+        lower_tag = tag.lower()
+        for idx, existing in enumerate(self._tag_order):
+            if lower_tag < existing.lower():
+                return idx
+        return len(self._tag_order)
+
+    def _create_tag_list_item_widget(self, tag):
+        widget = QWidget()
+        widget.setStyleSheet(
+            f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px;"
+        )
+        layout = QHBoxLayout()
+        layout.setContentsMargins(4, 2, 4, 2)
+        tag_label = QLabel(tag)
+        tag_label.setStyleSheet(
+            f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LABEL_TEXT}; padding: 2px 8px;"
+        )
+        tag_label.setWordWrap(True)
+        tag_label.setMinimumWidth(250)
+        tag_label.setMaximumWidth(300)
+        layout.addWidget(tag_label)
+        layout.addStretch(1)
+        btn_add = QPushButton("Add")
+        btn_add.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {COLOR_TAG_ADD_BTN_BG};
+                color: {COLOR_TAG_ADD_BTN_TEXT};
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 2px 10px;
+                font-size: {FONT_SIZE_TAG_LIST_ITEM}pt;
+            }}
+            QPushButton:hover {{
+                background-color: {COLOR_TAG_ADD_BTN_BG_HOVER};
+            }}
+            QPushButton:pressed {{
+                background-color: {COLOR_TAG_ADD_BTN_BG_PRESSED};
+            }}
+            """
+        )
+        btn_add.setMinimumSize(SIZE_ADD_BUTTON_WIDTH, SIZE_ADD_BUTTON_HEIGHT)
+        btn_add.clicked.connect(lambda checked=False, t=tag: self.add_tag_to_input(t))
+        layout.addWidget(btn_add)
+        widget.setLayout(layout)
+        return widget
+
     def update_tags_list_widget(self, tags):
-        # Clear the list and add custom widgets for each tag
-        self.tags_list_widget.clear()
-        self.tags_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
-        self.tags_list_widget.setEnabled(True)
-        for tag in sorted(tags, key=lambda t: t.lower()):
-            item = QListWidgetItem()
-            widget = QWidget()
-            # widget.setToolTip(tag)
-            widget.setStyleSheet(f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px;")
-            layout = QHBoxLayout()
-            layout.setContentsMargins(4, 2, 4, 2)
-            # Tag label
-            tag_label = QLabel(tag)
-            tag_label.setStyleSheet(f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LABEL_TEXT}; padding: 2px 8px;")
-            tag_label.setWordWrap(True)
-            tag_label.setMinimumWidth(250)
-            tag_label.setMaximumWidth(300)  # Limit width to allow wrapping
-            layout.addWidget(tag_label)
-            layout.addStretch(1)  # Push buttons to the right
-            # Add button
-            btn_add = QPushButton("Add")
-            btn_add.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {COLOR_TAG_ADD_BTN_BG};
-                    color: {COLOR_TAG_ADD_BTN_TEXT};
-                    font-weight: bold;
-                    border-radius: 6px;
-                    padding: 2px 10px;
-                    font-size: {FONT_SIZE_TAG_LIST_ITEM}pt;
-                }}
-                QPushButton:hover {{
-                    background-color: {COLOR_TAG_ADD_BTN_BG_HOVER};
-                }}
-                QPushButton:pressed {{
-                    background-color: {COLOR_TAG_ADD_BTN_BG_PRESSED};
-                }}
-                """
-            )
-            btn_add.setMinimumSize(SIZE_ADD_BUTTON_WIDTH, SIZE_ADD_BUTTON_HEIGHT)
-            btn_add.clicked.connect(lambda checked, t=tag: self.add_tag_to_input(t))
-            layout.addWidget(btn_add)
-            widget.setLayout(layout)
-            self.tags_list_widget.addItem(item)
-            self.tags_list_widget.setItemWidget(item, widget)
+        if not hasattr(self, "_tag_item_cache"):
+            self._tag_item_cache = {}
+            self._tag_order = []
+
+        list_widget = self.tags_list_widget
+        list_widget.setUpdatesEnabled(False)
+        list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        list_widget.setEnabled(True)
+
+        all_tags = self.all_tags or []
+        all_sorted = sorted(all_tags, key=lambda t: t.lower())
+        cached_tags = set(self._tag_item_cache.keys())
+        current_set = set(all_sorted)
+
+        # Remove tags that no longer exist
+        for removed_tag in cached_tags - current_set:
+            item, widget = self._tag_item_cache.pop(removed_tag)
+            row = list_widget.row(item)
+            if row != -1:
+                list_widget.setItemWidget(item, None)
+                taken_item = list_widget.takeItem(row)
+                if taken_item is not None:
+                    del taken_item
+            widget.deleteLater()
+            if removed_tag in self._tag_order:
+                self._tag_order.remove(removed_tag)
+
+        # Add any new tags
+        for tag in all_sorted:
+            if tag not in self._tag_item_cache:
+                item = QListWidgetItem()
+                widget = self._create_tag_list_item_widget(tag)
+                insert_index = self._find_tag_insert_index(tag)
+                list_widget.insertItem(insert_index, item)
+                list_widget.setItemWidget(item, widget)
+                item.setSizeHint(widget.sizeHint())
+                self._tag_item_cache[tag] = (item, widget)
+                self._tag_order.insert(insert_index, tag)
+
+        visible_tags = set(tags)
+        for tag, (item, _) in self._tag_item_cache.items():
+            item.setHidden(tag not in visible_tags)
+
+        list_widget.setUpdatesEnabled(True)
 
     def add_tag_to_input(self, tag):
         # Insert tag at the end of the input (plain text, then update HTML)
@@ -2603,6 +2667,7 @@ class IPTCEditor(QMainWindow):
         """
         if not self.current_image_path:
             return True
+        total_start = time.perf_counter()
         raw_input = self.iptc_text_edit.toPlainText().strip()
         tag_type = (
             self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
@@ -2614,61 +2679,122 @@ class IPTCEditor(QMainWindow):
         )
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
+        self._log_save_event(
+            f"Start save for {self.current_image_path} tag={tag_type} keywords={len(keywords)} force={force} refresh_ui={refresh_ui}"
+        )
         if not raw_input and not force:
             # No changes to save
+            self._log_save_event("No changes detected; skipping save")
             return True
         try:
             meta = Exiv2Bind(self.current_image_path)
             meta.from_dict({"iptc": {tag_type: []}})
+            self._log_save_event(
+                f"Cleared IPTC {tag_type} in {time.perf_counter() - total_start:.3f}s"
+            )
         except Exception as e:
+            self._log_save_event(
+                f"Failed clearing IPTC {tag_type}: {e}", level="warning"
+            )
             self.show_custom_popup(
                 "exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}"
             )
             return False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
+            self._log_save_event(
+                f"DB cleared tags for {self.current_image_path} in {time.perf_counter() - total_start:.3f}s"
+            )
             if refresh_ui:
+                refresh_start = time.perf_counter()
+                load_start = time.perf_counter()
                 self.load_previous_tags()
+                load_elapsed = time.perf_counter() - load_start
+                search_start = time.perf_counter()
                 self.update_tags_search()
+                search_elapsed = time.perf_counter() - search_start
+                message_start = time.perf_counter()
                 self.show_auto_close_message(
                     "Tags Saved",
                     "Tags have been saved successfully.",
                     timeout=1200,
                 )
+                message_elapsed = time.perf_counter() - message_start
+                self._log_save_event(
+                    "UI refresh complete for empty tag save in "
+                    f"{time.perf_counter() - refresh_start:.3f}s "
+                    f"(load={load_elapsed:.3f}s search={search_elapsed:.3f}s "
+                    f"message={message_elapsed:.3f}s)"
+                )
             self.last_loaded_keywords = ""
+            self._log_save_event(
+                f"Completed empty tag save in {time.perf_counter() - total_start:.3f}s"
+            )
             return True
         if invalid_tags:
+            self._log_save_event(
+                f"Invalid tags blocked save: {invalid_tags}", level="warning"
+            )
             self.show_custom_popup(
                 "Invalid Tag(s)",
                 f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
             )
             return False
         try:
+            write_start = time.perf_counter()
             if multi_valued:
                 meta.from_dict({"iptc": {tag_type: keywords}})
+                metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(self.current_image_path, keywords, tag_type)
             else:
                 single_value = keywords[-1] if keywords else ""
                 meta.from_dict({"iptc": {tag_type: [single_value]}})
+                metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(
                     self.current_image_path,
                     [single_value] if single_value else [],
                     tag_type,
                 )
+            db_elapsed = time.perf_counter() - write_start - metadata_elapsed
+            self._log_save_event(
+                f"Metadata write took {metadata_elapsed:.3f}s; DB update took {db_elapsed:.3f}s"
+            )
             # Add new tags to tag DB and update tag list
+            tag_insert_start = time.perf_counter()
             for tag in keywords:
                 self.db.add_tag(tag, tag_type)
+            tag_insert_elapsed = time.perf_counter() - tag_insert_start
+            if keywords:
+                self._log_save_event(
+                    f"Ensured {len(keywords)} tag entries in {tag_insert_elapsed:.3f}s"
+                )
             if refresh_ui:
+                refresh_start = time.perf_counter()
+                load_start = time.perf_counter()
                 self.load_previous_tags()
+                load_elapsed = time.perf_counter() - load_start
+                search_start = time.perf_counter()
                 self.update_tags_search()
+                search_elapsed = time.perf_counter() - search_start
+                message_start = time.perf_counter()
                 self.show_auto_close_message(
                     "Tags Saved",
                     "Tags have been saved successfully.",
                     timeout=1200,
                 )
+                message_elapsed = time.perf_counter() - message_start
+                self._log_save_event(
+                    f"UI refresh complete in {time.perf_counter() - refresh_start:.3f}s "
+                    f"(load={load_elapsed:.3f}s search={search_elapsed:.3f}s "
+                    f"message={message_elapsed:.3f}s)"
+                )
             self.last_loaded_keywords = raw_input
+            self._log_save_event(
+                f"Save complete in {time.perf_counter() - total_start:.3f}s"
+            )
             return True
         except Exception as e:
+            self._log_save_event(f"Failed to write IPTC {tag_type}: {e}", level="warning")
             self.show_custom_popup(
                 "exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}"
             )
