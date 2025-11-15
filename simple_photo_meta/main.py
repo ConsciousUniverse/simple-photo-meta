@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, sqlite3, subprocess, re
+import sys, os, sqlite3, subprocess, re, time
 from appdirs import user_data_dir
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +32,8 @@ from PySide6.QtGui import (
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer
 import hashlib
 from PIL import Image, ImageOps
+from datetime import datetime
+
 from simple_photo_meta import iptc_tags
 from simple_photo_meta.exiv2bind import Exiv2Bind
 
@@ -57,9 +59,19 @@ def _preview_is_current(image_path, preview_path):
 
 
 def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
+    start = time.perf_counter()
     preview_path = _preview_cache_path(image_path, edge_length)
     if os.path.exists(preview_path) and _preview_is_current(image_path, preview_path):
+        elapsed = time.perf_counter() - start
+        print(
+            f"[PreviewCache] Hit {image_path} edge={edge_length} -> {preview_path} ({elapsed:.2f}s)"
+        )
+        sys.stdout.flush()
         return preview_path
+    print(
+        f"[PreviewCache] Build {image_path} edge={edge_length} -> {preview_path}"
+    )
+    sys.stdout.flush()
     try:
         with Image.open(image_path) as img:
             if hasattr(img, "n_frames") and img.n_frames > 1:
@@ -77,9 +89,15 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
             os.utime(preview_path, (mtime, mtime))
         except OSError:
             pass
+        elapsed = time.perf_counter() - start
+        print(
+            f"[PreviewCache] Built {image_path} edge={edge_length} in {elapsed:.2f}s"
+        )
+        sys.stdout.flush()
         return preview_path
     except Exception as exc:
         print(f"Failed to prepare preview for {image_path}: {exc}")
+        sys.stdout.flush()
         try:
             if os.path.exists(preview_path):
                 os.remove(preview_path)
@@ -656,19 +674,91 @@ class PreviewWorker(QThread):
         self.edge_length = max(512, int(edge_length))
 
     def run(self):
+        start = time.perf_counter()
+        print(f"[PreviewWorker] Start {self.image_path} edge={self.edge_length}")
+        sys.stdout.flush()
         if self.isInterruptionRequested():
+            print(f"[PreviewWorker] Cancelled before work {self.image_path}")
+            sys.stdout.flush()
             return
         try:
             preview_path = ensure_preview_image(self.image_path, self.edge_length)
             if self.isInterruptionRequested() or not preview_path:
-                if not preview_path:
-                    self.preview_failed.emit(
-                        self.image_path, "Preview generation failed.", self.edge_length
-                    )
+                elapsed = time.perf_counter() - start
+                print(
+                    f"[PreviewWorker] Failed {self.image_path} edge={self.edge_length} in {elapsed:.2f}s"
+                )
+                sys.stdout.flush()
+                self.preview_failed.emit(
+                    self.image_path, "Preview generation failed.", self.edge_length
+                )
                 return
+            elapsed = time.perf_counter() - start
+            print(
+                f"[PreviewWorker] Done {self.image_path} edge={self.edge_length} in {elapsed:.2f}s"
+            )
+            sys.stdout.flush()
             self.preview_ready.emit(self.image_path, preview_path, self.edge_length)
         except Exception as exc:
+            elapsed = time.perf_counter() - start
+            print(
+                f"[PreviewWorker] Exception {self.image_path} edge={self.edge_length} in {elapsed:.2f}s: {exc}"
+            )
+            sys.stdout.flush()
             self.preview_failed.emit(self.image_path, str(exc), self.edge_length)
+
+
+class MetadataWorker(QThread):
+    metadata_ready = Signal(str, str, list)
+    metadata_failed = Signal(str, str, str)
+
+    def __init__(self, image_path, tag_type):
+        super().__init__()
+        self.image_path = image_path
+        self.tag_type = tag_type
+
+    def run(self):
+        start = time.perf_counter()
+        print(
+            f"[MetadataWorker] Start {self.image_path} tag={self.tag_type}"
+        )
+        sys.stdout.flush()
+        if self.isInterruptionRequested():
+            print(f"[MetadataWorker] Cancelled before work {self.image_path}")
+            sys.stdout.flush()
+            return
+        try:
+            meta = Exiv2Bind(self.image_path)
+            result = meta.to_dict()
+            iptc_data = result.get("iptc", {})
+            tags = []
+            for field, value in iptc_data.items():
+                if field == self.tag_type:
+                    if isinstance(value, list):
+                        tags.extend(value)
+                    elif isinstance(value, str):
+                        tags.append(value)
+            tags = [t.strip() for t in tags if t and t.strip()]
+            if self.isInterruptionRequested():
+                print(
+                    f"[MetadataWorker] Cancelled after read {self.image_path}"
+                )
+                sys.stdout.flush()
+                return
+            elapsed = time.perf_counter() - start
+            print(
+                f"[MetadataWorker] Done {self.image_path} tag={self.tag_type} in {elapsed:.2f}s"
+            )
+            sys.stdout.flush()
+            self.metadata_ready.emit(self.image_path, self.tag_type, tags)
+        except Exception as exc:
+            elapsed = time.perf_counter() - start
+            print(
+                f"[MetadataWorker] Exception {self.image_path} tag={self.tag_type} in {elapsed:.2f}s: {exc}"
+            )
+            sys.stdout.flush()
+            if not self.isInterruptionRequested():
+                self.metadata_failed.emit(self.image_path, self.tag_type, str(exc))
 
 
 class CustomMessageDialog(QDialog):
@@ -756,13 +846,21 @@ class IPTCEditor(QMainWindow):
         self.page_size = 10
         self.total_pages = 1
         self.selected_iptc_tag = None  # <-- Store selected tag dict
+        self._preview_retry_counts = {}
+        self._preview_timers = {}
+        self._metadata_timers = {}
+        self._metadata_pending_key = None
+        self.cleaned_keywords = []
         # Create or open the SQLite database
         self.db = TagDatabase()
+        self._preview_log_path = self._init_preview_log()
         self.worker = None
         self._active_scan_folder = None
         self.preview_worker = None
         self._active_preview_workers = set()
         self._pending_preview_key = None
+        self.metadata_worker = None
+        self._active_metadata_workers = set()
         self.setStyleSheet(f"background-color: {COLOR_BG_DARK_OLIVE};")
         button_css = (
             f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
@@ -994,8 +1092,6 @@ class IPTCEditor(QMainWindow):
         # Remove fixed width constraints so it expands with the splitter
         self.list_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.list_view.clicked.connect(self.image_selected)
-        # Add pressed signal to always trigger preview, even if already selected
-        self.list_view.pressed.connect(self.image_selected)
         # Add context menu policy and handler for right-click
         self.list_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_view.customContextMenuRequested.connect(
@@ -1447,12 +1543,32 @@ class IPTCEditor(QMainWindow):
         self.preview_worker = None
         self._pending_preview_key = None
 
+    def cancel_metadata_worker(self, wait=False):
+        for worker in list(self._active_metadata_workers):
+            worker.requestInterruption()
+            self._metadata_timers.pop((worker.image_path, worker.tag_type), None)
+            if wait:
+                worker.wait()
+                self._on_metadata_worker_finished(worker)
+        if self._metadata_pending_key:
+            self._metadata_timers.pop(self._metadata_pending_key, None)
+            self._metadata_pending_key = None
+        if wait:
+            self.metadata_worker = None
+
     def _on_preview_worker_finished(self, worker):
         if worker in self._active_preview_workers:
             self._active_preview_workers.discard(worker)
             worker.deleteLater()
         if worker is self.preview_worker:
             self.preview_worker = None
+
+    def _on_metadata_worker_finished(self, worker):
+        if worker in self._active_metadata_workers:
+            self._active_metadata_workers.discard(worker)
+            worker.deleteLater()
+        if worker is self.metadata_worker:
+            self.metadata_worker = None
 
     def start_directory_scan(self, folder_path, remove_missing=False):
         if not folder_path:
@@ -1491,22 +1607,40 @@ class IPTCEditor(QMainWindow):
         edge = max(label_width, label_height, 1024)
         return min(max(edge, 512), DEFAULT_PREVIEW_MAX_EDGE)
 
-    def start_preview_loading(self, image_path):
+    def start_preview_loading(self, image_path, retry=False):
         if not image_path:
             return
+        if not retry:
+            self._preview_retry_counts[image_path] = 0
+            self._preview_timers[image_path] = time.perf_counter()
+        self._log_preview_event(f"Requesting preview for {image_path}; retry={retry}")
         self.cancel_preview_worker()
         self._preview_image_cache = None
         edge = self._desired_preview_edge()
         self._pending_preview_key = (image_path, edge)
         preview_path = _preview_cache_path(image_path, edge)
         if os.path.exists(preview_path) and _preview_is_current(image_path, preview_path):
+            load_start = time.perf_counter()
             pixmap = QPixmap(preview_path)
+            load_elapsed = time.perf_counter() - load_start
+            self._log_preview_event(
+                f"Cached preview load via Qt for {image_path} ({preview_path}) took {load_elapsed:.2f}s"
+            )
             if not pixmap.isNull():
                 self._preview_image_cache = pixmap
                 self._pending_preview_key = None
+                self._log_preview_event(
+                    self._format_duration_message(
+                        image_path, "Cached preview ready; applying rotation"
+                    )
+                )
                 self._apply_rotation()
                 return
+            self._log_preview_event(f"Cached preview unreadable: {preview_path}")
         self.image_label.setText("Loading preview…")
+        self._log_preview_event(
+            f"Starting preview worker for {image_path} (edge={edge})"
+        )
         worker = PreviewWorker(image_path, edge)
         worker.preview_ready.connect(self.on_preview_ready)
         worker.preview_failed.connect(self.on_preview_failed)
@@ -1520,14 +1654,47 @@ class IPTCEditor(QMainWindow):
             return
         if self._pending_preview_key != (image_path, edge_length):
             return
+        self._log_preview_event(
+            f"Preview ready for {image_path}; file={preview_path} edge={edge_length}"
+        )
         pixmap = QPixmap(preview_path)
         if pixmap.isNull():
-            print(f"Preview decode failed for {image_path}. Falling back to full image.")
+            self._log_preview_event(
+                f"Qt decode failed for preview {preview_path}; trying Pillow"
+            )
+            pixmap = self._load_preview_pixmap(preview_path)
+        if pixmap is None or pixmap.isNull():
+            self._log_preview_event(
+                f"Preview decode failed for {image_path}; attempt {self._preview_retry_counts.get(image_path, 0)}"
+            )
+            attempts = self._preview_retry_counts.get(image_path, 0)
+            if attempts < 1:
+                self._preview_retry_counts[image_path] = attempts + 1
+                try:
+                    os.remove(preview_path)
+                except OSError:
+                    pass
+                self._pending_preview_key = None
+                self._log_preview_event(
+                    f"Deleted cached preview {preview_path}; retrying generation"
+                )
+                self.start_preview_loading(image_path, retry=True)
+                return
+            self._preview_retry_counts.pop(image_path, None)
+            self._log_preview_event(
+                self._format_duration_message(
+                    image_path, "Preview decode permanently failed; using full image"
+                )
+            )
             self._pending_preview_key = None
             self._display_full_image_fallback(image_path)
             return
         self._pending_preview_key = None
+        self._preview_retry_counts.pop(image_path, None)
         self._preview_image_cache = pixmap
+        self._log_preview_event(
+            self._format_duration_message(image_path, "Preview cached; applying rotation")
+        )
         self._apply_rotation()
 
     def on_preview_failed(self, image_path, error_message, edge_length):
@@ -1536,17 +1703,207 @@ class IPTCEditor(QMainWindow):
         if self._pending_preview_key != (image_path, edge_length):
             return
         self._pending_preview_key = None
+        self._preview_retry_counts.pop(image_path, None)
         if error_message:
-            print(f"Preview failed for {image_path}: {error_message}")
+            self._log_preview_event(
+                self._format_duration_message(
+                    image_path, f"Preview worker failed: {error_message}"
+                ),
+                level="warning",
+            )
         self._display_full_image_fallback(image_path)
 
+    def _prepare_metadata_ui_loading(self):
+        self.cleaned_keywords = []
+        self.last_loaded_keywords = ""
+        self.iptc_text_edit.blockSignals(True)
+        self.iptc_text_edit.clear()
+        self.iptc_text_edit.blockSignals(False)
+        self.iptc_text_edit.setPlaceholderText("Loading IPTC tags…")
+        self.iptc_text_edit.setEnabled(False)
+
+    def start_metadata_loading(self, image_path):
+        if not image_path:
+            return
+        tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        )
+        self.cancel_metadata_worker()
+        key = (image_path, tag_type)
+        self._metadata_pending_key = key
+        self._metadata_timers[key] = time.perf_counter()
+        self._log_metadata_event(
+            f"Starting metadata worker for {image_path}; tag={tag_type}"
+        )
+        worker = MetadataWorker(image_path, tag_type)
+        worker.metadata_ready.connect(self.on_metadata_ready)
+        worker.metadata_failed.connect(self.on_metadata_failed)
+        worker.finished.connect(lambda: self._on_metadata_worker_finished(worker))
+        self.metadata_worker = worker
+        self._active_metadata_workers.add(worker)
+        worker.start()
+
+    def on_metadata_ready(self, image_path, tag_type, tags):
+        start_time = self._metadata_timers.pop((image_path, tag_type), None)
+        elapsed = (
+            time.perf_counter() - start_time if start_time is not None else None
+        )
+        current_tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        )
+        if (
+            image_path != self.current_image_path
+            or tag_type != current_tag_type
+        ):
+            self._log_metadata_event(
+                f"Discarding metadata for stale request image={image_path} tag={tag_type}",
+                level="warning",
+            )
+            if self._metadata_pending_key == (image_path, tag_type):
+                self._metadata_pending_key = None
+            return
+        message = (
+            f"{image_path} ({elapsed:.2f}s) - Metadata loaded"
+            if elapsed is not None
+            else f"{image_path} - Metadata loaded"
+        )
+        self._log_metadata_event(message)
+        self.cleaned_keywords = tags
+        self.last_loaded_keywords = "\n".join(tags)
+        self.iptc_text_edit.setPlaceholderText("")
+        self.iptc_text_edit.setEnabled(True)
+        if tags:
+            self.set_tag_input_html(tags)
+        else:
+            self.set_tag_input_html([])
+        if self._metadata_pending_key == (image_path, tag_type):
+            self._metadata_pending_key = None
+
+    def on_metadata_failed(self, image_path, tag_type, error_message):
+        start_time = self._metadata_timers.pop((image_path, tag_type), None)
+        elapsed = (
+            time.perf_counter() - start_time if start_time is not None else None
+        )
+        current_tag_type = (
+            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        )
+        if (
+            image_path != self.current_image_path
+            or tag_type != current_tag_type
+        ):
+            if self._metadata_pending_key == (image_path, tag_type):
+                self._metadata_pending_key = None
+            return
+        message = (
+            f"{image_path} ({elapsed:.2f}s) - Metadata load failed: {error_message}"
+            if elapsed is not None
+            else f"{image_path} - Metadata load failed: {error_message}"
+        )
+        self._log_metadata_event(message, level="warning")
+        self.cleaned_keywords = []
+        self.last_loaded_keywords = ""
+        self.set_tag_input_html([])
+        self.iptc_text_edit.setPlaceholderText("Unable to load IPTC tags.")
+        self.iptc_text_edit.setEnabled(True)
+        if self._metadata_pending_key == (image_path, tag_type):
+            self._metadata_pending_key = None
+
+    def _load_preview_pixmap(self, path):
+        """Load a cached preview using Pillow when Qt lacks a JPEG plugin."""
+        try:
+            from PIL.ImageQt import ImageQt
+
+            with Image.open(path) as pil_img:
+                if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
+                    pil_img.seek(0)
+                pil_img = ImageOps.exif_transpose(pil_img)
+                if pil_img.mode not in ("RGB", "RGBA"):
+                    pil_img = pil_img.convert("RGB")
+                qt_image = ImageQt(pil_img)
+            pixmap = QPixmap.fromImage(qt_image)
+            return pixmap if not pixmap.isNull() else None
+        except Exception as exc:
+            self._log_preview_event(
+                f"Preview Pillow decode failed for {path}: {exc}", level="warning"
+            )
+            return None
+
+    def _log_preview_event(self, message, level="info"):
+        prefix = "[Preview]"
+        if level == "warning":
+            print(f"{prefix} WARNING: {message}")
+        else:
+            print(f"{prefix} {message}")
+        if getattr(self, "_preview_log_path", None):
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
+            except OSError:
+                self._preview_log_path = None
+
+    def _log_metadata_event(self, message, level="info"):
+        prefix = "[Metadata]"
+        if level == "warning":
+            print(f"{prefix} WARNING: {message}")
+        else:
+            print(f"{prefix} {message}")
+        if getattr(self, "_preview_log_path", None):
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
+            except OSError:
+                self._preview_log_path = None
+
+    def _log_selection_event(self, message, level="info"):
+        prefix = "[Selection]"
+        if level == "warning":
+            print(f"{prefix} WARNING: {message}")
+        else:
+            print(f"{prefix} {message}")
+        if getattr(self, "_preview_log_path", None):
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
+            except OSError:
+                self._preview_log_path = None
+
+    def _format_duration_message(self, image_path, message):
+        start = self._preview_timers.pop(image_path, None)
+        if start is None:
+            return f"{image_path} - {message}"
+        elapsed = time.perf_counter() - start
+        return f"{image_path} ({elapsed:.2f}s) - {message}"
+
+    def _init_preview_log(self):
+        try:
+            log_dir = os.path.join(os.path.dirname(self.db.db_path), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            path = os.path.join(log_dir, "preview.log")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(path, "a", encoding="utf-8") as log_file:
+                log_file.write(f"\n=== Session start {timestamp} ===\n")
+            return path
+        except OSError:
+            return None
+
     def _display_full_image_fallback(self, image_path):
+        fallback_start = time.perf_counter()
+        self._log_preview_event(
+            f"{image_path} - starting full-image fallback load", level="warning"
+        )
         try:
             pixmap = self._load_full_pixmap(image_path)
         except Exception as exc:
             self.show_custom_popup("Error", f"Could not open image: {exc}")
             return
         self._preview_image_cache = pixmap
+        elapsed = time.perf_counter() - fallback_start
+        self._log_preview_event(
+            f"{image_path} ({elapsed:.2f}s) - full-image fallback ready", level="warning"
+        )
         self._apply_rotation()
 
     def _load_full_pixmap(self, path):
@@ -1749,30 +2106,50 @@ class IPTCEditor(QMainWindow):
         return True
 
     def image_selected(self, index):
-        if not self.handle_save_events():
-            return  # Don't switch images
+        selection_start = time.perf_counter()
+        last_checkpoint = selection_start
+
+        def log_step(label, level="info", path_hint=None):
+            nonlocal last_checkpoint
+            now = time.perf_counter()
+            delta = now - last_checkpoint
+            total = now - selection_start
+            path_value = (
+                path_hint
+                if path_hint is not None
+                else getattr(self, "current_image_path", None) or "N/A"
+            )
+            self._log_selection_event(
+                f"{path_value} - {label} (+{delta:.3f}s / {total:.3f}s)",
+                level=level,
+            )
+            last_checkpoint = now
+
         selected_index = index.row()
+        self._log_selection_event(
+            f"Row {selected_index} selected; image count={len(self.image_list)}"
+        )
+        if not self.handle_save_events():
+            log_step("Selection blocked by unsaved changes", level="warning", path_hint="N/A")
+            return  # Don't switch images
+        log_step("Unsaved-change check complete", path_hint="N/A")
         if selected_index < 0 or selected_index >= len(self.image_list):
+            log_step("Selection index out of range", level="warning", path_hint="N/A")
             return
         # Always get the image path after handle_unsaved_changes
         image_path = self.image_list[selected_index]
+        log_step("Resolved image path", path_hint=image_path)
         self.current_image_path = image_path
         self._preview_rotation_angle = 0
         self.display_image(self.current_image_path)
-        self.iptc_text_edit.clear()  # Explicitly clear input field before setting new tags
-        self.extract_keywords()
-        # Always update the input field, even if there are no tags
-        if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
-            self.set_tag_input_html(self.cleaned_keywords)
-        else:
-            self.set_tag_input_html([])
-        self.last_loaded_keywords = (
-            "\n".join(self.cleaned_keywords)
-            if hasattr(self, "cleaned_keywords")
-            else ""
-        )
+        log_step("Preview request queued", path_hint=image_path)
+        self._prepare_metadata_ui_loading()
+        log_step("Metadata UI prepared", path_hint=image_path)
+        self.start_metadata_loading(self.current_image_path)
+        log_step("Metadata worker started", path_hint=image_path)
         self.load_previous_tags()
-        self.update_tags_search()
+        log_step("Previous tags loaded", path_hint=image_path)
+        log_step("Selection handling complete", path_hint=image_path)
 
     def display_image(self, path):
         self.start_preview_loading(path)
@@ -1808,14 +2185,19 @@ class IPTCEditor(QMainWindow):
 
     def closeEvent(self, event):
         self.cancel_preview_worker(wait=True)
+        self.cancel_metadata_worker(wait=True)
         self.cancel_active_scan()
         super().closeEvent(event)
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
         tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        load_start = time.perf_counter()
         self.all_tags = self.db.get_tags(tag_type)
-        self.update_tags_list_widget(self.all_tags)
+        elapsed = time.perf_counter() - load_start
+        self._log_selection_event(
+            f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags in {elapsed:.3f}s",
+        )
 
     def update_tags_list_widget(self, tags):
         # Clear the list and add custom widgets for each tag
@@ -1893,30 +2275,6 @@ class IPTCEditor(QMainWindow):
     def tag_clicked(self, item):
         # Do nothing when a tag is clicked (only the Add button should add the tag)
         pass
-
-    def extract_keywords(self):
-        # Extract tags for the selected tag type from exiv2 output.
-        tag_type = (
-            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
-        )
-        try:
-            meta = Exiv2Bind(self.current_image_path)
-            result = meta.to_dict()
-            tags = []
-            iptc_data = result.get("iptc", {})
-            for result_field, result_tag in iptc_data.items():
-                if result_field == tag_type:
-                    if isinstance(result_tag, list):
-                        tags.extend(result_tag)
-                    elif isinstance(result_tag, str):
-                        tags.append(result_tag)
-            # Remove empty strings and strip whitespace
-            tags = [t.strip() for t in tags if t and t.strip()]
-        except Exception as e:
-            print("Error reading IPTC data:", e)
-            self.cleaned_keywords = []
-            return
-        self.cleaned_keywords = tags
 
     def is_valid_tag(self, tag):
         # Only allow alphanumeric and dashes
@@ -2021,19 +2379,13 @@ class IPTCEditor(QMainWindow):
         self.update_tags_search()
         # Always update the preview pane for the current image and tag type
         if self.current_image_path:
-            self.extract_keywords()
-            if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
-                self.set_tag_input_html(self.cleaned_keywords)
-            else:
-                self.set_tag_input_html([])
-            self.last_loaded_keywords = (
-                "\n".join(self.cleaned_keywords)
-                if hasattr(self, "cleaned_keywords")
-                else ""
-            )
+            self._prepare_metadata_ui_loading()
+            self.start_metadata_loading(self.current_image_path)
         else:
             self.set_tag_input_html([])
             self.last_loaded_keywords = ""
+            self.iptc_text_edit.setPlaceholderText("")
+            self.iptc_text_edit.setEnabled(True)
 
     def set_tag_input_html(self, tags):
         if not tags:
