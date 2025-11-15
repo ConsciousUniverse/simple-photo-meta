@@ -1,0 +1,32 @@
+[Search] Pagination updated: total_images=1517 page=2/152 tags_mode=yes in 0.014s
+[Search] Model built with 10 rows in 0.015s; total show_current_page=0.029s
+[Search] Thumbnail worker started for 10 items
+[Search] Thumbnail worker finished
+[Search] Thumbnail worker finished
+[Search] Search update start: query='dan 19' tags=2 tag_type=Keywords
+[Search] Pagination updated: total_images=1337 page=1/134 tags_mode=yes in 0.021s
+[Search] Page query fetched 10 items in 0.022s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=1337 page=1/134 tags_mode=yes in 0.021s
+[Search] Model built with 10 rows in 0.022s; total show_current_page=0.044s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.066s (page=1/134)
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1974/04d12aa0-db4d-4a41-8cf6-1e749c59649c.tif: image has wrong mode
+[Search] Thumbnail worker finished
+[Search] Thumbnail worker finished
+[Search] Search update start: query='dan 198' tags=2 tag_type=Keywords
+[Search] Pagination updated: total_images=583 page=1/59 tags_mode=yes in 0.016s
+[Search] Page query fetched 10 items in 0.017s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=583 page=1/59 tags_mode=yes in 0.016s
+[Search] Model built with 10 rows in 0.017s; total show_current_page=0.034s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.052s (page=1/59)
+[Search] Search update start: query='dan 1982' tags=2 tag_type=Keywords
+[Search] Pagination updated: total_images=49 page=1/5 tags_mode=yes in 0.023s
+[Search] Page query fetched 10 items in 0.022s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=49 page=1/5 tags_mode=yes in 0.021s
+[Search] Model built with 10 rows in 0.022s; total show_current_page=0.044s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.068s (page=1/5)
+QThread: Destroyed while thread '' is still running
+Aborted (core dumped)
+

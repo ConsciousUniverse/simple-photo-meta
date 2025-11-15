@@ -39,6 +39,7 @@ from simple_photo_meta.exiv2bind import Exiv2Bind
 
 
 PREVIEW_CACHE_DIR_NAME = ".previews"
+THUMBNAIL_DIR_NAME = ".thumbnails"
 DEFAULT_PREVIEW_MAX_EDGE = 2048
 
 
@@ -56,6 +57,28 @@ def _preview_is_current(image_path, preview_path):
         return os.path.getmtime(preview_path) >= os.path.getmtime(image_path)
     except OSError:
         return False
+
+
+def _thumbnail_cache_path(image_path):
+    folder = os.path.dirname(image_path)
+    thumb_dir = os.path.join(folder, THUMBNAIL_DIR_NAME)
+    os.makedirs(thumb_dir, exist_ok=True)
+    hash_str = hashlib.sha256(os.path.abspath(image_path).encode()).hexdigest()
+    return os.path.join(thumb_dir, f"{hash_str}.jpg")
+
+
+def ensure_thumbnail_image(image_path, size=(250, 250)):
+    thumb_path = _thumbnail_cache_path(image_path)
+    if not os.path.exists(thumb_path):
+        try:
+            with Image.open(image_path) as img:
+                img.thumbnail(size, Image.LANCZOS)
+                img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=85)
+        except Exception as exc:
+            print(f"Failed to create thumbnail for {image_path}: {exc}")
+            return None
+    return thumb_path
 
 
 def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
@@ -775,6 +798,34 @@ class MetadataWorker(QThread):
                 self.metadata_failed.emit(self.image_path, self.tag_type, str(exc))
 
 
+class ThumbnailBatchWorker(QThread):
+    thumbnail_ready = Signal(int, str, str)
+    finished = Signal()
+
+    def __init__(self, tasks, size=(250, 250)):
+        super().__init__()
+        self.tasks = tasks  # List of (row_index, image_path)
+        self.size = size
+
+    def run(self):
+        try:
+            for row_index, image_path in self.tasks:
+                if self.isInterruptionRequested():
+                    break
+                try:
+                    thumb_path = ensure_thumbnail_image(image_path, self.size)
+                except Exception as exc:
+                    print(f"[ThumbnailWorker] Failed {image_path}: {exc}")
+                    sys.stdout.flush()
+                    continue
+                if self.isInterruptionRequested():
+                    break
+                if thumb_path:
+                    self.thumbnail_ready.emit(row_index, image_path, thumb_path)
+        finally:
+            self.finished.emit()
+
+
 class CustomMessageDialog(QDialog):
     def __init__(self, parent=None, title="", message=""):
         super().__init__(parent)
@@ -876,6 +927,7 @@ class IPTCEditor(QMainWindow):
         self._pending_preview_key = None
         self.metadata_worker = None
         self._active_metadata_workers = set()
+        self.thumbnail_worker = None
         self.setStyleSheet(f"background-color: {COLOR_BG_DARK_OLIVE};")
         button_css = (
             f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
@@ -1421,6 +1473,8 @@ class IPTCEditor(QMainWindow):
             self._apply_rotation()
 
     def update_pagination(self):
+        start = time.perf_counter()
+        total_images = 0
         # Use the database to get the count of images in the current folder (with search tags)
         if not self.folder_path:
             self.current_page = 0
@@ -1450,6 +1504,11 @@ class IPTCEditor(QMainWindow):
                 self.current_page = self.total_pages - 1
             if self.current_page < 0:
                 self.current_page = 0
+        elapsed = time.perf_counter() - start
+        query_text = self.search_bar.toPlainText().strip() if self.folder_path else ""
+        self._log_search_event(
+            f"Pagination updated: total_images={total_images} page={self.current_page + 1}/{self.total_pages} tags_mode={'yes' if query_text else 'no'} in {elapsed:.3f}s"
+        )
         self.page_label.setText(f"Page {self.current_page + 1} / {self.total_pages}")
         self.page_label.setStyleSheet(f"color: {COLOR_PAPER}")
         self.btn_prev.setEnabled(self.current_page > 0)
@@ -1466,16 +1525,19 @@ class IPTCEditor(QMainWindow):
             self.show_current_page()
 
     def show_current_page(self):
+        page_start = time.perf_counter()
         # Use the database to get the images for the current page
         if not self.folder_path:
             self.image_list = []
             model = QStandardItemModel()
             self.list_view.setModel(model)
             self.update_pagination()
+            self._log_search_event("show_current_page skipped (no folder)")
             return
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
         tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        query_start = time.perf_counter()
         if not tags:
             if tag_type:
                 page_items = self.db.get_untagged_images_of_type_in_folder_paginated(
@@ -1489,33 +1551,71 @@ class IPTCEditor(QMainWindow):
             page_items = self.db.get_images_in_folder_paginated(
                 self.folder_path, self.current_page, self.page_size, tags, tag_type
             )
+        query_elapsed = time.perf_counter() - query_start
+        self._log_search_event(
+            f"Page query fetched {len(page_items)} items in {query_elapsed:.3f}s (page={self.current_page + 1}, tags_mode={'yes' if tags else 'no'}, tag_type={tag_type or 'ALL'})"
+        )
+        self.cancel_thumbnail_worker()
         self.image_list = page_items  # Store full paths, not just basenames
+        build_start = time.perf_counter()
         model = QStandardItemModel()
         supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+        thumbnail_tasks = []
+        placeholder_icon = QIcon()
         for fpath in page_items:
             if not fpath.lower().endswith(supported):
                 continue
-            thumb_path = self.ensure_thumbnail(fpath)
-            if thumb_path and os.path.exists(thumb_path):
-                pixmap = QPixmap(thumb_path)
-            else:
-                pixmap = QPixmap(fpath)
-            if pixmap.isNull():
-                icon = QIcon()
-            else:
-                icon = QIcon(
-                    pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                )
+            row_index = model.rowCount()
             item = QStandardItem()
-            item.setIcon(icon)
             item.setEditable(False)
-            # Show only the basename in the tooltip, but store full path in data
             item.setText("")
-            item.setSizeHint(QPixmap(175, 175).size())
+            item.setSizeHint(QSize(175, 175))
             item.setData(fpath, Qt.UserRole + 1)  # Store full path
+            item.setIcon(placeholder_icon)
             model.appendRow(item)
+            thumbnail_tasks.append((row_index, fpath))
         self.list_view.setModel(model)
         self.update_pagination()
+        build_elapsed = time.perf_counter() - build_start
+        total_elapsed = time.perf_counter() - page_start
+        self._log_search_event(
+            f"Model built with {model.rowCount()} rows in {build_elapsed:.3f}s; total show_current_page={total_elapsed:.3f}s"
+        )
+        if thumbnail_tasks:
+            self.start_thumbnail_worker(thumbnail_tasks)
+
+    def start_thumbnail_worker(self, tasks):
+        self.cancel_thumbnail_worker()
+        if not tasks:
+            return
+        worker = ThumbnailBatchWorker(tasks)
+        worker.thumbnail_ready.connect(self.on_thumbnail_ready)
+        worker.finished.connect(self.on_thumbnail_worker_finished)
+        self.thumbnail_worker = worker
+        self._log_search_event(f"Thumbnail worker started for {len(tasks)} items")
+        worker.start()
+
+    def on_thumbnail_ready(self, row_index, image_path, thumb_path):
+        model = self.list_view.model()
+        if model is None:
+            return
+        item = model.item(row_index)
+        if item is None:
+            return
+        current_path = item.data(Qt.UserRole + 1)
+        if current_path != image_path:
+            return
+        pixmap = QPixmap(thumb_path) if os.path.exists(thumb_path) else QPixmap(image_path)
+        if pixmap.isNull():
+            return
+        icon = QIcon(
+            pixmap.scaled(
+                self.list_view.iconSize(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        )
+        item.setIcon(icon)
 
     def show_image_filename_context_menu(self, pos):
         index = self.list_view.indexAt(pos)
@@ -1573,6 +1673,14 @@ class IPTCEditor(QMainWindow):
         if wait:
             self.metadata_worker = None
 
+    def cancel_thumbnail_worker(self, wait=False):
+        if self.thumbnail_worker:
+            self.thumbnail_worker.requestInterruption()
+            if wait and self.thumbnail_worker.isRunning():
+                self.thumbnail_worker.wait()
+            self.thumbnail_worker.deleteLater()
+            self.thumbnail_worker = None
+
     def _on_preview_worker_finished(self, worker):
         if worker in self._active_preview_workers:
             self._active_preview_workers.discard(worker)
@@ -1587,11 +1695,22 @@ class IPTCEditor(QMainWindow):
         if worker is self.metadata_worker:
             self.metadata_worker = None
 
+    def on_thumbnail_worker_finished(self):
+        self._log_search_event("Thumbnail worker finished")
+        if self.thumbnail_worker:
+            worker = self.thumbnail_worker
+            self.thumbnail_worker = None
+            try:
+                worker.deleteLater()
+            except RuntimeError:
+                pass
+
     def start_directory_scan(self, folder_path, remove_missing=False):
         if not folder_path:
             return
         self.cancel_active_scan()
         self.cancel_preview_worker()
+        self.cancel_thumbnail_worker()
         if remove_missing:
             self.db.remove_missing_images(folder_path)
         self._active_scan_folder = folder_path
@@ -1887,6 +2006,20 @@ class IPTCEditor(QMainWindow):
             except OSError:
                 self._preview_log_path = None
 
+    def _log_search_event(self, message, level="info"):
+        prefix = "[Search]"
+        if level == "warning":
+            print(f"{prefix} WARNING: {message}")
+        else:
+            print(f"{prefix} {message}")
+        if getattr(self, "_preview_log_path", None):
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
+            except OSError:
+                self._preview_log_path = None
+
     def _format_duration_message(self, image_path, message):
         start = self._preview_timers.pop(image_path, None)
         if start is None:
@@ -1999,6 +2132,7 @@ class IPTCEditor(QMainWindow):
             return
         self.cancel_active_scan()
         self.cancel_preview_worker()
+        self.cancel_thumbnail_worker()
         self.folder_path = folder
         self.current_page = 0
         self.image_list = []
@@ -2204,6 +2338,7 @@ class IPTCEditor(QMainWindow):
     def closeEvent(self, event):
         self.cancel_preview_worker(wait=True)
         self.cancel_metadata_worker(wait=True)
+        self.cancel_thumbnail_worker(wait=True)
         self.cancel_active_scan()
         super().closeEvent(event)
 
@@ -2343,34 +2478,29 @@ class IPTCEditor(QMainWindow):
         self.start_directory_scan(self.folder_path, remove_missing=True)
 
     def update_search(self):
-        # Just reset to first page and update pagination/display
+        search_start = time.perf_counter()
+        text = self.search_bar.toPlainText().strip()
+        tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        truncated = text[:40] + ("…" if len(text) > 40 else "")
+        self._log_search_event(
+            f"Search update start: query='{truncated}' tags={len(tags)} tag_type={tag_type or 'ALL'}"
+        )
         self.current_page = 0
         self.update_pagination()
         self.show_current_page()
+        total_elapsed = time.perf_counter() - search_start
+        self._log_search_event(
+            f"Search update complete in {total_elapsed:.3f}s (page={self.current_page + 1}/{self.total_pages})"
+        )
 
     def get_thumbnail_path(self, image_path):
         """Return the path to the cached thumbnail for a given image."""
-        folder = os.path.dirname(image_path)
-        thumb_dir = os.path.join(folder, ".thumbnails")
-        os.makedirs(thumb_dir, exist_ok=True)
-        # Use a hash of the absolute path for uniqueness
-        hash_str = hashlib.sha256(os.path.abspath(image_path).encode()).hexdigest()
-        ext = ".jpg"
-        return os.path.join(thumb_dir, f"{hash_str}{ext}")
+        return _thumbnail_cache_path(image_path)
 
     def ensure_thumbnail(self, image_path, size=(250, 250)):
         """Create a thumbnail for the image if it doesn't exist. Return the thumbnail path."""
-        thumb_path = self.get_thumbnail_path(image_path)
-        if not os.path.exists(thumb_path):
-            try:
-                with Image.open(image_path) as img:
-                    img.thumbnail(size, Image.LANCZOS)
-                    img = img.convert("RGB")
-                    img.save(thumb_path, "JPEG", quality=85)
-            except Exception as e:
-                print(f"Failed to create thumbnail for {image_path}: {e}")
-                return None
-        return thumb_path
+        return ensure_thumbnail_image(image_path, size)
 
     def on_search_text_changed(self):
         # Debounce: restart timer on every keystroke
