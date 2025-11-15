@@ -598,6 +598,18 @@ class TagDatabase:
         except Exception:
             pass
 
+    def purge_cache_images(self):
+        patterns = [
+            f"%{os.sep}{PREVIEW_CACHE_DIR_NAME}{os.sep}%",
+            f"%{os.sep}.thumbnails{os.sep}%",
+        ]
+        with self.conn:
+            for pattern in patterns:
+                self.conn.execute(
+                    "DELETE FROM images WHERE path LIKE ?",
+                    (pattern,),
+                )
+
 
 class ScanWorker(QThread):
     scan_finished = Signal(str, bool)
@@ -623,6 +635,8 @@ class ScanWorker(QThread):
                     break
                 if ".thumbnails" in dirs:
                     dirs.remove(".thumbnails")
+                if PREVIEW_CACHE_DIR_NAME in dirs:
+                    dirs.remove(PREVIEW_CACHE_DIR_NAME)
                 for fname in files:
                     if self.isInterruptionRequested():
                         cancelled = True
@@ -853,6 +867,7 @@ class IPTCEditor(QMainWindow):
         self.cleaned_keywords = []
         # Create or open the SQLite database
         self.db = TagDatabase()
+        self.db.purge_cache_images()
         self._preview_log_path = self._init_preview_log()
         self.worker = None
         self._active_scan_folder = None
@@ -1160,7 +1175,9 @@ class IPTCEditor(QMainWindow):
         else:
             self.btn_save_tags.setText("✓")  # fallback
         self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }}")
-        self.btn_save_tags.clicked.connect(lambda: self.save_tags_and_notify(force=True))
+        self.btn_save_tags.clicked.connect(
+            lambda: self.save_tags_and_notify(force=True, refresh_ui=True)
+        )
         rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
         image_widget = QWidget()
@@ -2006,6 +2023,7 @@ class IPTCEditor(QMainWindow):
         if completed:
             self.db.mark_directory_scanned(folder_path)
             self.remove_unused_tags_from_db()
+            self.db.purge_cache_images()
             self.show_scan_status("Scan complete.")
         else:
             self.show_scan_status("Scan cancelled.")
@@ -2441,13 +2459,13 @@ class IPTCEditor(QMainWindow):
             if result == "cancel":
                 return False
             elif result == "yes":
-                return self.save_tags_and_notify(force=True)
+                return self.save_tags_and_notify(force=True, refresh_ui=False)
             elif result == "no":
                 return True
         # No unsaved changes, just allow switch
         return True
 
-    def save_tags_and_notify(self, force=False):
+    def save_tags_and_notify(self, force=False, refresh_ui=True):
         """
         Save tags, update tag list/database, and show success/failure dialog.
         If force=True, always attempt save (used for save button).
@@ -2479,10 +2497,15 @@ class IPTCEditor(QMainWindow):
             return False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
-            self.load_previous_tags()
-            self.update_tags_search()
+            if refresh_ui:
+                self.load_previous_tags()
+                self.update_tags_search()
+                self.show_auto_close_message(
+                    "Tags Saved",
+                    "Tags have been saved successfully.",
+                    timeout=1200,
+                )
             self.last_loaded_keywords = ""
-            self.show_auto_close_message("Tags Saved", "Tags have been saved successfully.", timeout=1200)
             return True
         if invalid_tags:
             self.show_custom_popup(
@@ -2505,10 +2528,15 @@ class IPTCEditor(QMainWindow):
             # Add new tags to tag DB and update tag list
             for tag in keywords:
                 self.db.add_tag(tag, tag_type)
-            self.load_previous_tags()
-            self.update_tags_search()
+            if refresh_ui:
+                self.load_previous_tags()
+                self.update_tags_search()
+                self.show_auto_close_message(
+                    "Tags Saved",
+                    "Tags have been saved successfully.",
+                    timeout=1200,
+                )
             self.last_loaded_keywords = raw_input
-            self.show_auto_close_message("Tags Saved", "Tags have been saved successfully.", timeout=1200)
             return True
         except Exception as e:
             self.show_custom_popup(
