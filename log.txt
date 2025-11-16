@@ -1,8 +1,1 @@
-[Save] Start save for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1973/7ab47b06-71ac-4db1-969b-cf9f87f88cfd.jpg tag=Keywords keywords=1 force=True refresh_ui=True
-[Save] Cleared IPTC Keywords in 0.001s
-[Save] Metadata write took 0.000s; DB update took 0.062s
-[Save] Ensured 1 tag entries in 0.000s
-[Selection] /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1973/7ab47b06-71ac-4db1-969b-cf9f87f88cfd.jpg - Loaded 1570 tags in 0.001s
-[Save] UI refresh complete in 16.925s (load=0.001s search=15.762s message=1.162s)
-[Save] Save complete in 16.989s
-
+/media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/2010/3d79d21b-6bc1-4737-a1c5-2be2ab1fdd01.jpg

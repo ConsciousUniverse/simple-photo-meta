@@ -1299,19 +1299,18 @@ class IPTCEditor(QMainWindow):
             f"""
             QListWidget {{
                 font-weight: bold;
-                padding: 16px 0px 16px 28px; /* Remove right padding */
+                padding: 12px 8px 12px 12px;
+                border: none;
             }}
             QListWidget::item {{
-                background: {COLOR_TAG_LIST_BG};
+                background: transparent;
                 color: {COLOR_TAG_LIST_TEXT};
                 font-size: {FONT_SIZE_TAG_LIST}pt;
                 font-weight: bold;
-                border-radius: 6px;
-                padding: 6px 14px;
-                min-height: 6em;
-                max-height: 7em;
+                border: none;
+                padding: 0px;
+                margin: 0px;
                 white-space: pre-wrap;
-                border: 1px solid {COLOR_TAG_LIST_ITEM_BORDER};
             }}
             QListWidget::item:selected {{
                 background: {COLOR_TAG_LIST_SELECTED_BG};
@@ -1321,15 +1320,12 @@ class IPTCEditor(QMainWindow):
             + scrollbar_style
         )
         self.tags_list_widget.setWordWrap(True)
-        self.tags_list_widget.setSpacing(8)
+        self.tags_list_widget.setSpacing(10)
         self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
-        self.tags_list_widget.setViewportMargins(
-            0, 0, 0, 0  # Remove right viewport margin
-        )
+        self.tags_list_widget.setViewportMargins(0, 0, 0, 0)
         self.tags_list_widget.setStyleSheet(
             self.tags_list_widget.styleSheet()
             + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
-            f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         right_panel.addWidget(self.tags_list_widget)
 
@@ -2379,19 +2375,22 @@ class IPTCEditor(QMainWindow):
     def _create_tag_list_item_widget(self, tag):
         widget = QWidget()
         widget.setStyleSheet(
-            f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px;"
+            f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px; border: 1px solid {COLOR_TAG_LIST_ITEM_BORDER};"
         )
         layout = QHBoxLayout()
-        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
         tag_label = QLabel(tag)
         tag_label.setStyleSheet(
             f"font-weight: bold; font-size: {FONT_SIZE_TAG_LABEL}pt; color: {COLOR_TAG_LABEL_TEXT}; padding: 2px 8px;"
         )
         tag_label.setWordWrap(True)
-        tag_label.setMinimumWidth(250)
-        tag_label.setMaximumWidth(300)
+        tag_label.setMinimumWidth(100)
+        tag_label.setMaximumWidth(240)
+        tag_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(tag_label)
-        layout.addStretch(1)
+
         btn_add = QPushButton("Add")
         btn_add.setStyleSheet(
             f"""
@@ -2411,10 +2410,18 @@ class IPTCEditor(QMainWindow):
             }}
             """
         )
-        btn_add.setMinimumSize(SIZE_ADD_BUTTON_WIDTH, SIZE_ADD_BUTTON_HEIGHT)
+        btn_add.setMinimumHeight(36)
+        btn_add.setMinimumWidth(SIZE_ADD_BUTTON_WIDTH)
+        btn_add.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_add.clicked.connect(lambda checked=False, t=tag: self.add_tag_to_input(t))
-        layout.addWidget(btn_add)
+        layout.addWidget(btn_add, 0, Qt.AlignVCenter | Qt.AlignRight)
+
         widget.setLayout(layout)
+        margins = layout.contentsMargins()
+        content_height = max(tag_label.sizeHint().height(), btn_add.sizeHint().height())
+        widget_min_height = content_height + margins.top() + margins.bottom()
+        widget.setMinimumHeight(widget_min_height)
+        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         return widget
 
     def update_tags_list_widget(self, tags):
@@ -2426,6 +2433,8 @@ class IPTCEditor(QMainWindow):
         list_widget.setUpdatesEnabled(False)
         list_widget.setSelectionMode(QAbstractItemView.NoSelection)
         list_widget.setEnabled(True)
+        list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        list_widget.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
         all_tags = self.all_tags or []
         all_sorted = sorted(all_tags, key=lambda t: t.lower())
@@ -2453,13 +2462,20 @@ class IPTCEditor(QMainWindow):
                 insert_index = self._find_tag_insert_index(tag)
                 list_widget.insertItem(insert_index, item)
                 list_widget.setItemWidget(item, widget)
-                item.setSizeHint(widget.sizeHint())
+                size_hint = widget.sizeHint()
+                if size_hint.height() < widget.minimumHeight():
+                    size_hint.setHeight(widget.minimumHeight())
+                item.setSizeHint(size_hint)
                 self._tag_item_cache[tag] = (item, widget)
                 self._tag_order.insert(insert_index, tag)
 
         visible_tags = set(tags)
-        for tag, (item, _) in self._tag_item_cache.items():
+        for tag, (item, widget) in self._tag_item_cache.items():
             item.setHidden(tag not in visible_tags)
+            size_hint = widget.sizeHint()
+            if size_hint.height() < widget.minimumHeight():
+                size_hint.setHeight(widget.minimumHeight())
+            item.setSizeHint(size_hint)
 
         list_widget.setUpdatesEnabled(True)
 
