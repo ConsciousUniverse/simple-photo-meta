@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
     QSplitter,
     QDialog,
     QComboBox,
-    QSizePolicy
+    QSizePolicy,
+    QCompleter
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -29,7 +30,7 @@ from PySide6.QtGui import (
     QFont,
     QTextCursor,
 )
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
 from PIL import Image, ImageOps
 from datetime import datetime
@@ -131,7 +132,8 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
 # === COLOUR VARIABLES (ALL COLOURS DEFINED HERE) ===
 
 # Base palette
-COLOR_BG_DARK_OLIVE = "#232d18"
+#COLOR_BG_DARK_OLIVE = "#232d18"
+COLOR_BG_DARK_OLIVE = "#333333"
 COLOR_GOLD = "gold"
 COLOR_GOLD_HOVER = "#e6c200"
 COLOR_GOLD_PRESSED = "#c9a800"
@@ -218,8 +220,8 @@ SIZE_ADD_BUTTON_HEIGHT = 45
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
 FONT_SIZE_DEFAULT = 12
-FONT_SIZE_TAG_INPUT = 12
-FONT_SIZE_TAG_LIST = 12
+FONT_SIZE_TAG_INPUT = 18
+FONT_SIZE_TAG_LIST = 14
 FONT_SIZE_INFO_BANNER = 12
 FONT_SIZE_TAG_LABEL = 12
 FONT_SIZE_TAG_LIST_ITEM = 12
@@ -1275,6 +1277,40 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setStyleSheet(
             f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;}}"
         )
+        
+        # Set up autocomplete for tags
+        self.tag_completer_model = QStringListModel()
+        self.tag_completer = QCompleter()
+        self.tag_completer.setModel(self.tag_completer_model)
+        self.tag_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.tag_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.tag_completer.setWidget(self.iptc_text_edit)
+        self.tag_completer.setMaxVisibleItems(10)  # Show up to 10 items at once
+        # Style the completer popup to match our theme
+        self.tag_completer.popup().setStyleSheet(
+            f"""
+            QListView {{
+                background: {COLOR_TAG_LIST_BG};
+                color: {COLOR_TAG_LIST_TEXT};
+                border: 2px solid {COLOR_GOLD};
+                border-radius: 8px;
+                padding: 4px;
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_LIST}pt;
+                min-width: 300px;
+            }}
+            QListView::item {{
+                padding: 6px;
+                border-radius: 4px;
+            }}
+            QListView::item:selected {{
+                background: {COLOR_TAG_LIST_SELECTED_BG};
+                color: {COLOR_TAG_LIST_SELECTED_TEXT};
+            }}
+            """
+        )
+        self.tag_completer.activated.connect(self.insert_completion)
+        
         iptc_layout.addWidget(self.iptc_text_edit)
         # Ensure the container expands horizontally to match the image preview
         iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -2385,6 +2421,10 @@ class IPTCEditor(QMainWindow):
         self._log_selection_event(
             f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags in {elapsed:.3f}s",
         )
+        
+        # Update autocomplete suggestions with all available tags
+        if hasattr(self, 'tag_completer_model') and self.all_tags:
+            self.tag_completer_model.setStringList(sorted(self.all_tags, key=str.lower))
 
     def _find_tag_insert_index(self, tag):
         """Return the sorted insert position for a tag in the cached order."""
@@ -2669,6 +2709,49 @@ class IPTCEditor(QMainWindow):
         tags = text.split("\n")
         self.set_tag_input_html(tags)
         self.cleaned_keywords = [t for t in tags if t.strip()]
+        
+        # Update autocomplete suggestions based on current line
+        self.update_tag_completer()
+
+    def update_tag_completer(self):
+        """Update the completer based on the current word being typed."""
+        cursor = self.iptc_text_edit.textCursor()
+        cursor.select(QTextCursor.LineUnderCursor)
+        current_line = cursor.selectedText().strip()
+        
+        if not current_line:
+            self.tag_completer.popup().hide()
+            return
+        
+        # Get all available tags and filter out ones already in the input
+        existing_tags = set(t.strip() for t in self.iptc_text_edit.toPlainText().split("\n") if t.strip())
+        all_tags = self.all_tags or []
+        
+        # Filter suggestions: match current line and exclude already-added tags
+        suggestions = [
+            tag for tag in all_tags
+            if tag.lower().startswith(current_line.lower()) and tag not in existing_tags
+        ]
+        
+        if suggestions:
+            self.tag_completer_model.setStringList(sorted(suggestions, key=str.lower))
+            self.tag_completer.setCompletionPrefix(current_line)
+            # Position popup near cursor
+            rect = self.iptc_text_edit.cursorRect()
+            rect.setWidth(self.tag_completer.popup().sizeHintForColumn(0) + 
+                         self.tag_completer.popup().verticalScrollBar().sizeHint().width())
+            self.tag_completer.complete(rect)
+        else:
+            self.tag_completer.popup().hide()
+
+    def insert_completion(self, completion):
+        """Insert the selected completion into the text edit."""
+        cursor = self.iptc_text_edit.textCursor()
+        # Select the current line to replace it
+        cursor.select(QTextCursor.LineUnderCursor)
+        cursor.removeSelectedText()
+        cursor.insertText(completion)
+        self.iptc_text_edit.setTextCursor(cursor)
 
     def handle_save_events(self):
         """
