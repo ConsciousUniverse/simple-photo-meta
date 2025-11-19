@@ -799,30 +799,37 @@ class MetadataWorker(QThread):
 
 
 class ThumbnailBatchWorker(QThread):
-    thumbnail_ready = Signal(int, str, str)
+    thumbnail_ready = Signal(int, str, str, int)  # row, path, thumb_path, generation_id
     finished = Signal()
 
-    def __init__(self, tasks, size=(250, 250)):
+    def __init__(self, tasks, generation_id=0, size=(250, 250)):
         super().__init__()
         self.tasks = tasks  # List of (row_index, image_path)
+        self.generation_id = generation_id
         self.size = size
 
     def run(self):
         try:
             for row_index, image_path in self.tasks:
                 if self.isInterruptionRequested():
+                    print(f"[ThumbnailWorker gen={self.generation_id}] Interrupted before processing")
+                    sys.stdout.flush()
                     break
                 try:
                     thumb_path = ensure_thumbnail_image(image_path, self.size)
                 except Exception as exc:
-                    print(f"[ThumbnailWorker] Failed {image_path}: {exc}")
+                    print(f"[ThumbnailWorker gen={self.generation_id}] Failed {image_path}: {exc}")
                     sys.stdout.flush()
                     continue
                 if self.isInterruptionRequested():
+                    print(f"[ThumbnailWorker gen={self.generation_id}] Interrupted after processing")
+                    sys.stdout.flush()
                     break
                 if thumb_path:
-                    self.thumbnail_ready.emit(row_index, image_path, thumb_path)
+                    self.thumbnail_ready.emit(row_index, image_path, thumb_path, self.generation_id)
         finally:
+            print(f"[ThumbnailWorker gen={self.generation_id}] Worker run() complete")
+            sys.stdout.flush()
             self.finished.emit()
 
 
@@ -928,6 +935,8 @@ class IPTCEditor(QMainWindow):
         self.metadata_worker = None
         self._active_metadata_workers = set()
         self.thumbnail_worker = None
+        self._active_thumbnail_workers = set()
+        self._thumbnail_generation_id = 0  # Track which thumbnail batch is current
         self.setStyleSheet(f"background-color: {COLOR_BG_DARK_OLIVE};")
         button_css = (
             f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
@@ -1583,17 +1592,31 @@ class IPTCEditor(QMainWindow):
             self.start_thumbnail_worker(thumbnail_tasks)
 
     def start_thumbnail_worker(self, tasks):
+        # Cancel old worker (requests interruption but doesn't wait)
         self.cancel_thumbnail_worker()
+        
+        # Increment generation ID to invalidate old workers
+        current_gen = self._thumbnail_generation_id
+        
         if not tasks:
             return
-        worker = ThumbnailBatchWorker(tasks)
-        worker.thumbnail_ready.connect(self.on_thumbnail_ready)
-        worker.finished.connect(self.on_thumbnail_worker_finished)
+        
+        self._log_search_event(f"Starting thumbnail worker gen={current_gen} for {len(tasks)} items")
+        worker = ThumbnailBatchWorker(tasks, generation_id=current_gen)
+        worker.thumbnail_ready.connect(
+            lambda row, path, thumb, gen=current_gen: self.on_thumbnail_ready(row, path, thumb, gen)
+        )
+        worker.finished.connect(lambda w=worker: self.on_thumbnail_worker_finished(w))
+        
         self.thumbnail_worker = worker
-        self._log_search_event(f"Thumbnail worker started for {len(tasks)} items")
+        self._active_thumbnail_workers.add(worker)
         worker.start()
 
-    def on_thumbnail_ready(self, row_index, image_path, thumb_path):
+    def on_thumbnail_ready(self, row_index, image_path, thumb_path, generation_id):
+        # Ignore thumbnails from old workers
+        if generation_id != self._thumbnail_generation_id:
+            return
+        
         model = self.list_view.model()
         if model is None:
             return
@@ -1672,12 +1695,13 @@ class IPTCEditor(QMainWindow):
             self.metadata_worker = None
 
     def cancel_thumbnail_worker(self, wait=False):
-        if self.thumbnail_worker:
+        # Request interruption on old worker so it exits early, but don't wait/destroy
+        if self.thumbnail_worker and self.thumbnail_worker.isRunning():
             self.thumbnail_worker.requestInterruption()
-            if wait and self.thumbnail_worker.isRunning():
-                self.thumbnail_worker.wait()
-            self.thumbnail_worker.deleteLater()
-            self.thumbnail_worker = None
+        
+        # Increment generation ID to ignore results from old workers
+        self._thumbnail_generation_id += 1
+        self.thumbnail_worker = None
 
     def _on_preview_worker_finished(self, worker):
         if worker in self._active_preview_workers:
@@ -1693,15 +1717,13 @@ class IPTCEditor(QMainWindow):
         if worker is self.metadata_worker:
             self.metadata_worker = None
 
-    def on_thumbnail_worker_finished(self):
-        self._log_search_event("Thumbnail worker finished")
-        if self.thumbnail_worker:
-            worker = self.thumbnail_worker
+    def on_thumbnail_worker_finished(self, worker):
+        if worker in self._active_thumbnail_workers:
+            self._active_thumbnail_workers.discard(worker)
+            worker.deleteLater()
+        if worker is self.thumbnail_worker:
             self.thumbnail_worker = None
-            try:
-                worker.deleteLater()
-            except RuntimeError:
-                pass
+        self._log_search_event("Thumbnail worker finished")
 
     def start_directory_scan(self, folder_path, remove_missing=False):
         if not folder_path:
