@@ -917,7 +917,7 @@ class IPTCEditor(QMainWindow):
         self.image_list = []
         self.current_image_path = None
         self.current_page = 0
-        self.page_size = 10
+        self.page_size = 25
         self.total_pages = 1
         self.selected_iptc_tag = None  # <-- Store selected tag dict
         self._preview_retry_counts = {}
@@ -1290,8 +1290,8 @@ class IPTCEditor(QMainWindow):
         self.tag_suggestions_list.setWindowFlags(Qt.SubWindow)
         self.tag_suggestions_list.setFocusPolicy(Qt.NoFocus)
         self.tag_suggestions_list.setFocusProxy(None)
-        self.tag_suggestions_list.resize(300, 300)  # Use resize instead of setFixedHeight
-        self.tag_suggestions_list.setMinimumSize(300, 300)
+        self.tag_suggestions_list.resize(500, 300)  # Increased width to 500 to avoid clipping
+        self.tag_suggestions_list.setMinimumSize(500, 300)
         self.tag_suggestions_list.setMouseTracking(True)
         self.tag_suggestions_list.setAttribute(Qt.WA_ShowWithoutActivating)
         self.tag_suggestions_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -2753,10 +2753,10 @@ class IPTCEditor(QMainWindow):
             existing_tags = set(t.strip() for t in self.iptc_text_edit.toPlainText().split("\n") if t.strip())
             all_tags = self.all_tags or []
             
-            # Filter suggestions: match current line and exclude already-added tags
+            # Filter suggestions: match partial string anywhere in tag and exclude already-added tags
             suggestions = [
                 tag for tag in all_tags
-                if tag.lower().startswith(current_line.lower()) and tag not in existing_tags
+                if current_line.lower() in tag.lower() and tag not in existing_tags
             ]
             
             if suggestions:
