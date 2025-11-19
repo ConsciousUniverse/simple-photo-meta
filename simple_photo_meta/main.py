@@ -951,6 +951,12 @@ class IPTCEditor(QMainWindow):
 
         self._tag_item_cache = {}
         self._tag_order = []
+        
+        # Timer to debounce tag input HTML formatting
+        self._tag_format_timer = QTimer()
+        self._tag_format_timer.setSingleShot(True)
+        self._tag_format_timer.timeout.connect(self._apply_tag_formatting)
+        
         self.create_widgets()
         self.load_previous_tags()
         self._scan_refresh_timer = QTimer(self)
@@ -1278,38 +1284,42 @@ class IPTCEditor(QMainWindow):
             f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;}}"
         )
         
-        # Set up autocomplete for tags
+        # Set up autocomplete for tags - use custom implementation for stability
         self.tag_completer_model = QStringListModel()
-        self.tag_completer = QCompleter()
-        self.tag_completer.setModel(self.tag_completer_model)
-        self.tag_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.tag_completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.tag_completer.setWidget(self.iptc_text_edit)
-        self.tag_completer.setMaxVisibleItems(10)  # Show up to 10 items at once
-        # Style the completer popup to match our theme
-        self.tag_completer.popup().setStyleSheet(
+        self.tag_suggestions_list = QListWidget(self)  # Child of main window
+        self.tag_suggestions_list.setWindowFlags(Qt.SubWindow)
+        self.tag_suggestions_list.setFocusPolicy(Qt.NoFocus)
+        self.tag_suggestions_list.setFocusProxy(None)
+        self.tag_suggestions_list.resize(300, 300)  # Use resize instead of setFixedHeight
+        self.tag_suggestions_list.setMinimumSize(300, 300)
+        self.tag_suggestions_list.setMouseTracking(True)
+        self.tag_suggestions_list.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.tag_suggestions_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.tag_suggestions_list.setStyleSheet(
             f"""
-            QListView {{
+            QListWidget {{
                 background: {COLOR_TAG_LIST_BG};
                 color: {COLOR_TAG_LIST_TEXT};
                 border: 2px solid {COLOR_GOLD};
-                border-radius: 8px;
-                padding: 4px;
+                padding: 8px;
                 font-weight: bold;
                 font-size: {FONT_SIZE_TAG_LIST}pt;
-                min-width: 300px;
             }}
-            QListView::item {{
-                padding: 6px;
-                border-radius: 4px;
+            QListWidget::item {{
+                padding: 10px 12px;
+                margin-bottom: 4px;
             }}
-            QListView::item:selected {{
+            QListWidget::item:selected {{
                 background: {COLOR_TAG_LIST_SELECTED_BG};
                 color: {COLOR_TAG_LIST_SELECTED_TEXT};
             }}
             """
         )
-        self.tag_completer.activated.connect(self.insert_completion)
+        self.tag_suggestions_list.itemClicked.connect(self.on_suggestion_clicked)
+        self.tag_suggestions_list.hide()
+        
+        # Install event filter to handle Ctrl+Space for autocomplete
+        self.iptc_text_edit.installEventFilter(self)
         
         iptc_layout.addWidget(self.iptc_text_edit)
         # Ensure the container expands horizontally to match the image preview
@@ -1396,6 +1406,9 @@ class IPTCEditor(QMainWindow):
         right_panel_widget.setContentsMargins(0, 0, 0, 0)  # Add margin (left, top, right, bottom)
         right_panel_widget.setLayout(right_panel)
         main_splitter.addWidget(right_panel_widget)
+        
+        # Hide the right panel - using autocomplete instead
+        right_panel_widget.setVisible(False)
 
         # Add the splitter to the outer layout
         outer_layout.addWidget(main_splitter)
@@ -2405,6 +2418,18 @@ class IPTCEditor(QMainWindow):
             painter.end()
             self.image_label.setPixmap(final_pixmap)
 
+    def eventFilter(self, obj, event):
+        """Handle keyboard events for autocomplete trigger."""
+        if obj == self.iptc_text_edit and event.type() == event.Type.KeyPress:
+            # Ctrl+Space or just Space triggers autocomplete
+            if event.key() == Qt.Key_Space and (event.modifiers() == Qt.ControlModifier or event.modifiers() == Qt.NoModifier):
+                current_text = self.iptc_text_edit.textCursor().block().text().strip()
+                # Only trigger if there's some text on the current line
+                if current_text and len(current_text) >= 1:
+                    self.update_tag_completer()
+                    return True  # Event handled
+        return super().eventFilter(obj, event)
+
     def closeEvent(self, event):
         self.cancel_preview_worker(wait=True)
         self.cancel_metadata_worker(wait=True)
@@ -2421,10 +2446,6 @@ class IPTCEditor(QMainWindow):
         self._log_selection_event(
             f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags in {elapsed:.3f}s",
         )
-        
-        # Update autocomplete suggestions with all available tags
-        if hasattr(self, 'tag_completer_model') and self.all_tags:
-            self.tag_completer_model.setStringList(sorted(self.all_tags, key=str.lower))
 
     def _find_tag_insert_index(self, tag):
         """Return the sorted insert position for a tag in the cached order."""
@@ -2704,54 +2725,93 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setTextCursor(cursor)
 
     def on_tag_input_text_changed(self):
-        # Get plain text, split into lines, and re-apply HTML styling
+        # Update cleaned keywords immediately for save detection
         text = self.iptc_text_edit.toPlainText()
         tags = text.split("\n")
-        self.set_tag_input_html(tags)
         self.cleaned_keywords = [t for t in tags if t.strip()]
         
-        # Update autocomplete suggestions based on current line
+        # Update autocomplete as you type
         self.update_tag_completer()
+
+    def _apply_tag_formatting(self):
+        """Apply HTML formatting to tag input - called after typing stops."""
+        # Disabled - HTML formatting causes performance issues
+        pass
 
     def update_tag_completer(self):
         """Update the completer based on the current word being typed."""
-        cursor = self.iptc_text_edit.textCursor()
-        cursor.select(QTextCursor.LineUnderCursor)
-        current_line = cursor.selectedText().strip()
-        
-        if not current_line:
-            self.tag_completer.popup().hide()
-            return
-        
-        # Get all available tags and filter out ones already in the input
-        existing_tags = set(t.strip() for t in self.iptc_text_edit.toPlainText().split("\n") if t.strip())
-        all_tags = self.all_tags or []
-        
-        # Filter suggestions: match current line and exclude already-added tags
-        suggestions = [
-            tag for tag in all_tags
-            if tag.lower().startswith(current_line.lower()) and tag not in existing_tags
-        ]
-        
-        if suggestions:
-            self.tag_completer_model.setStringList(sorted(suggestions, key=str.lower))
-            self.tag_completer.setCompletionPrefix(current_line)
-            # Position popup near cursor
-            rect = self.iptc_text_edit.cursorRect()
-            rect.setWidth(self.tag_completer.popup().sizeHintForColumn(0) + 
-                         self.tag_completer.popup().verticalScrollBar().sizeHint().width())
-            self.tag_completer.complete(rect)
-        else:
-            self.tag_completer.popup().hide()
+        try:
+            cursor = self.iptc_text_edit.textCursor()
+            cursor.select(QTextCursor.LineUnderCursor)
+            current_line = cursor.selectedText().strip()
+            
+            if not current_line or len(current_line) < 1:
+                self.tag_suggestions_list.hide()
+                return
+            
+            # Get all available tags and filter out ones already in the input
+            existing_tags = set(t.strip() for t in self.iptc_text_edit.toPlainText().split("\n") if t.strip())
+            all_tags = self.all_tags or []
+            
+            # Filter suggestions: match current line and exclude already-added tags
+            suggestions = [
+                tag for tag in all_tags
+                if tag.lower().startswith(current_line.lower()) and tag not in existing_tags
+            ]
+            
+            if suggestions:
+                # Update list widget with suggestions
+                self.tag_suggestions_list.clear()
+                for tag in sorted(suggestions, key=str.lower)[:10]:  # Show max 10
+                    self.tag_suggestions_list.addItem(tag)
+                
+                # Position widget below current cursor - use parent coordinates for child widget
+                cursor_rect = self.iptc_text_edit.cursorRect()
+                local_pos = cursor_rect.bottomLeft()
+                global_pos = self.iptc_text_edit.mapToGlobal(local_pos)
+                parent_pos = self.mapFromGlobal(global_pos)
+                
+                self.tag_suggestions_list.move(parent_pos)
+                self.tag_suggestions_list.show()
+                self.tag_suggestions_list.raise_()
+                self.tag_suggestions_list.setCurrentRow(0)
+            else:
+                self.tag_suggestions_list.hide()
+        except Exception as e:
+            print(f"[Autocomplete] Error updating suggestions: {e}")
+            sys.stdout.flush()
+            self.tag_suggestions_list.hide()
 
-    def insert_completion(self, completion):
-        """Insert the selected completion into the text edit."""
-        cursor = self.iptc_text_edit.textCursor()
-        # Select the current line to replace it
-        cursor.select(QTextCursor.LineUnderCursor)
-        cursor.removeSelectedText()
-        cursor.insertText(completion)
-        self.iptc_text_edit.setTextCursor(cursor)
+    def on_suggestion_clicked(self, item):
+        """Handle clicking on a suggestion."""
+        try:
+            completion = item.text()
+            
+            # Get current cursor position and line
+            cursor = self.iptc_text_edit.textCursor()
+            cursor.select(QTextCursor.LineUnderCursor)
+            current_line = cursor.selectedText()
+            
+            # Replace current line with completion
+            cursor.removeSelectedText()
+            cursor.insertText(completion)
+            
+            # Move to end of line
+            cursor.movePosition(QTextCursor.EndOfLine)
+            self.iptc_text_edit.setTextCursor(cursor)
+            
+            # Update cleaned keywords
+            text = self.iptc_text_edit.toPlainText()
+            tags = text.split("\n")
+            self.cleaned_keywords = [t for t in tags if t.strip()]
+            
+            self.tag_suggestions_list.hide()
+            
+            # Return focus to text edit
+            self.iptc_text_edit.setFocus()
+        except Exception as e:
+            print(f"[Autocomplete] Error inserting suggestion: {e}")
+            sys.stdout.flush()
 
     def handle_save_events(self):
         """
