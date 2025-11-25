@@ -466,8 +466,12 @@ class TagDatabase:
                 join_clauses.append(
                     f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
                 )
-                where_clauses.append(f"t{idx}.tag LIKE ?")
-                params.append(f"%{tag}%")
+                # Normalize both search term and stored tag by removing common punctuation
+                normalized_tag = tag.replace("'", "").replace('"', "").replace("-", "").replace(".", "").replace(",", "").replace("!", "").replace("?", "")
+                where_clauses.append(
+                    f"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(t{idx}.tag, '''', ''), '\"', ''), '-', ''), '.', ''), ',', ''), '!', ''), '?', '') LIKE ?"
+                )
+                params.append(f"%{normalized_tag}%")
                 if tag_type:
                     where_clauses.append(f"t{idx}.tag_type = ?")
                     params.append(tag_type)
@@ -498,8 +502,12 @@ class TagDatabase:
                 join_clauses.append(
                     f"JOIN image_tags it{idx} ON i.id = it{idx}.image_id JOIN tags t{idx} ON t{idx}.id = it{idx}.tag_id"
                 )
-                where_clauses.append(f"t{idx}.tag LIKE ?")
-                params.append(f"%{tag}%")
+                # Normalize both search term and stored tag by removing common punctuation
+                normalized_tag = tag.replace("'", "").replace('"', "").replace("-", "").replace(".", "").replace(",", "").replace("!", "").replace("?", "")
+                where_clauses.append(
+                    f"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(t{idx}.tag, '''', ''), '\"', ''), '-', ''), '.', ''), ',', ''), '!', ''), '?', '') LIKE ?"
+                )
+                params.append(f"%{normalized_tag}%")
                 if tag_type:
                     where_clauses.append(f"t{idx}.tag_type = ?")
                     params.append(tag_type)
