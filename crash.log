@@ -1,0 +1,32 @@
+
+[Search] Search update start: query='19' tags=1 tag_type=Keywords
+[Search] Pagination updated: total_images=6096 page=1/610 tags_mode=yes in 0.015s
+[Search] Page query fetched 10 items in 0.016s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=6096 page=1/610 tags_mode=yes in 0.016s
+[Search] Model built with 10 rows in 0.017s; total show_current_page=0.033s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.049s (page=1/610)
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1914/3fbb51fc-7d31-4cdb-b237-666353eefc39.tif: image has wrong mode
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1922/eab40809-5633-4718-8843-e5fd71021439.tif: image has wrong mode
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1925/8f675312-d427-410f-8f35-e07b748648e7.tif: image has wrong mode
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1929/afa45664-add3-4b2f-a6d5-ab5c7ab1221b.tif: image has wrong mode
+Failed to create thumbnail for /media/chris/f23f3fa5-fefb-4ca8-9b78-c696bb27c5c0/IMAGE_ARCHIVE/1929/dd5dc73f-3d9f-4a09-9a39-c63be6e6cf35.tif: image has wrong mode
+[Search] Thumbnail worker finished
+[Search] Thumbnail worker finished
+[Search] Search update start: query='197' tags=1 tag_type=Keywords
+[Search] Pagination updated: total_images=1406 page=1/141 tags_mode=yes in 0.012s
+[Search] Page query fetched 10 items in 0.012s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=1406 page=1/141 tags_mode=yes in 0.012s
+[Search] Model built with 10 rows in 0.013s; total show_current_page=0.025s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.038s (page=1/141)
+[Search] Search update start: query='1975' tags=1 tag_type=Keywords
+[Search] Pagination updated: total_images=139 page=1/14 tags_mode=yes in 0.012s
+[Search] Page query fetched 10 items in 0.012s (page=1, tags_mode=yes, tag_type=Keywords)
+[Search] Pagination updated: total_images=139 page=1/14 tags_mode=yes in 0.012s
+[Search] Model built with 10 rows in 0.013s; total show_current_page=0.526s
+[Search] Thumbnail worker started for 10 items
+[Search] Search update complete in 0.539s (page=1/14)
+QThread: Destroyed while thread '' is still running
+Aborted (core dumped)
+

@@ -1744,9 +1744,15 @@ class IPTCEditor(QMainWindow):
             self.metadata_worker = None
 
     def cancel_thumbnail_worker(self, wait=False):
-        # Request interruption on old worker so it exits early, but don't wait/destroy
+        # Request interruption on old worker so it exits early
         if self.thumbnail_worker and self.thumbnail_worker.isRunning():
             self.thumbnail_worker.requestInterruption()
+            if wait:
+                # Wait for the thread to finish before destroying it
+                self.thumbnail_worker.wait(2000)  # Wait up to 2 seconds
+            else:
+                # Even for non-wait cases, give it a brief moment to stop gracefully
+                self.thumbnail_worker.wait(100)  # Wait up to 100ms
         
         # Increment generation ID to ignore results from old workers
         self._thumbnail_generation_id += 1
@@ -2421,13 +2427,13 @@ class IPTCEditor(QMainWindow):
     def eventFilter(self, obj, event):
         """Handle keyboard events for autocomplete trigger."""
         if obj == self.iptc_text_edit and event.type() == event.Type.KeyPress:
-            # Ctrl+Space or just Space triggers autocomplete
-            if event.key() == Qt.Key_Space and (event.modifiers() == Qt.ControlModifier or event.modifiers() == Qt.NoModifier):
+            # Ctrl+Space triggers autocomplete
+            if event.key() == Qt.Key_Space and event.modifiers() == Qt.ControlModifier:
                 current_text = self.iptc_text_edit.textCursor().block().text().strip()
                 # Only trigger if there's some text on the current line
                 if current_text and len(current_text) >= 1:
                     self.update_tag_completer()
-                    return True  # Event handled
+                return True  # Event handled
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
@@ -2765,11 +2771,17 @@ class IPTCEditor(QMainWindow):
                 for tag in sorted(suggestions, key=str.lower)[:10]:  # Show max 10
                     self.tag_suggestions_list.addItem(tag)
                 
-                # Position widget below current cursor - use parent coordinates for child widget
-                cursor_rect = self.iptc_text_edit.cursorRect()
-                local_pos = cursor_rect.bottomLeft()
+                # Position widget above the text input field - anchor to the top of the text edit widget
+                text_edit_rect = self.iptc_text_edit.rect()
+                local_pos = text_edit_rect.topLeft()
                 global_pos = self.iptc_text_edit.mapToGlobal(local_pos)
                 parent_pos = self.mapFromGlobal(global_pos)
+                
+                # Move it above by subtracting the height of the suggestions list
+                parent_pos.setY(parent_pos.y() - self.tag_suggestions_list.height())
+                
+                # Shift slightly to the left to avoid overhanging the right edge
+                parent_pos.setX(parent_pos.x() - 50)
                 
                 self.tag_suggestions_list.move(parent_pos)
                 self.tag_suggestions_list.show()
