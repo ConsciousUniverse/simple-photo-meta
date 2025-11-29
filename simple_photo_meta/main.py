@@ -2378,9 +2378,13 @@ class IPTCEditor(QMainWindow):
         self._log_selection_event(
             f"Row {selected_index} selected; image count={len(self.image_list)}"
         )
-        if not self.handle_save_events():
+        save_result = self.handle_save_events()
+        if not save_result:
             log_step("Selection blocked by unsaved changes", level="warning", path_hint="N/A")
             return  # Don't switch images
+        # If tags were saved, refresh the thumbnail view to update visibility
+        if save_result == "saved":
+            self.show_current_page()
         log_step("Unsaved-change check complete", path_hint="N/A")
         if selected_index < 0 or selected_index >= len(self.image_list):
             log_step("Selection index out of range", level="warning", path_hint="N/A")
@@ -2836,7 +2840,7 @@ class IPTCEditor(QMainWindow):
     def handle_save_events(self):
         """
         Unified save handler for switching images/tag types. Only saves if there are unsaved changes and user chooses Yes.
-        Returns True if save succeeded or not needed, False if cancelled or failed.
+        Returns "saved" if save occurred, True if no save needed or user chose No, False if cancelled or failed.
         """
         current_input = self.iptc_text_edit.toPlainText().strip()
         if (
@@ -2854,7 +2858,8 @@ class IPTCEditor(QMainWindow):
             if result == "cancel":
                 return False
             elif result == "yes":
-                return self.save_tags_and_notify(force=True, refresh_ui=False)
+                save_success = self.save_tags_and_notify(force=True, refresh_ui=False)
+                return "saved" if save_success else False
             elif result == "no":
                 return True
         # No unsaved changes, just allow switch
@@ -2914,6 +2919,10 @@ class IPTCEditor(QMainWindow):
                 search_start = time.perf_counter()
                 self.update_tags_search()
                 search_elapsed = time.perf_counter() - search_start
+                # Refresh thumbnail view to show/hide image based on current search
+                thumb_start = time.perf_counter()
+                self.show_current_page()
+                thumb_elapsed = time.perf_counter() - thumb_start
                 message_start = time.perf_counter()
                 self.show_auto_close_message(
                     "Tags Saved",
@@ -2925,7 +2934,7 @@ class IPTCEditor(QMainWindow):
                     "UI refresh complete for empty tag save in "
                     f"{time.perf_counter() - refresh_start:.3f}s "
                     f"(load={load_elapsed:.3f}s search={search_elapsed:.3f}s "
-                    f"message={message_elapsed:.3f}s)"
+                    f"thumb={thumb_elapsed:.3f}s message={message_elapsed:.3f}s)"
                 )
             self.last_loaded_keywords = ""
             self._log_save_event(
@@ -2977,6 +2986,10 @@ class IPTCEditor(QMainWindow):
                 search_start = time.perf_counter()
                 self.update_tags_search()
                 search_elapsed = time.perf_counter() - search_start
+                # Refresh thumbnail view to show/hide image based on current search
+                thumb_start = time.perf_counter()
+                self.show_current_page()
+                thumb_elapsed = time.perf_counter() - thumb_start
                 message_start = time.perf_counter()
                 self.show_auto_close_message(
                     "Tags Saved",
@@ -2987,7 +3000,7 @@ class IPTCEditor(QMainWindow):
                 self._log_save_event(
                     f"UI refresh complete in {time.perf_counter() - refresh_start:.3f}s "
                     f"(load={load_elapsed:.3f}s search={search_elapsed:.3f}s "
-                    f"message={message_elapsed:.3f}s)"
+                    f"thumb={thumb_elapsed:.3f}s message={message_elapsed:.3f}s)"
                 )
             self.last_loaded_keywords = raw_input
             self._log_save_event(
