@@ -134,11 +134,11 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
 # Base palette
 #COLOR_BG_DARK_OLIVE = "#232d18"
 COLOR_BG_DARK_OLIVE = "#333333"
-COLOR_GOLD = "gold"
-COLOR_GOLD_HOVER = "#e6c200"
-COLOR_GOLD_PRESSED = "#c9a800"
+COLOR_LIGHT_BLUE = "lightblue"
+COLOR_GOLD_HOVER = "#add8e6"
+COLOR_GOLD_PRESSED = "#87ceeb"
 COLOR_ARMY_GREEN = "#4B5320"
-COLOR_PAPER = "#FFFACD"
+COLOR_PAPER = "#F6F4E6"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
@@ -146,71 +146,71 @@ COLOR_GRAY = "#bdbdbd"
 
 # Thumbnails pane
 COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_OLIVE
-COLOR_THUMB_LIST_PANE_BORDER = COLOR_GOLD
+COLOR_THUMB_LIST_PANE_BORDER = COLOR_LIGHT_BLUE
 
 # Image preview
 COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_OLIVE
-COLOR_IMAGE_PREVIEW_BORDER = COLOR_GOLD
-COLOR_IMAGE_PREVIEW_TEXT = COLOR_GOLD
+COLOR_IMAGE_PREVIEW_BORDER = COLOR_LIGHT_BLUE
+COLOR_IMAGE_PREVIEW_TEXT = COLOR_LIGHT_BLUE
 
 # Tag input pane
 COLOR_TAG_INPUT_BG = COLOR_PAPER
 COLOR_TAG_INPUT_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_TAG_INPUT_BORDER = COLOR_GOLD
+COLOR_TAG_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Tag list widget
 COLOR_TAG_LIST_BG = COLOR_PAPER
 COLOR_TAG_LIST_TEXT = COLOR_BLACK
-COLOR_TAG_LIST_SELECTED_BG = COLOR_GOLD
+COLOR_TAG_LIST_SELECTED_BG = COLOR_LIGHT_BLUE
 COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_TAG_LIST_BORDER = COLOR_GOLD
-COLOR_TAG_LIST_ITEM_BORDER = COLOR_GOLD
+COLOR_TAG_LIST_BORDER = COLOR_LIGHT_BLUE
+COLOR_TAG_LIST_ITEM_BORDER = COLOR_LIGHT_BLUE
 
 # Tag label in tag list
 COLOR_TAG_LABEL_TEXT = COLOR_BG_DARK_OLIVE
 
 # Tag add button in tag list
-COLOR_TAG_ADD_BTN_BG = COLOR_GOLD
+COLOR_TAG_ADD_BTN_BG = COLOR_LIGHT_BLUE
 COLOR_TAG_ADD_BTN_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_TAG_ADD_BTN_BORDER = COLOR_GOLD
+COLOR_TAG_ADD_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Search bars (thumbs and tags)
 COLOR_SEARCH_INPUT_BG = COLOR_PAPER
 COLOR_SEARCH_INPUT_TEXT = COLOR_BLACK
-COLOR_SEARCH_INPUT_BORDER = COLOR_GOLD
+COLOR_SEARCH_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Pagination controls
-COLOR_PAGINATION_BTN_BG = COLOR_GOLD
+COLOR_PAGINATION_BTN_BG = COLOR_LIGHT_BLUE
 COLOR_PAGINATION_BTN_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_PAGINATION_BTN_BORDER = COLOR_GOLD
+COLOR_PAGINATION_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_PAGINATION_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_PAGINATION_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Info banner
 COLOR_INFO_BANNER_BG = COLOR_ORANGE
 COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_INFO_BANNER_BORDER = COLOR_GOLD
+COLOR_INFO_BANNER_BORDER = COLOR_LIGHT_BLUE
 
 # Dialogs
 COLOR_DIALOG_BG = COLOR_BG_DARK_OLIVE
-COLOR_DIALOG_TEXT = COLOR_GOLD
-COLOR_DIALOG_BTN_BG = COLOR_GOLD
+COLOR_DIALOG_TEXT = COLOR_LIGHT_BLUE
+COLOR_DIALOG_BTN_BG = COLOR_LIGHT_BLUE
 COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_OLIVE
-COLOR_DIALOG_BTN_BORDER = COLOR_GOLD
+COLOR_DIALOG_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_DIALOG_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_DIALOG_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Combobox
 COLOR_COMBOBOX_BG = COLOR_BG_DARK_OLIVE
-COLOR_COMBOBOX_TEXT = COLOR_GOLD
-COLOR_COMBOBOX_BORDER = COLOR_GOLD
+COLOR_COMBOBOX_TEXT = COLOR_LIGHT_BLUE
+COLOR_COMBOBOX_BORDER = COLOR_LIGHT_BLUE
 
 # Scrollbars
 COLOR_SCROLLBAR_BG = "transparent"
-COLOR_SCROLLBAR_HANDLE = COLOR_GOLD
-COLOR_SCROLLBAR_BORDER = COLOR_GOLD
+COLOR_SCROLLBAR_HANDLE = COLOR_LIGHT_BLUE
+COLOR_SCROLLBAR_BORDER = COLOR_LIGHT_BLUE
 COLOR_SCROLLBAR_WIDTH = "16px"
 COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
 
@@ -947,15 +947,16 @@ class IPTCEditor(QMainWindow):
         self.thumbnail_worker = None
         self._active_thumbnail_workers = set()
         self._thumbnail_generation_id = 0  # Track which thumbnail batch is current
-        self.setStyleSheet(f"background-color: {COLOR_BG_DARK_OLIVE};")
+        
+        # Set a single variable for consistent corner radius across all UI elements
+        self.corner_radius = 16
+        
+        self.setStyleSheet(f"QMainWindow {{ background-color: {COLOR_BG_DARK_OLIVE}; border-radius: {self.corner_radius}px; }}")
         button_css = (
-            f"QPushButton {{ background-color: {COLOR_GOLD}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
+            f"QPushButton {{ background-color: {COLOR_LIGHT_BLUE}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
             f"QPushButton:pressed {{ background-color: {COLOR_GOLD_HOVER}; }}"
         )
         self.setStyleSheet(self.styleSheet() + "\n" + button_css)
-
-        # Set a single variable for consistent corner radius across all UI elements
-        self.corner_radius = 16
 
         self._tag_item_cache = {}
         self._tag_order = []
@@ -1127,15 +1128,25 @@ class IPTCEditor(QMainWindow):
             f"}}"
         )
         central_widget = QWidget()
+        central_widget.setAttribute(Qt.WA_TranslucentBackground)
+        central_widget.setStyleSheet("background: transparent;")
         central_widget.setContentsMargins(0,0,0,0)
         self.setCentralWidget(central_widget)
 
         # === BEGIN: Wrap all widgets in a single outer QWidget ===
         outer_container = QWidget()
-        outer_container.setStyleSheet("padding-bottom: 11px;")
+        outer_container.setAttribute(Qt.WA_StyledBackground)
+        outer_container.setAutoFillBackground(True)
+        outer_container.setStyleSheet(f"QWidget {{ background-color: {COLOR_BG_DARK_OLIVE}; border-radius: {self.corner_radius}px; }}")
         outer_layout = QVBoxLayout()
-        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setContentsMargins(8, 8, 8, 8)
+        outer_layout.setSpacing(0)
         outer_container.setLayout(outer_layout)
+        
+        # Add a bottom spacer to prevent widgets from extending to the very bottom
+        bottom_spacer = QWidget()
+        bottom_spacer.setFixedHeight(4)
+        bottom_spacer.setStyleSheet("background: transparent;")
 
         # Use a QSplitter for user-adjustable left pane
         main_splitter = QSplitter(Qt.Horizontal)
@@ -1232,10 +1243,16 @@ class IPTCEditor(QMainWindow):
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
-        self.btn_rotate_left = QPushButton("⟲ Rotate Left")
-        self.btn_rotate_right = QPushButton("⟳ Rotate Right")
+        self.btn_rotate_left = QPushButton("⟲")
+        self.btn_rotate_right = QPushButton("⟳")
+        self.btn_rotate_left.setToolTip("Rotate Left")
+        self.btn_rotate_right.setToolTip("Rotate Right")
         self.btn_rotate_left.setFont(self.font())
         self.btn_rotate_right.setFont(self.font())
+        self.btn_rotate_left.setMaximumWidth(60)
+        self.btn_rotate_right.setMaximumWidth(60)
+        self.btn_rotate_left.setFixedHeight(28)
+        self.btn_rotate_right.setFixedHeight(28)
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         rotate_controls.addWidget(self.btn_rotate_left)
@@ -1246,7 +1263,8 @@ class IPTCEditor(QMainWindow):
         from PySide6.QtWidgets import QApplication, QStyle
         style = QApplication.instance().style() if QApplication.instance() else None
         icon_size = 18
-        self.btn_save_tags.setFixedSize(icon_size + 6, icon_size + 6)  # Add padding for centering
+        self.btn_save_tags.setMinimumWidth(100)  # Wider button for save tags
+        self.btn_save_tags.setFixedHeight(28)
         if style:
             icon = style.standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
             self.btn_save_tags.setIcon(icon)
@@ -1259,6 +1277,7 @@ class IPTCEditor(QMainWindow):
         )
         rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
+        rotate_controls.setContentsMargins(5, 0, 5, 0)  # Add left and right margins
         image_widget = QWidget()
         image_layout = QVBoxLayout(image_widget)
         image_layout.setContentsMargins(
@@ -1278,8 +1297,8 @@ class IPTCEditor(QMainWindow):
                 background: {COLOR_TAG_INPUT_BG};
                 border-radius: {self.corner_radius - 4}px;
                 border: 1px solid {COLOR_TAG_INPUT_BORDER};
-                margin-left: 0px;
-                margin-right: 0px;
+                margin-left: 5px;
+                margin-right: 5px;
                 margin-bottom: 12px;
             }}
             """
@@ -1308,7 +1327,7 @@ class IPTCEditor(QMainWindow):
             QListWidget {{
                 background: {COLOR_TAG_LIST_BG};
                 color: {COLOR_TAG_LIST_TEXT};
-                border: 2px solid {COLOR_GOLD};
+                border: 2px solid {COLOR_LIGHT_BLUE};
                 padding: 8px;
                 font-weight: bold;
                 font-size: {FONT_SIZE_TAG_LIST}pt;
@@ -1420,11 +1439,13 @@ class IPTCEditor(QMainWindow):
 
         # Add the splitter to the outer layout
         outer_layout.addWidget(main_splitter)
+        outer_layout.addWidget(bottom_spacer)
         # === END: All widgets are now inside outer_container ===
 
         # Set the outer_container as the only child of the central widget
         central_layout = QVBoxLayout()
         central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
         central_layout.addWidget(outer_container)
         central_widget.setLayout(central_layout)
 
