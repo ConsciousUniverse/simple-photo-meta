@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QComboBox,
     QSizePolicy,
-    QCompleter
+    QCompleter,
+    QScrollArea
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -29,6 +30,7 @@ from PySide6.QtGui import (
     QStandardItem,
     QFont,
     QTextCursor,
+    QTransform,
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
@@ -1241,6 +1243,9 @@ class IPTCEditor(QMainWindow):
         )
         self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        # Enable mouse tracking and make clickable
+        self.image_label.setCursor(Qt.PointingHandCursor)
+        self.image_label.mouseDoubleClickEvent = self.on_preview_image_clicked
         # Add rotation controls below image_label
         rotate_controls = QHBoxLayout()
         self.btn_rotate_left = QPushButton("⟲")
@@ -1326,7 +1331,7 @@ class IPTCEditor(QMainWindow):
             QWidget#IptcInputContainer {{
                 background: {COLOR_TAG_INPUT_BG};
                 border-radius: {self.corner_radius - 4}px;
-                border: 1px solid {COLOR_TAG_INPUT_BORDER};
+                border: 2px solid {COLOR_TAG_INPUT_BORDER};
                 margin-left: 5px;
                 margin-right: 5px;
                 margin-bottom: 12px;
@@ -1571,6 +1576,44 @@ class IPTCEditor(QMainWindow):
         if self.current_image_path:
             self._preview_rotation_angle = (self._preview_rotation_angle + 90) % 360
             self._apply_rotation()
+
+    def on_preview_image_clicked(self, event):
+        """Open full-size image in a new window when preview is clicked"""
+        if not self.current_image_path or not os.path.exists(self.current_image_path):
+            return
+        
+        # Create a new top-level window
+        full_image_window = QDialog(self)
+        full_image_window.setWindowTitle(os.path.basename(self.current_image_path))
+        full_image_window.setModal(False)
+        full_image_window.resize(1200, 900)
+        
+        # Create layout
+        layout = QVBoxLayout(full_image_window)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create scroll area for large images
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setAlignment(Qt.AlignCenter)
+        
+        # Create label for the image
+        image_label = QLabel()
+        image_label.setAlignment(Qt.AlignCenter)
+        
+        # Load the full-size image with rotation applied
+        pixmap = QPixmap(self.current_image_path)
+        if not pixmap.isNull():
+            # Apply the same rotation as preview
+            if self._preview_rotation_angle != 0:
+                transform = QTransform().rotate(self._preview_rotation_angle)
+                pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
+            image_label.setPixmap(pixmap)
+        
+        scroll_area.setWidget(image_label)
+        layout.addWidget(scroll_area)
+        
+        full_image_window.show()
 
     def update_pagination(self):
         start = time.perf_counter()
