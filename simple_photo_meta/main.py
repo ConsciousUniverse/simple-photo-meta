@@ -2457,12 +2457,12 @@ class IPTCEditor(QMainWindow):
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
-        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
         load_start = time.perf_counter()
         self.all_tags = self.db.get_tags(tag_type)
         elapsed = time.perf_counter() - load_start
         self._log_selection_event(
-            f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags in {elapsed:.3f}s",
+            f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags for type '{tag_type}' in {elapsed:.3f}s",
         )
 
     def _find_tag_insert_index(self, tag):
@@ -2911,11 +2911,13 @@ class IPTCEditor(QMainWindow):
             self._log_save_event(
                 f"DB cleared tags for {self.current_image_path} in {time.perf_counter() - total_start:.3f}s"
             )
+            # Always reload tag list for autocomplete
+            load_start = time.perf_counter()
+            self.load_previous_tags()
+            load_elapsed = time.perf_counter() - load_start
+            
             if refresh_ui:
                 refresh_start = time.perf_counter()
-                load_start = time.perf_counter()
-                self.load_previous_tags()
-                load_elapsed = time.perf_counter() - load_start
                 search_start = time.perf_counter()
                 self.update_tags_search()
                 search_elapsed = time.perf_counter() - search_start
@@ -2978,11 +2980,13 @@ class IPTCEditor(QMainWindow):
                 self._log_save_event(
                     f"Ensured {len(keywords)} tag entries in {tag_insert_elapsed:.3f}s"
                 )
+            # Always reload tag list for autocomplete
+            load_start = time.perf_counter()
+            self.load_previous_tags()
+            load_elapsed = time.perf_counter() - load_start
+            
             if refresh_ui:
                 refresh_start = time.perf_counter()
-                load_start = time.perf_counter()
-                self.load_previous_tags()
-                load_elapsed = time.perf_counter() - load_start
                 search_start = time.perf_counter()
                 self.update_tags_search()
                 search_elapsed = time.perf_counter() - search_start
