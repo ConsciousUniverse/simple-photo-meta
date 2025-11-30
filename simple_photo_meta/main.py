@@ -1256,8 +1256,9 @@ class IPTCEditor(QMainWindow):
         self.btn_next.clicked.connect(self.next_page)
         self.page_label = QLabel()
         self.page_label.setFont(self.font())
+        self.page_label.setAlignment(Qt.AlignCenter)
         self.pagination_layout.addWidget(self.btn_prev)
-        self.pagination_layout.addWidget(self.page_label)
+        self.pagination_layout.addWidget(self.page_label, 1)  # Stretch factor 1 to center
         self.pagination_layout.addWidget(self.btn_next)
         left_panel.addLayout(self.pagination_layout)
 
@@ -1291,33 +1292,13 @@ class IPTCEditor(QMainWindow):
         self.btn_rotate_right.setToolTip("Rotate Right")
         self.btn_rotate_left.setFont(self.font())
         self.btn_rotate_right.setFont(self.font())
-        self.btn_rotate_left.setMaximumWidth(60)
-        self.btn_rotate_right.setMaximumWidth(60)
+        self.btn_rotate_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_rotate_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_rotate_left.setFixedHeight(28)
         self.btn_rotate_right.setFixedHeight(28)
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         rotate_controls.addWidget(self.btn_rotate_left)
-        # Add save button (icon) between rotate buttons
-        self.btn_save_tags = QPushButton()
-        self.btn_save_tags.setToolTip("Save tags for this image")
-        # Use a standard checkmark icon from Qt for the save button, and center it vertically
-        from PySide6.QtWidgets import QApplication, QStyle
-        style = QApplication.instance().style() if QApplication.instance() else None
-        icon_size = 18
-        self.btn_save_tags.setMinimumWidth(100)  # Wider button for save tags
-        self.btn_save_tags.setFixedHeight(28)
-        if style:
-            icon = style.standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
-            self.btn_save_tags.setIcon(icon)
-            self.btn_save_tags.setIconSize(QSize(icon_size, icon_size))
-        else:
-            self.btn_save_tags.setText("✓")  # fallback
-        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; }}")
-        self.btn_save_tags.clicked.connect(
-            lambda: self.save_tags_and_notify(force=True, refresh_ui=True)
-        )
-        rotate_controls.addWidget(self.btn_save_tags)
         rotate_controls.addWidget(self.btn_rotate_right)
         rotate_controls.setContentsMargins(5, 0, 5, 0)  # Add left and right margins
         image_widget = QWidget()
@@ -1376,11 +1357,12 @@ class IPTCEditor(QMainWindow):
             """
         )
         iptc_layout = QVBoxLayout(iptc_input_container)
-        iptc_layout.setContentsMargins(0, 0, 0, 0)
+        iptc_layout.setContentsMargins(8, 0, 8, 18)
+        iptc_layout.setSpacing(8)
         self.iptc_text_edit = QTextEdit()
         self.iptc_text_edit.setFont(self.font())
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;}}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px;}}"
         )
         
         # Set up autocomplete for tags - use custom implementation for stability
@@ -1421,10 +1403,25 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.installEventFilter(self)
         
         iptc_layout.addWidget(self.iptc_text_edit)
+        
+        # Add save button below tag input (inside the same container)
+        self.btn_save_tags = QPushButton("Save Edits")
+        self.btn_save_tags.setFont(self.font())
+        self.btn_save_tags.setToolTip("Save tags for this image")
+        self.btn_save_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_save_tags.setFixedHeight(35)
+        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; font-weight: bold; font-size: {FONT_SIZE_DEFAULT}pt; color: {COLOR_BG_DARK_OLIVE}; margin-left: 18px; margin-right: 18px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_OLIVE}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_OLIVE}; }}")
+        self.btn_save_tags.clicked.connect(
+            lambda: self.save_tags_and_notify(force=True, refresh_ui=True)
+        )
+        iptc_layout.addWidget(self.btn_save_tags)
+        
         # Ensure the container expands horizontally to match the image preview
-        iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        iptc_input_container.setMinimumHeight(150)
         center_splitter.addWidget(iptc_input_container)
-        center_splitter.setSizes([600, 40, 200])  # image, tag_type_dropdown, tag_input
+        
+        center_splitter.setSizes([600, 40, 320])  # image, tag_type_dropdown, tag_input_with_button
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
         
         # Now connect the dropdown signal after iptc_text_edit exists
@@ -3006,6 +3003,10 @@ class IPTCEditor(QMainWindow):
         If force=True, always attempt save (used for save button).
         Returns True if save succeeded or not needed, False if failed.
         """
+        # Hide autocomplete popup if visible
+        if self.tag_suggestions_list.isVisible():
+            self.tag_suggestions_list.hide()
+        
         if not self.current_image_path:
             return True
         total_start = time.perf_counter()
@@ -3045,6 +3046,9 @@ class IPTCEditor(QMainWindow):
             self.db.set_image_tags(self.current_image_path, [], tag_type)
             # Ensure database commit completes
             try:
+                self.db.conn.commit()
+                # Force database to flush any cached queries
+                self.db.conn.execute("BEGIN IMMEDIATE")
                 self.db.conn.commit()
             except Exception as e:
                 self._log_save_event(f"DB commit failed: {e}", level="warning")
@@ -3101,6 +3105,9 @@ class IPTCEditor(QMainWindow):
                 # Ensure database commit completes
                 try:
                     self.db.conn.commit()
+                    # Force database to flush any cached queries
+                    self.db.conn.execute("BEGIN IMMEDIATE")
+                    self.db.conn.commit()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             else:
@@ -3114,6 +3121,9 @@ class IPTCEditor(QMainWindow):
                 )
                 # Ensure database commit completes
                 try:
+                    self.db.conn.commit()
+                    # Force database to flush any cached queries
+                    self.db.conn.execute("BEGIN IMMEDIATE")
                     self.db.conn.commit()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
