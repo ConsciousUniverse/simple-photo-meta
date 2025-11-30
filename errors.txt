@@ -1,0 +1,4 @@
+QSocketNotifier: Can only be used with threads started with QThread
+Traceback (most recent call last):
+  File "/tmp/onefile_5590_1764507199_444239/main.py", line 41, in <module>
+ImportError: libexiv2.so.30: cannot open shared object file: No such file or directory

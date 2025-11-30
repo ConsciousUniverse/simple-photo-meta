@@ -595,6 +595,43 @@ class TagDatabase:
         row = c.fetchone()
         return row[0] if row else 0
 
+    def get_images_with_type_in_folder_paginated(
+        self, folder_path, page, page_size, tag_type
+    ):
+        """Get images that have ANY tags of the specified type."""
+        c = self.conn.cursor()
+        offset = page * page_size
+        query = """
+            SELECT DISTINCT i.path FROM images i
+            JOIN image_tags it ON i.id = it.image_id
+            JOIN tags t ON t.id = it.tag_id
+            WHERE i.path LIKE ? AND t.tag_type = ?
+            ORDER BY i.path ASC LIMIT ? OFFSET ?
+        """
+        c.execute(
+            query,
+            (
+                os.path.join(os.path.abspath(folder_path), "%"),
+                tag_type,
+                page_size,
+                offset,
+            ),
+        )
+        return [row[0] for row in c.fetchall()]
+
+    def get_image_count_with_type_in_folder(self, folder_path, tag_type):
+        """Count images that have ANY tags of the specified type."""
+        c = self.conn.cursor()
+        query = """
+            SELECT COUNT(DISTINCT i.id) FROM images i
+            JOIN image_tags it ON i.id = it.image_id
+            JOIN tags t ON t.id = it.tag_id
+            WHERE i.path LIKE ? AND t.tag_type = ?
+        """
+        c.execute(query, (os.path.join(os.path.abspath(folder_path), "%"), tag_type))
+        row = c.fetchone()
+        return row[0] if row else 0
+
     def mark_directory_scanned(self, dir_path):
         c = self.conn.cursor()
         c.execute(
@@ -1629,6 +1666,7 @@ class IPTCEditor(QMainWindow):
             tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
             if not tags:
                 if tag_type:
+                    # Count images WITHOUT any tags of this type
                     total_images = self.db.get_untagged_image_count_of_type_in_folder(
                         self.folder_path, tag_type
                     )
@@ -1682,15 +1720,19 @@ class IPTCEditor(QMainWindow):
         tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
         query_start = time.perf_counter()
         if not tags:
+            # No search terms - show images based on tag type selection
             if tag_type:
+                # Show images WITHOUT any tags of this type
                 page_items = self.db.get_untagged_images_of_type_in_folder_paginated(
                     self.folder_path, self.current_page, self.page_size, tag_type
                 )
             else:
+                # Show all images without any tags
                 page_items = self.db.get_untagged_images_in_folder_paginated(
                     self.folder_path, self.current_page, self.page_size
                 )
         else:
+            # Search terms provided - filter by those terms (and optionally tag type)
             page_items = self.db.get_images_in_folder_paginated(
                 self.folder_path, self.current_page, self.page_size, tags, tag_type
             )
@@ -2068,6 +2110,14 @@ class IPTCEditor(QMainWindow):
         self._log_metadata_event(message)
         self.cleaned_keywords = tags
         self.last_loaded_keywords = "\n".join(tags)
+        
+        # Sync database with actual file metadata to prevent stale data
+        try:
+            self.db.set_image_tags(image_path, tags, tag_type)
+            self.db.conn.commit()
+        except Exception as e:
+            self._log_metadata_event(f"Failed to sync DB with metadata: {e}", level="warning")
+        
         self.iptc_text_edit.setPlaceholderText("")
         self.iptc_text_edit.setEnabled(True)
         if tags:
@@ -2783,6 +2833,12 @@ class IPTCEditor(QMainWindow):
             return
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(index)
         self.load_previous_tags()
+        
+        # Use QTimer to defer UI updates and keep interface responsive
+        QTimer.singleShot(0, lambda: self._deferred_tag_type_update())
+    
+    def _deferred_tag_type_update(self):
+        """Deferred update after tag type change to keep UI responsive."""
         self.update_search()
         self.update_tags_search()
         # Always update the preview pane for the current image and tag type
@@ -2987,6 +3043,11 @@ class IPTCEditor(QMainWindow):
             return False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
+            # Ensure database commit completes
+            try:
+                self.db.conn.commit()
+            except Exception as e:
+                self._log_save_event(f"DB commit failed: {e}", level="warning")
             self._log_save_event(
                 f"DB cleared tags for {self.current_image_path} in {time.perf_counter() - total_start:.3f}s"
             )
@@ -3037,6 +3098,11 @@ class IPTCEditor(QMainWindow):
                 meta.from_dict({"iptc": {tag_type: keywords}})
                 metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(self.current_image_path, keywords, tag_type)
+                # Ensure database commit completes
+                try:
+                    self.db.conn.commit()
+                except Exception as e:
+                    self._log_save_event(f"DB commit failed: {e}", level="warning")
             else:
                 single_value = keywords[-1] if keywords else ""
                 meta.from_dict({"iptc": {tag_type: [single_value]}})
@@ -3046,6 +3112,11 @@ class IPTCEditor(QMainWindow):
                     [single_value] if single_value else [],
                     tag_type,
                 )
+                # Ensure database commit completes
+                try:
+                    self.db.conn.commit()
+                except Exception as e:
+                    self._log_save_event(f"DB commit failed: {e}", level="warning")
             db_elapsed = time.perf_counter() - write_start - metadata_elapsed
             self._log_save_event(
                 f"Metadata write took {metadata_elapsed:.3f}s; DB update took {db_elapsed:.3f}s"
