@@ -31,6 +31,9 @@ from PySide6.QtGui import (
     QFont,
     QTextCursor,
     QTransform,
+    QTextCharFormat,
+    QColor,
+    QTextBlockFormat,
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
@@ -1320,7 +1323,8 @@ class IPTCEditor(QMainWindow):
         self.iptc_tag_dropdown = QComboBox()
         self.iptc_tag_dropdown.setFont(self.font())
         self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
-        self.iptc_tag_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.iptc_tag_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.iptc_tag_dropdown.setMinimumHeight(0)
         
         # Populate dropdown with name and set description as tooltip
         keyword_index = 0
@@ -1337,6 +1341,11 @@ class IPTCEditor(QMainWindow):
         self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
         
         tag_type_layout.addWidget(self.iptc_tag_dropdown)
+        
+        # Ensure container can collapse - set both min and max to 0 to allow full collapse
+        tag_type_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
+        tag_type_container.setMinimumHeight(0)
+        tag_type_container.setMaximumHeight(16777215)  # Default max
         
         center_splitter.addWidget(tag_type_container)
         
@@ -1418,10 +1427,16 @@ class IPTCEditor(QMainWindow):
         
         # Ensure the container expands horizontally to match the image preview
         iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        iptc_input_container.setMinimumHeight(150)
+        iptc_input_container.setMinimumHeight(100)
         center_splitter.addWidget(iptc_input_container)
         
-        center_splitter.setSizes([600, 40, 320])  # image, tag_type_dropdown, tag_input_with_button
+        # Make tag type section collapsible
+        center_splitter.setCollapsible(0, False)  # Image preview cannot be collapsed
+        center_splitter.setCollapsible(1, True)   # Tag type dropdown can be collapsed
+        center_splitter.setCollapsible(2, False)  # Tag input cannot be collapsed
+        center_splitter.setChildrenCollapsible(True)
+        
+        center_splitter.setSizes([600, 65, 320])  # image, tag_type_dropdown, tag_input_with_button
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
         
         # Now connect the dropdown signal after iptc_text_edit exists
@@ -2855,7 +2870,7 @@ class IPTCEditor(QMainWindow):
             tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
             self.iptc_text_edit.setFont(tag_input_font)
             self.iptc_text_edit.setStyleSheet(
-                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px; }}"
             )
             return
         # Set plain text, one tag per line
@@ -2867,12 +2882,16 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px; }}"
         )
-        # Move cursor to end
+        # Move cursor to end and add new line for typing
         cursor = self.iptc_text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)
         self.iptc_text_edit.setTextCursor(cursor)
+        self.iptc_text_edit.insertPlainText("\n")
+        
+        # Apply tag formatting to show backgrounds
+        self._apply_tag_formatting()
 
     def on_tag_input_text_changed(self):
         # Update cleaned keywords immediately for save detection
@@ -2880,13 +2899,77 @@ class IPTCEditor(QMainWindow):
         tags = text.split("\n")
         self.cleaned_keywords = [t for t in tags if t.strip()]
         
+        # Apply background color to complete tag lines
+        self._apply_tag_formatting()
+        
         # Update autocomplete as you type
         self.update_tag_completer()
 
     def _apply_tag_formatting(self):
-        """Apply HTML formatting to tag input - called after typing stops."""
-        # Disabled - HTML formatting causes performance issues
-        pass
+        """Apply background color to tag lines above the current line."""
+        cursor = self.iptc_text_edit.textCursor()
+        current_position = cursor.position()
+        current_block = cursor.blockNumber()
+        
+        # Save current scroll position
+        scrollbar = self.iptc_text_edit.verticalScrollBar()
+        scroll_position = scrollbar.value()
+        
+        # Block signals to prevent recursion
+        self.iptc_text_edit.blockSignals(True)
+        
+        # Create format for tags (light blue background with padding)
+        tag_format = QTextCharFormat()
+        tag_format.setBackground(QColor(COLOR_LIGHT_BLUE))
+        
+        # Create block format with left/right indentation for padding effect
+        tag_block_format = QTextBlockFormat()
+        tag_block_format.setLeftMargin(4)
+        tag_block_format.setRightMargin(4)
+        tag_block_format.setTopMargin(2)
+        tag_block_format.setBottomMargin(2)
+        
+        # Create format for current line (transparent background)
+        current_format = QTextCharFormat()
+        current_format.setBackground(QColor(0, 0, 0, 0))  # Transparent
+        
+        current_block_format = QTextBlockFormat()
+        current_block_format.setLeftMargin(0)
+        current_block_format.setRightMargin(0)
+        current_block_format.setTopMargin(0)
+        current_block_format.setBottomMargin(0)
+        
+        # Iterate through all blocks (lines)
+        block = self.iptc_text_edit.document().begin()
+        block_num = 0
+        
+        while block.isValid():
+            block_cursor = QTextCursor(block)
+            
+            # Apply background: light blue for completed tags, transparent for current line
+            if block_num < current_block and block.text().strip():
+                # Select entire line content
+                block_cursor.movePosition(QTextCursor.StartOfBlock)
+                block_cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                block_cursor.setCharFormat(tag_format)
+                block_cursor.setBlockFormat(tag_block_format)
+            else:
+                # Select entire line content
+                block_cursor.movePosition(QTextCursor.StartOfBlock)
+                block_cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                block_cursor.setCharFormat(current_format)
+                block_cursor.setBlockFormat(current_block_format)
+            
+            block = block.next()
+            block_num += 1
+        
+        # Restore cursor position and scroll
+        new_cursor = self.iptc_text_edit.textCursor()
+        new_cursor.setPosition(current_position)
+        self.iptc_text_edit.setTextCursor(new_cursor)
+        scrollbar.setValue(scroll_position)
+        
+        self.iptc_text_edit.blockSignals(False)
 
     def update_tag_completer(self):
         """Update the completer based on the current word being typed."""
@@ -3161,6 +3244,12 @@ class IPTCEditor(QMainWindow):
                     timeout=1200,
                 )
                 message_elapsed = time.perf_counter() - message_start
+                
+                # Reload tags into input to ensure all are highlighted with blue background
+                self.iptc_text_edit.blockSignals(True)
+                self.set_tag_input_html(keywords)
+                self.iptc_text_edit.blockSignals(False)
+                
                 self._log_save_event(
                     f"UI refresh complete in {time.perf_counter() - refresh_start:.3f}s "
                     f"(load={load_elapsed:.3f}s search={search_elapsed:.3f}s "
