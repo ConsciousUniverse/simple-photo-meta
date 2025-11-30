@@ -138,7 +138,7 @@ COLOR_LIGHT_BLUE = "lightblue"
 COLOR_GOLD_HOVER = "#add8e6"
 COLOR_GOLD_PRESSED = "#87ceeb"
 COLOR_ARMY_GREEN = "#4B5320"
-COLOR_PAPER = "#F6F4E6"
+COLOR_PAPER = "#FDFCF2"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
@@ -1287,6 +1287,36 @@ class IPTCEditor(QMainWindow):
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
 
+        # --- Tag Type Dropdown (moved from right panel) ---
+        tag_type_container = QWidget()
+        tag_type_container.setContentsMargins(5, 0, 5, 5)
+        tag_type_layout = QHBoxLayout(tag_type_container)
+        tag_type_layout.setContentsMargins(0, 0, 0, 0)
+        tag_type_layout.setSpacing(8)
+        
+        self.iptc_tag_dropdown = QComboBox()
+        self.iptc_tag_dropdown.setFont(self.font())
+        self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
+        self.iptc_tag_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        # Populate dropdown with name and set description as tooltip
+        keyword_index = 0
+        for i, tag in enumerate(iptc_tags.iptc_writable_tags):
+            display_name = tag["name"].upper()
+            self.iptc_tag_dropdown.addItem(display_name, tag)
+            self.iptc_tag_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
+            if tag["tag"] == "Keywords":
+                keyword_index = i
+        # Don't connect the signal yet - iptc_text_edit doesn't exist
+        # We'll connect it after creating iptc_text_edit
+        # Set initial value to 'Keywords' if present
+        self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
+        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
+        
+        tag_type_layout.addWidget(self.iptc_tag_dropdown)
+        
+        center_splitter.addWidget(tag_type_container)
+        
         # --- Tag Input Pane with persistent rounded corners and matching width ---
         iptc_input_container = QWidget()
         iptc_input_container.setContentsMargins(0,0,0,0)
@@ -1352,8 +1382,11 @@ class IPTCEditor(QMainWindow):
         # Ensure the container expands horizontally to match the image preview
         iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         center_splitter.addWidget(iptc_input_container)
-        center_splitter.setSizes([600, 200])
+        center_splitter.setSizes([600, 40, 200])  # image, tag_type_dropdown, tag_input
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
+        
+        # Now connect the dropdown signal after iptc_text_edit exists
+        self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
         # --- end tag input pane wrap ---
 
         main_splitter.addWidget(center_splitter)
@@ -1410,24 +1443,6 @@ class IPTCEditor(QMainWindow):
             + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
         )
         right_panel.addWidget(self.tags_list_widget)
-
-        # IPTC Application2 Tag Dropdown
-        self.iptc_tag_dropdown = QComboBox()
-        self.iptc_tag_dropdown.setFont(self.font())
-        self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
-        right_panel.addWidget(self.iptc_tag_dropdown)
-        # Populate dropdown with name and set description as tooltip
-        keyword_index = 0
-        for i, tag in enumerate(iptc_tags.iptc_writable_tags):
-            display_name = tag["name"].upper()
-            self.iptc_tag_dropdown.addItem(display_name, tag)
-            self.iptc_tag_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
-            if tag["tag"] == "Keywords":
-                keyword_index = i
-        self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
-        # Set initial value to 'Keywords' if present
-        self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
-        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
 
         right_panel_widget = QWidget()
         right_panel_widget.setContentsMargins(0, 0, 0, 0)  # Add margin (left, top, right, bottom)
