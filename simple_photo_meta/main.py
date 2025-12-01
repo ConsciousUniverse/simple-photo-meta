@@ -138,11 +138,11 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
 
 # Base palette
 #COLOR_BG_DARK_OLIVE = "#232d18"
-COLOR_BG_DARK_OLIVE = "#333333"
+COLOR_BG_DARK_GREY = "#282828"
 COLOR_LIGHT_BLUE = "lightblue"
 COLOR_GOLD_HOVER = "#add8e6"
 COLOR_GOLD_PRESSED = "#87ceeb"
-COLOR_ARMY_GREEN = "#4B5320"
+COLOR_DARK_GREY = "#343434"
 COLOR_PAPER = "#FDFCF2"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
@@ -150,33 +150,33 @@ COLOR_WHITE = "white"
 COLOR_GRAY = "#bdbdbd"
 
 # Thumbnails pane
-COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_OLIVE
+COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_GREY
 COLOR_THUMB_LIST_PANE_BORDER = COLOR_LIGHT_BLUE
 
 # Image preview
-COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_OLIVE
+COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_GREY
 COLOR_IMAGE_PREVIEW_BORDER = COLOR_LIGHT_BLUE
 COLOR_IMAGE_PREVIEW_TEXT = COLOR_LIGHT_BLUE
 
 # Tag input pane
 COLOR_TAG_INPUT_BG = COLOR_PAPER
-COLOR_TAG_INPUT_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_TAG_INPUT_TEXT = COLOR_BG_DARK_GREY
 COLOR_TAG_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Tag list widget
 COLOR_TAG_LIST_BG = COLOR_PAPER
 COLOR_TAG_LIST_TEXT = COLOR_BLACK
 COLOR_TAG_LIST_SELECTED_BG = COLOR_LIGHT_BLUE
-COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_GREY
 COLOR_TAG_LIST_BORDER = COLOR_LIGHT_BLUE
 COLOR_TAG_LIST_ITEM_BORDER = COLOR_LIGHT_BLUE
 
 # Tag label in tag list
-COLOR_TAG_LABEL_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_TAG_LABEL_TEXT = COLOR_BG_DARK_GREY
 
 # Tag add button in tag list
 COLOR_TAG_ADD_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_TAG_ADD_BTN_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_TAG_ADD_BTN_TEXT = COLOR_BG_DARK_GREY
 COLOR_TAG_ADD_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
@@ -188,27 +188,27 @@ COLOR_SEARCH_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Pagination controls
 COLOR_PAGINATION_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_PAGINATION_BTN_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_PAGINATION_BTN_TEXT = COLOR_BG_DARK_GREY
 COLOR_PAGINATION_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_PAGINATION_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_PAGINATION_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Info banner
 COLOR_INFO_BANNER_BG = COLOR_ORANGE
-COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_GREY
 COLOR_INFO_BANNER_BORDER = COLOR_LIGHT_BLUE
 
 # Dialogs
-COLOR_DIALOG_BG = COLOR_BG_DARK_OLIVE
+COLOR_DIALOG_BG = COLOR_BG_DARK_GREY
 COLOR_DIALOG_TEXT = COLOR_LIGHT_BLUE
 COLOR_DIALOG_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_OLIVE
+COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_GREY
 COLOR_DIALOG_BTN_BORDER = COLOR_LIGHT_BLUE
 COLOR_DIALOG_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_DIALOG_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Combobox
-COLOR_COMBOBOX_BG = COLOR_BG_DARK_OLIVE
+COLOR_COMBOBOX_BG = COLOR_BG_DARK_GREY
 COLOR_COMBOBOX_TEXT = COLOR_LIGHT_BLUE
 COLOR_COMBOBOX_BORDER = COLOR_LIGHT_BLUE
 
@@ -993,9 +993,9 @@ class IPTCEditor(QMainWindow):
         # Set a single variable for consistent corner radius across all UI elements
         self.corner_radius = 16
         
-        self.setStyleSheet(f"QMainWindow {{ background-color: {COLOR_BG_DARK_OLIVE}; border-radius: {self.corner_radius}px; }}")
+        self.setStyleSheet(f"QMainWindow {{ background-color: {COLOR_BG_DARK_GREY}; border-radius: {self.corner_radius}px; }}")
         button_css = (
-            f"QPushButton {{ background-color: {COLOR_LIGHT_BLUE}; color: {COLOR_ARMY_GREEN}; font-weight: bold; border-radius: 6px; }} "
+            f"QPushButton {{ background-color: {COLOR_LIGHT_BLUE}; color: {COLOR_DARK_GREY}; font-weight: bold; border-radius: 6px; }} "
             f"QPushButton:pressed {{ background-color: {COLOR_GOLD_HOVER}; }}"
         )
         self.setStyleSheet(self.styleSheet() + "\n" + button_css)
@@ -1179,7 +1179,7 @@ class IPTCEditor(QMainWindow):
         outer_container = QWidget()
         outer_container.setAttribute(Qt.WA_StyledBackground)
         outer_container.setAutoFillBackground(True)
-        outer_container.setStyleSheet(f"QWidget {{ background-color: {COLOR_BG_DARK_OLIVE}; border-radius: {self.corner_radius}px; }}")
+        outer_container.setStyleSheet(f"QWidget {{ background-color: {COLOR_BG_DARK_GREY}; border-radius: {self.corner_radius}px; }}")
         outer_layout = QVBoxLayout()
         outer_layout.setContentsMargins(8, 8, 8, 8)
         outer_layout.setSpacing(0)
@@ -1419,7 +1419,7 @@ class IPTCEditor(QMainWindow):
         self.btn_save_tags.setToolTip("Save tags for this image")
         self.btn_save_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_save_tags.setFixedHeight(35)
-        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; font-weight: bold; font-size: {FONT_SIZE_DEFAULT}pt; color: {COLOR_BG_DARK_OLIVE}; margin-left: 18px; margin-right: 18px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_OLIVE}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_OLIVE}; }}")
+        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; font-weight: bold; font-size: {FONT_SIZE_DEFAULT}pt; color: {COLOR_BG_DARK_GREY}; margin-left: 18px; margin-right: 18px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_GREY}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_GREY}; }}")
         self.btn_save_tags.clicked.connect(
             lambda: self.save_tags_and_notify(force=True, refresh_ui=True)
         )
@@ -2617,7 +2617,7 @@ class IPTCEditor(QMainWindow):
     def _create_tag_list_item_widget(self, tag):
         widget = QWidget()
         widget.setStyleSheet(
-            f"color: {COLOR_ARMY_GREEN}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px; border: 1px solid {COLOR_TAG_LIST_ITEM_BORDER};"
+            f"color: {COLOR_DARK_GREY}; background: {COLOR_TAG_LIST_BG}; border-radius: 8px; border: 1px solid {COLOR_TAG_LIST_ITEM_BORDER};"
         )
         layout = QHBoxLayout()
         layout.setContentsMargins(12, 10, 12, 10)
