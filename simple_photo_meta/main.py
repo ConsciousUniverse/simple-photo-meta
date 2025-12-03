@@ -30,7 +30,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QSizePolicy,
     QCompleter,
-    QScrollArea
+    QScrollArea,
+    QStyledItemDelegate
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -44,6 +45,7 @@ from PySide6.QtGui import (
     QColor,
     QTextBlockFormat,
     QFontMetrics,
+    QPalette,
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
@@ -244,6 +246,18 @@ FONT_SIZE_TAG_LIST_ITEM = 12
 FONT_SIZE_COMBOBOX = 14
 FONT_SIZE_BUTTON = 14
 FONT_SIZE_POPUP = 12
+
+
+# Custom delegate for dropdown items
+class ComboBoxItemDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+    
+    def paint(self, painter, option, index):
+        # Force text color to cream
+        option.palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        option.palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
+        super().paint(painter, option, index)
 
 
 class TagDatabase:
@@ -1247,6 +1261,15 @@ class IPTCEditor(QMainWindow):
         self.metadata_format_dropdown.addItem("IPTC", "iptc")
         self.metadata_format_dropdown.addItem("EXIF", "exif")
         self.metadata_format_dropdown.currentIndexChanged.connect(self.on_metadata_format_changed)
+        # Get the view and set palette
+        format_view = self.metadata_format_dropdown.view()
+        from PySide6.QtGui import QPalette
+        palette = format_view.palette()
+        palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
+        palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
+        palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
+        format_view.setPalette(palette)
         self.metadata_format_dropdown.setStyleSheet(
             f"""
             QComboBox {{
@@ -1258,15 +1281,6 @@ class IPTCEditor(QMainWindow):
                 font-size: {FONT_SIZE_COMBOBOX}pt;
                 font-weight: bold;
             }}
-            QComboBox QAbstractItemView {{
-                color: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                background: {COLOR_LIGHT_BLUE};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                selection-background-color: {COLOR_GOLD_HOVER};
-                outline: none;
-            }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
@@ -1278,6 +1292,32 @@ class IPTCEditor(QMainWindow):
             }}
             """
         )
+        # Set view style separately
+        self.metadata_format_dropdown.view().setStyleSheet(
+            f"""
+            QListView {{
+                background: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                padding: 6px;
+                outline: none;
+                min-width: 120px;
+            }}
+            QListView::item {{
+                color: {COLOR_CREAM};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                border-radius: 4px;
+            }}
+            QListView::item:selected {{
+                background: {COLOR_GOLD_HOVER};
+                color: {COLOR_BG_DARK_GREY};
+            }}
+            """
+        )
+        # Apply custom delegate to force text color
+        self.metadata_format_dropdown.setItemDelegate(ComboBoxItemDelegate())
         
         # Metadata field selector (tag type within selected format) - right side
         self.metadata_type_dropdown = QComboBox()
@@ -1286,6 +1326,15 @@ class IPTCEditor(QMainWindow):
         self.metadata_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.metadata_type_dropdown.setMinimumHeight(38)
         self.metadata_type_dropdown.currentIndexChanged.connect(self.on_metadata_field_changed)
+        # Get the view and set palette
+        type_view = self.metadata_type_dropdown.view()
+        from PySide6.QtGui import QPalette
+        palette = type_view.palette()
+        palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
+        palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
+        palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
+        type_view.setPalette(palette)
         self.metadata_type_dropdown.setStyleSheet(
             f"""
             QComboBox {{
@@ -1297,15 +1346,6 @@ class IPTCEditor(QMainWindow):
                 font-size: {FONT_SIZE_COMBOBOX}pt;
                 font-weight: bold;
             }}
-            QComboBox QAbstractItemView {{
-                color: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                background: {COLOR_LIGHT_BLUE};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                selection-background-color: {COLOR_GOLD_HOVER};
-                outline: none;
-            }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
@@ -1317,6 +1357,31 @@ class IPTCEditor(QMainWindow):
             }}
             """
         )
+        # Set view style separately
+        self.metadata_type_dropdown.view().setStyleSheet(
+            f"""
+            QListView {{
+                background: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                padding: 6px;
+                outline: none;
+            }}
+            QListView::item {{
+                color: {COLOR_CREAM};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                border-radius: 4px;
+            }}
+            QListView::item:selected {{
+                background: {COLOR_GOLD_HOVER};
+                color: {COLOR_BG_DARK_GREY};
+            }}
+            """
+        )
+        # Apply custom delegate to force text color
+        self.metadata_type_dropdown.setItemDelegate(ComboBoxItemDelegate())
         
         # Populate IPTC fields initially
         keyword_index = 0
@@ -3114,8 +3179,8 @@ class IPTCEditor(QMainWindow):
                 self.tag_display_list.addItem(item)
                 self.tag_display_list.setItemWidget(item, widget)
             
-            # Save to file immediately
-            self.save_tags_and_notify(force=True, refresh_ui=True)
+            # Save to file immediately without popup
+            self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
     
     def set_tag_input_html(self, tags):
         # Update the read-only tag display list
@@ -3173,8 +3238,8 @@ class IPTCEditor(QMainWindow):
         # Clear the input field
         self.iptc_text_edit.clear()
         
-        # Save to file immediately
-        self.save_tags_and_notify(force=True, refresh_ui=True)
+        # Save to file immediately without popup
+        self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
     
     def on_save_edits_clicked(self):
         """Handle Save Edits button click - commit any pending input first, then save."""
@@ -3288,8 +3353,8 @@ class IPTCEditor(QMainWindow):
             # Hide suggestions
             self.tag_suggestions_list.hide()
             
-            # Save immediately
-            self.save_tags_and_notify(force=True, refresh_ui=True)
+            # Save immediately without popup
+            self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
             
             # Return focus to text edit
             self.iptc_text_edit.setFocus()
@@ -3352,10 +3417,11 @@ class IPTCEditor(QMainWindow):
         # No unsaved changes, just allow switch
         return True
 
-    def save_tags_and_notify(self, force=False, refresh_ui=True):
+    def save_tags_and_notify(self, force=False, refresh_ui=True, show_notification=True):
         """
-        Save tags, update tag list/database, and show success/failure dialog.
+        Save tags, update tag list/database, and optionally show success/failure dialog.
         If force=True, always attempt save (used for save button).
+        If show_notification=False, suppress the success popup.
         Returns True if save succeeded or not needed, False if failed.
         """
         # Hide autocomplete popup if visible
@@ -3437,11 +3503,12 @@ class IPTCEditor(QMainWindow):
                 self.show_current_page()
                 thumb_elapsed = time.perf_counter() - thumb_start
                 message_start = time.perf_counter()
-                self.show_auto_close_message(
-                    "Tags Saved",
-                    "Tags have been saved successfully.",
-                    timeout=1200,
-                )
+                if show_notification:
+                    self.show_auto_close_message(
+                        "Tags Saved",
+                        "Tags have been saved successfully.",
+                        timeout=1200,
+                    )
                 message_elapsed = time.perf_counter() - message_start
                 self._log_save_event(
                     "UI refresh complete for empty tag save in "
@@ -3522,11 +3589,12 @@ class IPTCEditor(QMainWindow):
                 self.show_current_page()
                 thumb_elapsed = time.perf_counter() - thumb_start
                 message_start = time.perf_counter()
-                self.show_auto_close_message(
-                    "Tags Saved",
-                    "Tags have been saved successfully.",
-                    timeout=1200,
-                )
+                if show_notification:
+                    self.show_auto_close_message(
+                        "Tags Saved",
+                        "Tags have been saved successfully.",
+                        timeout=1200,
+                    )
                 message_elapsed = time.perf_counter() - message_start
                 
                 # Reload tags into input to ensure all are highlighted with blue background
