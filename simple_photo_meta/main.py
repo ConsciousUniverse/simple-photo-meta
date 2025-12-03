@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QLabel,
     QTextEdit,
+    QLineEdit,
     QPushButton,
     QFileDialog,
     QMessageBox,
@@ -42,6 +43,7 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QColor,
     QTextBlockFormat,
+    QFontMetrics,
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
@@ -151,24 +153,25 @@ COLOR_LIGHT_BLUE = "lightblue"
 COLOR_GOLD_HOVER = "#add8e6"
 COLOR_GOLD_PRESSED = "#87ceeb"
 COLOR_DARK_GREY = "#343434"
-COLOR_PAPER = "#FDFCF2"
+COLOR_PAPER = "#333333"
+COLOR_CREAM = "#E8E6D5"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
 COLOR_GRAY = "#bdbdbd"
 
 # Thumbnails pane
-COLOR_THUMB_LIST_PANE_BG = COLOR_BG_DARK_GREY
+COLOR_THUMB_LIST_PANE_BG = COLOR_PAPER
 COLOR_THUMB_LIST_PANE_BORDER = COLOR_LIGHT_BLUE
 
 # Image preview
-COLOR_IMAGE_PREVIEW_BG = COLOR_BG_DARK_GREY
+COLOR_IMAGE_PREVIEW_BG = COLOR_PAPER
 COLOR_IMAGE_PREVIEW_BORDER = COLOR_LIGHT_BLUE
 COLOR_IMAGE_PREVIEW_TEXT = COLOR_LIGHT_BLUE
 
 # Tag input pane
-COLOR_TAG_INPUT_BG = COLOR_PAPER
-COLOR_TAG_INPUT_TEXT = COLOR_BG_DARK_GREY
+COLOR_TAG_INPUT_BG = COLOR_CREAM
+COLOR_TAG_INPUT_TEXT = COLOR_PAPER
 COLOR_TAG_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Tag list widget
@@ -190,8 +193,8 @@ COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Search bars (thumbs and tags)
-COLOR_SEARCH_INPUT_BG = COLOR_PAPER
-COLOR_SEARCH_INPUT_TEXT = COLOR_BLACK
+COLOR_SEARCH_INPUT_BG = COLOR_CREAM
+COLOR_SEARCH_INPUT_TEXT = COLOR_PAPER
 COLOR_SEARCH_INPUT_BORDER = COLOR_LIGHT_BLUE
 
 # Pagination controls
@@ -238,8 +241,8 @@ FONT_SIZE_TAG_LIST = 14
 FONT_SIZE_INFO_BANNER = 12
 FONT_SIZE_TAG_LABEL = 12
 FONT_SIZE_TAG_LIST_ITEM = 12
-FONT_SIZE_COMBOBOX = 12
-FONT_SIZE_BUTTON = 12
+FONT_SIZE_COMBOBOX = 14
+FONT_SIZE_BUTTON = 14
 FONT_SIZE_POPUP = 12
 
 
@@ -1253,12 +1256,14 @@ class IPTCEditor(QMainWindow):
                 padding: 10px 12px;
                 background: {COLOR_LIGHT_BLUE};
                 font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
             }}
             QComboBox QAbstractItemView {{
                 color: {COLOR_BG_DARK_GREY};
                 border-radius: {self.corner_radius - 4}px;
                 background: {COLOR_LIGHT_BLUE};
                 font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
                 selection-background-color: {COLOR_GOLD_HOVER};
                 outline: none;
             }}
@@ -1290,12 +1295,14 @@ class IPTCEditor(QMainWindow):
                 padding: 10px 12px;
                 background: {COLOR_LIGHT_BLUE};
                 font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
             }}
             QComboBox QAbstractItemView {{
                 color: {COLOR_BG_DARK_GREY};
                 border-radius: {self.corner_radius - 4}px;
                 background: {COLOR_LIGHT_BLUE};
                 font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
                 selection-background-color: {COLOR_GOLD_HOVER};
                 outline: none;
             }}
@@ -1446,12 +1453,57 @@ class IPTCEditor(QMainWindow):
             """
         )
         iptc_layout = QVBoxLayout(iptc_input_container)
-        iptc_layout.setContentsMargins(8, 0, 8, 18)
+        iptc_layout.setContentsMargins(8, 8, 8, 18)
         iptc_layout.setSpacing(8)
-        self.iptc_text_edit = QTextEdit()
+        
+        # Top part: Read-only display of existing tags (clickable)
+        self.tag_display_list = QListWidget()
+        self.tag_display_list.setFont(self.font())
+        self.tag_display_list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.tag_display_list.setFocusPolicy(Qt.NoFocus)
+        self.tag_display_list.setStyleSheet(
+            f"""
+            QListWidget {{
+                background: {COLOR_BG_DARK_GREY};
+                border: none;
+                color: {COLOR_TAG_INPUT_TEXT};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding-left: 18px;
+                padding-right: 6px;
+                padding-top: 10px;
+                padding-bottom: 4px;
+            }}
+            QListWidget::item {{
+                background: transparent;
+                border: none;
+                padding: 0px;
+                margin-bottom: 6px;
+                margin-right: 12px;
+            }}
+            """
+        )
+        iptc_layout.addWidget(self.tag_display_list)
+        
+        # Bottom part: Single-line input field for editing
+        self.iptc_text_edit = QLineEdit()
         self.iptc_text_edit.setFont(self.font())
+        self.iptc_text_edit.setPlaceholderText("Click tag above to edit, or type new tag here...")
+        self.iptc_text_edit.setMinimumHeight(45)
+        self.iptc_text_edit.setTextMargins(8, 0, 8, 0)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px;}}"
+            f"""
+            QLineEdit {{
+                background-color: {COLOR_BG_DARK_GREY};
+                border: 1px solid {COLOR_TAG_INPUT_BORDER};
+                border-radius: 8px;
+                color: {COLOR_CREAM};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding: 10px 18px;
+                outline: none;
+            }}
+            """
         )
         
         # Set up autocomplete for tags - use custom implementation for stability
@@ -1469,7 +1521,7 @@ class IPTCEditor(QMainWindow):
             f"""
             QListWidget {{
                 background: {COLOR_TAG_LIST_BG};
-                color: {COLOR_TAG_LIST_TEXT};
+                color: {COLOR_CREAM};
                 border: 2px solid {COLOR_LIGHT_BLUE};
                 padding: 8px;
                 font-weight: bold;
@@ -1478,6 +1530,7 @@ class IPTCEditor(QMainWindow):
             QListWidget::item {{
                 padding: 10px 12px;
                 margin-bottom: 4px;
+                color: {COLOR_CREAM};
             }}
             QListWidget::item:selected {{
                 background: {COLOR_TAG_LIST_SELECTED_BG};
@@ -1491,23 +1544,14 @@ class IPTCEditor(QMainWindow):
         # Install event filter to handle Ctrl+Space for autocomplete
         self.iptc_text_edit.installEventFilter(self)
         
-        iptc_layout.addWidget(self.iptc_text_edit)
+        # Track which tag is being edited
+        self.editing_tag_index = None
         
-        # Add save button below tag input (inside the same container)
-        self.btn_save_tags = QPushButton("Save Edits")
-        self.btn_save_tags.setFont(self.font())
-        self.btn_save_tags.setToolTip("Save tags for this image")
-        self.btn_save_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_save_tags.setFixedHeight(35)
-        self.btn_save_tags.setStyleSheet(f"QPushButton {{ background-color: {COLOR_DIALOG_BTN_BG}; border-radius: 8px; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; padding: 3px; font-weight: bold; font-size: {FONT_SIZE_DEFAULT}pt; color: {COLOR_BG_DARK_GREY}; margin-left: 18px; margin-right: 18px; }} QPushButton:hover {{ background-color: {COLOR_DIALOG_BTN_BG_HOVER}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_GREY}; }} QPushButton:pressed {{ background-color: {COLOR_DIALOG_BTN_BG_PRESSED}; border: 2px solid {COLOR_DIALOG_BTN_BORDER}; color: {COLOR_BG_DARK_GREY}; }}")
-        self.btn_save_tags.clicked.connect(
-            lambda: self.save_tags_and_notify(force=True, refresh_ui=True)
-        )
-        iptc_layout.addWidget(self.btn_save_tags)
+        iptc_layout.addWidget(self.iptc_text_edit)
         
         # Ensure the container expands horizontally to match the image preview
         iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        iptc_input_container.setMinimumHeight(100)
+        iptc_input_container.setMinimumHeight(150)
         center_splitter.addWidget(iptc_input_container)
         
         # Make tag input section collapsible
@@ -1517,6 +1561,7 @@ class IPTCEditor(QMainWindow):
         
         center_splitter.setSizes([600, 320])  # image, tag_input_with_button
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
+        self.iptc_text_edit.returnPressed.connect(self.on_tag_input_return_pressed)
         # --- end tag input pane wrap ---
 
         main_splitter.addWidget(center_splitter)
@@ -1603,21 +1648,21 @@ class IPTCEditor(QMainWindow):
             f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; "
             f"padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
         )
-        # Make search input font slightly smaller
+        # Make search input font match tag input
         search_font = QFont()
-        search_font.setPointSize(FONT_SIZE_DEFAULT)
+        search_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.search_bar.setFont(search_font)
         self.tags_search_bar.setFont(search_font)
-        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_DEFAULT}pt;}}")
+        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_TAG_INPUT}pt;}}")
         self.tags_search_bar.setStyleSheet(
-            f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_DEFAULT}pt;}}"
+            f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
         )
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px; }}"
+            f"QLineEdit {{ background: {COLOR_BG_DARK_GREY}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_CREAM}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
@@ -1754,7 +1799,7 @@ class IPTCEditor(QMainWindow):
             f"Pagination updated: total_images={total_images} page={self.current_page + 1}/{self.total_pages} tags_mode={'yes' if query_text else 'no'} in {elapsed:.3f}s"
         )
         self.page_label.setText(f"Page {self.current_page + 1} / {self.total_pages}")
-        self.page_label.setStyleSheet(f"color: {COLOR_PAPER}")
+        self.page_label.setStyleSheet(f"color: {COLOR_CREAM}")
         self.btn_prev.setEnabled(self.current_page > 0)
         self.btn_next.setEnabled(self.current_page < self.total_pages - 1)
 
@@ -2454,8 +2499,10 @@ class IPTCEditor(QMainWindow):
     def save_tags_to_file_and_db(self, show_dialogs=False):
         if not self.current_image_path:
             return True
-        # Always get plain text for saving
-        raw_input = self.iptc_text_edit.toPlainText().strip()
+        # Get tags from display list
+        keywords = [self.tag_display_list.item(i).text() 
+                   for i in range(self.tag_display_list.count())]
+        raw_input = "\n".join(keywords)
         tag_type = (
             self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
         )
@@ -2464,7 +2511,6 @@ class IPTCEditor(QMainWindow):
             if self.selected_iptc_tag
             else False
         )
-        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         try:
             meta = Exiv2Bind(self.current_image_path)
@@ -2517,7 +2563,11 @@ class IPTCEditor(QMainWindow):
         self.db.conn.commit()
 
     def handle_unsaved_changes(self):
-        current_input = self.iptc_text_edit.toPlainText().strip()
+        # Get current tags from display list
+        current_tags = [self.tag_display_list.item(i).text() 
+                       for i in range(self.tag_display_list.count())]
+        current_input = "\n".join(current_tags)
+        
         if (
             hasattr(self, "last_loaded_keywords")
             and self.current_image_path is not None
@@ -2628,8 +2678,8 @@ class IPTCEditor(QMainWindow):
         if obj == self.iptc_text_edit and event.type() == event.Type.KeyPress:
             # Ctrl+Space triggers autocomplete
             if event.key() == Qt.Key_Space and event.modifiers() == Qt.ControlModifier:
-                current_text = self.iptc_text_edit.textCursor().block().text().strip()
-                # Only trigger if there's some text on the current line
+                current_text = self.iptc_text_edit.text().strip()
+                # Only trigger if there's some text
                 if current_text and len(current_text) >= 1:
                     self.update_tag_completer()
                 return True  # Event handled
@@ -2981,127 +3031,196 @@ class IPTCEditor(QMainWindow):
             self.iptc_text_edit.setPlaceholderText("")
             self.iptc_text_edit.setEnabled(True)
 
-    def set_tag_input_html(self, tags):
-        if not tags:
-            self.iptc_text_edit.clear()
-            tag_input_font = QFont()
-            tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
-            self.iptc_text_edit.setFont(tag_input_font)
-            self.iptc_text_edit.setStyleSheet(
-                f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px; }}"
-            )
-            return
-        # Set plain text, one tag per line
-        text = "\n".join(tags)
-        self.iptc_text_edit.blockSignals(True)
-        self.iptc_text_edit.setPlainText(text)
-        self.iptc_text_edit.blockSignals(False)
-        tag_input_font = QFont()
-        tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
-        self.iptc_text_edit.setFont(tag_input_font)
-        self.iptc_text_edit.setStyleSheet(
-            f"QTextEdit {{ background: transparent; border: none; color: {COLOR_TAG_INPUT_TEXT}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 0px; }}"
-        )
-        # Move cursor to end and add new line for typing
-        cursor = self.iptc_text_edit.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.iptc_text_edit.setTextCursor(cursor)
-        self.iptc_text_edit.insertPlainText("\n")
+    def _create_tag_widget(self, tag_text, index):
+        """Create a custom widget for a tag with text and delete button."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 4)
+        layout.setSpacing(8)
         
-        # Apply tag formatting to show backgrounds
-        self._apply_tag_formatting()
+        # Use QPushButton for the tag instead of QLabel - better text rendering
+        tag_button = QPushButton(tag_text)
+        tag_button.setFont(self.font())
+        tag_button.setCursor(Qt.PointingHandCursor)
+        tag_button.setFlat(True)
+        tag_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {COLOR_LIGHT_BLUE};
+                border: none;
+                border-radius: 8px;
+                padding: 12px 16px;
+                color: {COLOR_BG_DARK_GREY};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                text-align: center;
+            }}
+            QPushButton:hover {{
+                background: #9dc8e0;
+            }}
+            """
+        )
+        tag_button.clicked.connect(lambda: self._on_tag_label_clicked(index))
+        
+        # Delete button
+        delete_btn = QPushButton("✕")
+        delete_btn.setFixedSize(28, 28)
+        delete_btn.setCursor(Qt.PointingHandCursor)
+        delete_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: #d9534f;
+                border-radius: 14px;
+                color: white;
+                font-weight: bold;
+                font-size: 14pt;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background: #c9302c;
+            }}
+            """
+        )
+        delete_btn.clicked.connect(lambda: self._on_tag_delete_clicked(index))
+        
+        layout.addWidget(tag_button)
+        layout.addWidget(delete_btn)
+        layout.addStretch()
+        
+        return widget
+    
+    def _on_tag_label_clicked(self, index):
+        """Handle clicking on a tag label for editing."""
+        if index < len(self.cleaned_keywords):
+            tag_text = self.cleaned_keywords[index]
+            self.iptc_text_edit.setText(tag_text)
+            self.iptc_text_edit.setFocus()
+            self.iptc_text_edit.selectAll()
+            self.editing_tag_index = index
+    
+    def _on_tag_delete_clicked(self, index):
+        """Handle clicking the delete button on a tag."""
+        if index < len(self.cleaned_keywords):
+            # Remove from keywords list
+            del self.cleaned_keywords[index]
+            
+            # Rebuild the entire display list to fix indices
+            self.tag_display_list.clear()
+            for i, tag in enumerate(self.cleaned_keywords):
+                item = QListWidgetItem()
+                widget = self._create_tag_widget(tag, i)
+                # Set explicit height to prevent clipping
+                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.addItem(item)
+                self.tag_display_list.setItemWidget(item, widget)
+            
+            # Save to file immediately
+            self.save_tags_and_notify(force=True, refresh_ui=True)
+    
+    def set_tag_input_html(self, tags):
+        # Update the read-only tag display list
+        self.tag_display_list.clear()
+        if tags:
+            for i, tag in enumerate(tags):
+                item = QListWidgetItem()
+                widget = self._create_tag_widget(tag, i)
+                # Set explicit height to prevent clipping
+                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.addItem(item)
+                self.tag_display_list.setItemWidget(item, widget)
+        
+        # Clear the input field
+        self.iptc_text_edit.clear()
+        self.editing_tag_index = None
 
     def on_tag_input_text_changed(self):
-        # Update cleaned keywords immediately for save detection
-        text = self.iptc_text_edit.toPlainText()
-        tags = text.split("\n")
-        self.cleaned_keywords = [t for t in tags if t.strip()]
-        
-        # Apply background color to complete tag lines
-        self._apply_tag_formatting()
-        
         # Update autocomplete as you type
         self.update_tag_completer()
+    
+    def on_existing_tag_clicked(self, item):
+        """Handle clicking on an existing tag in the display list - no longer used with custom widgets."""
+        pass
+    
+    def on_tag_input_return_pressed(self):
+        """Handle Return key in the input field - save the tag and update file."""
+        input_text = self.iptc_text_edit.text().strip()
+        
+        if self.editing_tag_index is not None:
+            # Editing an existing tag
+            if input_text:
+                # Update the tag
+                self.cleaned_keywords[self.editing_tag_index] = input_text
+                item = self.tag_display_list.item(self.editing_tag_index)
+                widget = self._create_tag_widget(input_text, self.editing_tag_index)
+                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.setItemWidget(item, widget)
+            else:
+                # Empty input = delete the tag
+                del self.cleaned_keywords[self.editing_tag_index]
+                self.tag_display_list.takeItem(self.editing_tag_index)
+            
+            self.editing_tag_index = None
+        elif input_text:
+            # Adding a new tag
+            new_index = len(self.cleaned_keywords)
+            self.cleaned_keywords.append(input_text)
+            item = QListWidgetItem()
+            widget = self._create_tag_widget(input_text, new_index)
+            item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+            self.tag_display_list.addItem(item)
+            self.tag_display_list.setItemWidget(item, widget)
+        
+        # Clear the input field
+        self.iptc_text_edit.clear()
+        
+        # Save to file immediately
+        self.save_tags_and_notify(force=True, refresh_ui=True)
+    
+    def on_save_edits_clicked(self):
+        """Handle Save Edits button click - commit any pending input first, then save."""
+        # If there's text in the input field, process it first
+        if self.iptc_text_edit.text().strip():
+            input_text = self.iptc_text_edit.text().strip()
+            
+            if self.editing_tag_index is not None:
+                # Editing an existing tag
+                self.cleaned_keywords[self.editing_tag_index] = input_text
+                item = self.tag_display_list.item(self.editing_tag_index)
+                widget = self._create_tag_widget(input_text, self.editing_tag_index)
+                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.setItemWidget(item, widget)
+                self.editing_tag_index = None
+            else:
+                # Adding a new tag
+                new_index = len(self.cleaned_keywords)
+                self.cleaned_keywords.append(input_text)
+                item = QListWidgetItem()
+                widget = self._create_tag_widget(input_text, new_index)
+                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.addItem(item)
+                self.tag_display_list.setItemWidget(item, widget)
+            
+            self.iptc_text_edit.clear()
+        
+        # Now save everything to file
+        self.save_tags_and_notify(force=True, refresh_ui=True)
 
     def _apply_tag_formatting(self):
-        """Apply background color to tag lines above the current line."""
-        cursor = self.iptc_text_edit.textCursor()
-        current_position = cursor.position()
-        current_block = cursor.blockNumber()
-        
-        # Save current scroll position
-        scrollbar = self.iptc_text_edit.verticalScrollBar()
-        scroll_position = scrollbar.value()
-        
-        # Block signals to prevent recursion
-        self.iptc_text_edit.blockSignals(True)
-        
-        # Create format for tags (light blue background with padding)
-        tag_format = QTextCharFormat()
-        tag_format.setBackground(QColor(COLOR_LIGHT_BLUE))
-        
-        # Create block format with left/right indentation for padding effect
-        tag_block_format = QTextBlockFormat()
-        tag_block_format.setLeftMargin(4)
-        tag_block_format.setRightMargin(4)
-        tag_block_format.setTopMargin(2)
-        tag_block_format.setBottomMargin(2)
-        
-        # Create format for current line (transparent background)
-        current_format = QTextCharFormat()
-        current_format.setBackground(QColor(0, 0, 0, 0))  # Transparent
-        
-        current_block_format = QTextBlockFormat()
-        current_block_format.setLeftMargin(0)
-        current_block_format.setRightMargin(0)
-        current_block_format.setTopMargin(0)
-        current_block_format.setBottomMargin(0)
-        
-        # Iterate through all blocks (lines)
-        block = self.iptc_text_edit.document().begin()
-        block_num = 0
-        
-        while block.isValid():
-            block_cursor = QTextCursor(block)
-            
-            # Apply background: light blue for completed tags, transparent for current line
-            if block_num < current_block and block.text().strip():
-                # Select entire line content
-                block_cursor.movePosition(QTextCursor.StartOfBlock)
-                block_cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-                block_cursor.setCharFormat(tag_format)
-                block_cursor.setBlockFormat(tag_block_format)
-            else:
-                # Select entire line content
-                block_cursor.movePosition(QTextCursor.StartOfBlock)
-                block_cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-                block_cursor.setCharFormat(current_format)
-                block_cursor.setBlockFormat(current_block_format)
-            
-            block = block.next()
-            block_num += 1
-        
-        # Restore cursor position and scroll
-        new_cursor = self.iptc_text_edit.textCursor()
-        new_cursor.setPosition(current_position)
-        self.iptc_text_edit.setTextCursor(new_cursor)
-        scrollbar.setValue(scroll_position)
-        
-        self.iptc_text_edit.blockSignals(False)
+        """No longer used - formatting is handled by QListWidget styles."""
+        pass
 
     def update_tag_completer(self):
         """Update the completer based on the current word being typed."""
         try:
-            cursor = self.iptc_text_edit.textCursor()
-            cursor.select(QTextCursor.LineUnderCursor)
-            current_line = cursor.selectedText().strip()
+            current_line = self.iptc_text_edit.text().strip()
             
             if not current_line or len(current_line) < 1:
                 self.tag_suggestions_list.hide()
                 return
             
-            # Get all available tags and filter out ones already in the input
-            existing_tags = set(t.strip() for t in self.iptc_text_edit.toPlainText().split("\n") if t.strip())
+            # Get all available tags and filter out ones already in the display list
+            existing_tags = set(self.tag_display_list.item(i).text() 
+                              for i in range(self.tag_display_list.count()))
             all_tags = self.all_tags or []
             
             # Filter suggestions: match partial string anywhere in tag and exclude already-added tags
@@ -3140,29 +3259,37 @@ class IPTCEditor(QMainWindow):
             self.tag_suggestions_list.hide()
 
     def on_suggestion_clicked(self, item):
-        """Handle clicking on a suggestion."""
+        """Handle clicking on a suggestion - add tag directly."""
         try:
-            completion = item.text()
+            tag_text = item.text()
             
-            # Get current cursor position and line
-            cursor = self.iptc_text_edit.textCursor()
-            cursor.select(QTextCursor.LineUnderCursor)
-            current_line = cursor.selectedText()
+            # Add the tag directly instead of just populating the input
+            if self.editing_tag_index is not None:
+                # If editing, replace the existing tag
+                self.cleaned_keywords[self.editing_tag_index] = tag_text
+                list_item = self.tag_display_list.item(self.editing_tag_index)
+                widget = self._create_tag_widget(tag_text, self.editing_tag_index)
+                list_item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.setItemWidget(list_item, widget)
+                self.editing_tag_index = None
+            else:
+                # Add as new tag
+                new_index = len(self.cleaned_keywords)
+                self.cleaned_keywords.append(tag_text)
+                list_item = QListWidgetItem()
+                widget = self._create_tag_widget(tag_text, new_index)
+                list_item.setSizeHint(QSize(widget.sizeHint().width(), 56))
+                self.tag_display_list.addItem(list_item)
+                self.tag_display_list.setItemWidget(list_item, widget)
             
-            # Replace current line with completion
-            cursor.removeSelectedText()
-            cursor.insertText(completion)
+            # Clear the input field
+            self.iptc_text_edit.clear()
             
-            # Move to end of line
-            cursor.movePosition(QTextCursor.EndOfLine)
-            self.iptc_text_edit.setTextCursor(cursor)
-            
-            # Update cleaned keywords
-            text = self.iptc_text_edit.toPlainText()
-            tags = text.split("\n")
-            self.cleaned_keywords = [t for t in tags if t.strip()]
-            
+            # Hide suggestions
             self.tag_suggestions_list.hide()
+            
+            # Save immediately
+            self.save_tags_and_notify(force=True, refresh_ui=True)
             
             # Return focus to text edit
             self.iptc_text_edit.setFocus()
@@ -3178,12 +3305,35 @@ class IPTCEditor(QMainWindow):
         # Check if iptc_text_edit exists (may not during initialization)
         if not hasattr(self, 'iptc_text_edit'):
             return True
-            
-        current_input = self.iptc_text_edit.toPlainText().strip()
+        
+        # Check if there's unsaved input in the edit field
+        current_input = self.iptc_text_edit.text().strip()
+        if current_input:
+            # User has typed something but not pressed Enter
+            result = self.show_custom_confirm(
+                "Save Changes?",
+                "You have unsaved input in the edit field. Save before switching?",
+                yes_text="Yes",
+                no_text="No",
+                cancel_text="Cancel",
+            )
+            if result == "cancel":
+                return False
+            elif result == "yes":
+                # Simulate pressing Enter to save the current input
+                self.on_tag_input_return_pressed()
+                save_success = self.save_tags_and_notify(force=True, refresh_ui=False)
+                return "saved" if save_success else False
+            elif result == "no":
+                return True
+        
+        # Check if tags in display list differ from loaded tags
+        current_tags_str = "\n".join(self.cleaned_keywords)
+        
         if (
             hasattr(self, "last_loaded_keywords")
             and self.current_image_path is not None
-            and current_input != self.last_loaded_keywords
+            and current_tags_str != self.last_loaded_keywords
         ):
             result = self.show_custom_confirm(
                 "Save Changes?",
@@ -3215,7 +3365,11 @@ class IPTCEditor(QMainWindow):
         if not self.current_image_path:
             return True
         total_start = time.perf_counter()
-        raw_input = self.iptc_text_edit.toPlainText().strip()
+        
+        # Get tags from cleaned_keywords
+        keywords = self.cleaned_keywords
+        raw_input = "\n".join(keywords)
+        
         metadata_type, tag_type = self.get_current_tag_and_type()
         
         # Get multi_valued flag from current tag
@@ -3233,7 +3387,6 @@ class IPTCEditor(QMainWindow):
                 else False
             )
         
-        keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         self._log_save_event(
             f"Start save for {self.current_image_path} type={metadata_type} tag={tag_type} keywords={len(keywords)} force={force} refresh_ui={refresh_ui}"
