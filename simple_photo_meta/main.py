@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 import sys, os, sqlite3, subprocess, re, time
 from appdirs import user_data_dir
+
+# Register HEIF support for HEIC/HEIF images
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass  # HEIF support optional
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -703,7 +711,7 @@ class ScanWorker(QThread):
         db = None
         try:
             db = TagDatabase(self.db_path)
-            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic", ".heif")
             for root, dirs, files in os.walk(self.folder_path):
                 if self.isInterruptionRequested():
                     cancelled = True
@@ -1800,7 +1808,7 @@ class IPTCEditor(QMainWindow):
         self.image_list = page_items  # Store full paths, not just basenames
         build_start = time.perf_counter()
         model = QStandardItemModel()
-        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic", ".heif")
         thumbnail_tasks = []
         placeholder_icon = QIcon()
         for fpath in page_items:
@@ -2336,7 +2344,7 @@ class IPTCEditor(QMainWindow):
         FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
         file_size = os.path.getsize(path)
         ext = os.path.splitext(path)[1].lower()
-        if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff"]:
+        if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff", ".heic", ".heif"]:
             from PySide6.QtGui import QImage
             import io
 

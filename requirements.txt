@@ -1,4 +1,5 @@
 pillow==11.2.1
+pillow-heif==1.1.1
 pyside6==6.9.0
 pyside6-addons==6.9.0
 pyside6-essentials==6.9.0
