@@ -1219,8 +1219,54 @@ class IPTCEditor(QMainWindow):
         self.search_debounce_timer.setSingleShot(True)
         self.search_debounce_timer.timeout.connect(self.update_search)
 
-        # Metadata type selector dropdown (IPTC/EXIF combined)
+        # Metadata selector container (format + field in one row)
         self.current_metadata_type = "iptc"
+        metadata_selector_container = QWidget()
+        metadata_selector_layout = QHBoxLayout(metadata_selector_container)
+        metadata_selector_layout.setContentsMargins(0, 0, 0, 0)
+        metadata_selector_layout.setSpacing(8)
+        
+        # Metadata format selector (IPTC/EXIF) - left side
+        self.metadata_format_dropdown = QComboBox()
+        self.metadata_format_dropdown.setFont(self.font())
+        self.metadata_format_dropdown.setToolTip("Select metadata format")
+        self.metadata_format_dropdown.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.metadata_format_dropdown.setMinimumHeight(38)
+        self.metadata_format_dropdown.setMaximumWidth(100)
+        self.metadata_format_dropdown.addItem("IPTC", "iptc")
+        self.metadata_format_dropdown.addItem("EXIF", "exif")
+        self.metadata_format_dropdown.currentIndexChanged.connect(self.on_metadata_format_changed)
+        self.metadata_format_dropdown.setStyleSheet(
+            f"""
+            QComboBox {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_COMBOBOX_BORDER};
+                padding: 10px 12px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                selection-background-color: {COLOR_GOLD_HOVER};
+                outline: none;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+            """
+        )
+        
+        # Metadata field selector (tag type within selected format) - right side
         self.metadata_type_dropdown = QComboBox()
         self.metadata_type_dropdown.setFont(self.font())
         self.metadata_type_dropdown.setToolTip("Select metadata field to edit")
@@ -1257,29 +1303,26 @@ class IPTCEditor(QMainWindow):
             """
         )
         
-        # Populate with IPTC fields first
+        # Populate IPTC fields initially
         keyword_index = 0
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
-            display_name = "IPTC: " + tag["name"].upper()
-            self.metadata_type_dropdown.addItem(display_name, {"type": "iptc", "tag": tag})
+            display_name = tag["name"].upper()
+            self.metadata_type_dropdown.addItem(display_name, tag)
             self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
             if tag["tag"] == "Keywords":
                 keyword_index = i
-        
-        # Add EXIF fields
-        exif_start_index = len(iptc_tags.iptc_writable_tags)
-        for i, tag in enumerate(exif_tags.exif_writable_tags):
-            display_name = "EXIF: " + tag["name"].upper()
-            self.metadata_type_dropdown.addItem(display_name, {"type": "exif", "tag": tag})
-            self.metadata_type_dropdown.setItemData(exif_start_index + i, tag["description"], Qt.ToolTipRole)
         
         self.metadata_type_dropdown.setCurrentIndex(keyword_index)
         self.selected_iptc_tag = iptc_tags.iptc_writable_tags[keyword_index]
         self.selected_exif_tag = None
         
+        # Add both dropdowns to container
+        metadata_selector_layout.addWidget(self.metadata_format_dropdown)
+        metadata_selector_layout.addWidget(self.metadata_type_dropdown)
+        
         left_panel.addWidget(self.btn_select_folder)
         left_panel.addWidget(self.btn_scan_directory)
-        left_panel.addWidget(self.metadata_type_dropdown)
+        left_panel.addWidget(metadata_selector_container)
         left_panel.addWidget(self.search_bar)
         self.scan_status_label = QLabel()
         self.scan_status_label.setFont(self.font())
@@ -2824,6 +2867,55 @@ class IPTCEditor(QMainWindow):
         # Debounce: restart timer on every keystroke
         self.search_debounce_timer.start(350)  # 400ms delay
 
+    def on_metadata_format_changed(self, index):
+        # Get the selected format
+        format_type = self.metadata_format_dropdown.itemData(index)
+        if not format_type:
+            return
+            
+        # Prompt to save unsaved changes before switching
+        if not self.handle_save_events():
+            # Revert to previous selection
+            self.metadata_format_dropdown.blockSignals(True)
+            prev_index = 0 if self.current_metadata_type == "iptc" else 1
+            self.metadata_format_dropdown.setCurrentIndex(prev_index)
+            self.metadata_format_dropdown.blockSignals(False)
+            return
+        
+        # Update format and repopulate field dropdown
+        self.current_metadata_type = format_type
+        self.metadata_type_dropdown.blockSignals(True)
+        self.metadata_type_dropdown.clear()
+        
+        if format_type == "iptc":
+            # Populate IPTC fields
+            keyword_index = 0
+            for i, tag in enumerate(iptc_tags.iptc_writable_tags):
+                display_name = tag["name"].upper()
+                self.metadata_type_dropdown.addItem(display_name, tag)
+                self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
+                if tag["tag"] == "Keywords":
+                    keyword_index = i
+            self.metadata_type_dropdown.setCurrentIndex(keyword_index)
+            self.selected_iptc_tag = iptc_tags.iptc_writable_tags[keyword_index]
+        else:
+            # Populate EXIF fields
+            artist_index = 0
+            for i, tag in enumerate(exif_tags.exif_writable_tags):
+                display_name = tag["name"].upper()
+                self.metadata_type_dropdown.addItem(display_name, tag)
+                self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
+                if tag["tag"] == "Artist":
+                    artist_index = i
+            self.metadata_type_dropdown.setCurrentIndex(artist_index)
+            self.selected_exif_tag = exif_tags.exif_writable_tags[artist_index]
+        
+        self.metadata_type_dropdown.blockSignals(False)
+        self.load_previous_tags()
+        
+        # Use QTimer to defer UI updates and keep interface responsive
+        QTimer.singleShot(0, lambda: self._deferred_tag_type_update())
+    
     def on_metadata_field_changed(self, index):
         # Get the selected field data
         field_data = self.metadata_type_dropdown.itemData(index)
@@ -2838,23 +2930,20 @@ class IPTCEditor(QMainWindow):
             for i in range(self.metadata_type_dropdown.count()):
                 data = self.metadata_type_dropdown.itemData(i)
                 if data:
-                    if (self.current_metadata_type == "iptc" and data["type"] == "iptc" and 
-                        data["tag"] == self.selected_iptc_tag):
+                    if self.current_metadata_type == "iptc" and data == self.selected_iptc_tag:
                         self.metadata_type_dropdown.setCurrentIndex(i)
                         break
-                    elif (self.current_metadata_type == "exif" and data["type"] == "exif" and 
-                          data["tag"] == self.selected_exif_tag):
+                    elif self.current_metadata_type == "exif" and data == self.selected_exif_tag:
                         self.metadata_type_dropdown.setCurrentIndex(i)
                         break
             self.metadata_type_dropdown.blockSignals(False)
             return
         
-        # Update current metadata type and selected tag
-        self.current_metadata_type = field_data["type"]
-        if field_data["type"] == "iptc":
-            self.selected_iptc_tag = field_data["tag"]
+        # Update selected tag for current format
+        if self.current_metadata_type == "iptc":
+            self.selected_iptc_tag = field_data
         else:
-            self.selected_exif_tag = field_data["tag"]
+            self.selected_exif_tag = field_data
             
         self.load_previous_tags()
         
