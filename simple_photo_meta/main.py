@@ -40,7 +40,7 @@ import hashlib
 from PIL import Image, ImageOps
 from datetime import datetime
 
-from simple_photo_meta import iptc_tags
+from simple_photo_meta import iptc_tags, exif_tags
 from simple_photo_meta.exiv2bind import Exiv2Bind
 
 
@@ -241,7 +241,7 @@ class TagDatabase:
     Platform | Database location
     macOS | ~/Library/Application Support/SPM/tags.db
     Linux | ~/.local/share/SPM/tags.db
-    Windows | %LOCALAPPDATA%\SPM\tags.db
+    Windows | %LOCALAPPDATA%\\SPM\\tags.db
     """
 
     def __init__(self, db_path=None):
@@ -801,15 +801,16 @@ class MetadataWorker(QThread):
     metadata_ready = Signal(str, str, list)
     metadata_failed = Signal(str, str, str)
 
-    def __init__(self, image_path, tag_type):
+    def __init__(self, image_path, tag_type, metadata_type="iptc"):
         super().__init__()
         self.image_path = image_path
         self.tag_type = tag_type
+        self.metadata_type = metadata_type
 
     def run(self):
         start = time.perf_counter()
         print(
-            f"[MetadataWorker] Start {self.image_path} tag={self.tag_type}"
+            f"[MetadataWorker] Start {self.image_path} type={self.metadata_type} tag={self.tag_type}"
         )
         sys.stdout.flush()
         if self.isInterruptionRequested():
@@ -819,9 +820,9 @@ class MetadataWorker(QThread):
         try:
             meta = Exiv2Bind(self.image_path)
             result = meta.to_dict()
-            iptc_data = result.get("iptc", {})
+            metadata_section = result.get(self.metadata_type, {})
             tags = []
-            for field, value in iptc_data.items():
+            for field, value in metadata_section.items():
                 if field == self.tag_type:
                     if isinstance(value, list):
                         tags.extend(value)
@@ -836,14 +837,14 @@ class MetadataWorker(QThread):
                 return
             elapsed = time.perf_counter() - start
             print(
-                f"[MetadataWorker] Done {self.image_path} tag={self.tag_type} in {elapsed:.2f}s"
+                f"[MetadataWorker] Done {self.image_path} type={self.metadata_type} tag={self.tag_type} in {elapsed:.2f}s"
             )
             sys.stdout.flush()
             self.metadata_ready.emit(self.image_path, self.tag_type, tags)
         except Exception as exc:
             elapsed = time.perf_counter() - start
             print(
-                f"[MetadataWorker] Exception {self.image_path} tag={self.tag_type} in {elapsed:.2f}s: {exc}"
+                f"[MetadataWorker] Exception {self.image_path} type={self.metadata_type} tag={self.tag_type} in {elapsed:.2f}s: {exc}"
             )
             sys.stdout.flush()
             if not self.isInterruptionRequested():
@@ -1195,6 +1196,11 @@ class IPTCEditor(QMainWindow):
 
         # LEFT PANEL: folder and image list
         left_panel = QVBoxLayout()
+        
+        # Metadata Type Selector (IPTC/EXIF tabs with dropdowns) - at top
+        # Initialize metadata type tracking first
+        self.current_metadata_type = "iptc"  # Start with IPTC
+        
         self.btn_select_folder = QPushButton("Select Folder")
         self.btn_select_folder.setFont(self.font())
         self.btn_select_folder.clicked.connect(self.select_folder)
@@ -1213,8 +1219,67 @@ class IPTCEditor(QMainWindow):
         self.search_debounce_timer.setSingleShot(True)
         self.search_debounce_timer.timeout.connect(self.update_search)
 
+        # Metadata type selector dropdown (IPTC/EXIF combined)
+        self.current_metadata_type = "iptc"
+        self.metadata_type_dropdown = QComboBox()
+        self.metadata_type_dropdown.setFont(self.font())
+        self.metadata_type_dropdown.setToolTip("Select metadata field to edit")
+        self.metadata_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.metadata_type_dropdown.setMinimumHeight(38)
+        self.metadata_type_dropdown.currentIndexChanged.connect(self.on_metadata_field_changed)
+        self.metadata_type_dropdown.setStyleSheet(
+            f"""
+            QComboBox {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_COMBOBOX_BORDER};
+                padding: 10px 12px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                selection-background-color: {COLOR_GOLD_HOVER};
+                outline: none;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+            """
+        )
+        
+        # Populate with IPTC fields first
+        keyword_index = 0
+        for i, tag in enumerate(iptc_tags.iptc_writable_tags):
+            display_name = "IPTC: " + tag["name"].upper()
+            self.metadata_type_dropdown.addItem(display_name, {"type": "iptc", "tag": tag})
+            self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
+            if tag["tag"] == "Keywords":
+                keyword_index = i
+        
+        # Add EXIF fields
+        exif_start_index = len(iptc_tags.iptc_writable_tags)
+        for i, tag in enumerate(exif_tags.exif_writable_tags):
+            display_name = "EXIF: " + tag["name"].upper()
+            self.metadata_type_dropdown.addItem(display_name, {"type": "exif", "tag": tag})
+            self.metadata_type_dropdown.setItemData(exif_start_index + i, tag["description"], Qt.ToolTipRole)
+        
+        self.metadata_type_dropdown.setCurrentIndex(keyword_index)
+        self.selected_iptc_tag = iptc_tags.iptc_writable_tags[keyword_index]
+        self.selected_exif_tag = None
+        
         left_panel.addWidget(self.btn_select_folder)
         left_panel.addWidget(self.btn_scan_directory)
+        left_panel.addWidget(self.metadata_type_dropdown)
         left_panel.addWidget(self.search_bar)
         self.scan_status_label = QLabel()
         self.scan_status_label.setFont(self.font())
@@ -1313,42 +1378,6 @@ class IPTCEditor(QMainWindow):
         image_layout.addLayout(rotate_controls)
         center_splitter.addWidget(image_widget)
 
-        # --- Tag Type Dropdown (moved from right panel) ---
-        tag_type_container = QWidget()
-        tag_type_container.setContentsMargins(5, 0, 5, 5)
-        tag_type_layout = QHBoxLayout(tag_type_container)
-        tag_type_layout.setContentsMargins(0, 0, 0, 0)
-        tag_type_layout.setSpacing(8)
-        
-        self.iptc_tag_dropdown = QComboBox()
-        self.iptc_tag_dropdown.setFont(self.font())
-        self.iptc_tag_dropdown.setToolTip("Select an IPTC tag")
-        self.iptc_tag_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.iptc_tag_dropdown.setMinimumHeight(0)
-        
-        # Populate dropdown with name and set description as tooltip
-        keyword_index = 0
-        for i, tag in enumerate(iptc_tags.iptc_writable_tags):
-            display_name = tag["name"].upper()
-            self.iptc_tag_dropdown.addItem(display_name, tag)
-            self.iptc_tag_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
-            if tag["tag"] == "Keywords":
-                keyword_index = i
-        # Don't connect the signal yet - iptc_text_edit doesn't exist
-        # We'll connect it after creating iptc_text_edit
-        # Set initial value to 'Keywords' if present
-        self.iptc_tag_dropdown.setCurrentIndex(keyword_index)
-        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(keyword_index)
-        
-        tag_type_layout.addWidget(self.iptc_tag_dropdown)
-        
-        # Ensure container can collapse - set both min and max to 0 to allow full collapse
-        tag_type_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
-        tag_type_container.setMinimumHeight(0)
-        tag_type_container.setMaximumHeight(16777215)  # Default max
-        
-        center_splitter.addWidget(tag_type_container)
-        
         # --- Tag Input Pane with persistent rounded corners and matching width ---
         iptc_input_container = QWidget()
         iptc_input_container.setContentsMargins(0,0,0,0)
@@ -1430,17 +1459,13 @@ class IPTCEditor(QMainWindow):
         iptc_input_container.setMinimumHeight(100)
         center_splitter.addWidget(iptc_input_container)
         
-        # Make tag type section collapsible
+        # Make tag input section collapsible
         center_splitter.setCollapsible(0, False)  # Image preview cannot be collapsed
-        center_splitter.setCollapsible(1, True)   # Tag type dropdown can be collapsed
-        center_splitter.setCollapsible(2, False)  # Tag input cannot be collapsed
+        center_splitter.setCollapsible(1, False)  # Tag input cannot be collapsed
         center_splitter.setChildrenCollapsible(True)
         
-        center_splitter.setSizes([600, 65, 320])  # image, tag_type_dropdown, tag_input_with_button
+        center_splitter.setSizes([600, 320])  # image, tag_input_with_button
         self.iptc_text_edit.textChanged.connect(self.on_tag_input_text_changed)
-        
-        # Now connect the dropdown signal after iptc_text_edit exists
-        self.iptc_tag_dropdown.currentIndexChanged.connect(self.on_iptc_tag_changed)
         # --- end tag input pane wrap ---
 
         main_splitter.addWidget(center_splitter)
@@ -1550,33 +1575,7 @@ class IPTCEditor(QMainWindow):
             f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
         )
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
-        self.iptc_tag_dropdown.setStyleSheet(
-            f"""
-            QComboBox {{
-                color: {COLOR_COMBOBOX_TEXT};
-                border-radius: {self.corner_radius - 4}px;
-                border: 2px solid {COLOR_COMBOBOX_BORDER};
-                padding: 6px;
-                background: {COLOR_COMBOBOX_BG};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-            }}
-            QComboBox QAbstractItemView {{
-                color: {COLOR_COMBOBOX_TEXT};
-                border-radius: {self.corner_radius - 4}px;
-                background: {COLOR_COMBOBOX_BG};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 32px;
-                border-top-right-radius: {self.corner_radius - 4}px;
-                border-bottom-right-radius: {self.corner_radius - 4}px;
-                border: none;
-                background: transparent;
-            }}
-            """
-        )
+        # Dropdown stylesheets now applied immediately after creation (lines ~1260 and ~1290)
 
         button_style = (
             f"QPushButton {{ background-color: {COLOR_PAGINATION_BTN_BG}; color: {COLOR_PAGINATION_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
@@ -1675,7 +1674,8 @@ class IPTCEditor(QMainWindow):
         else:
             text = self.search_bar.toPlainText().strip()
             tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-            tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+            metadata_type, tag_name = self.get_current_tag_and_type()
+            tag_type = tag_name
             if not tags:
                 if tag_type:
                     # Count images WITHOUT any tags of this type
@@ -1729,7 +1729,8 @@ class IPTCEditor(QMainWindow):
             return
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        metadata_type, tag_name = self.get_current_tag_and_type()
+        tag_type = tag_name
         query_start = time.perf_counter()
         if not tags:
             # No search terms - show images based on tag type selection
@@ -2077,17 +2078,15 @@ class IPTCEditor(QMainWindow):
     def start_metadata_loading(self, image_path):
         if not image_path:
             return
-        tag_type = (
-            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
-        )
+        metadata_type, tag_type = self.get_current_tag_and_type()
         self.cancel_metadata_worker()
         key = (image_path, tag_type)
         self._metadata_pending_key = key
         self._metadata_timers[key] = time.perf_counter()
         self._log_metadata_event(
-            f"Starting metadata worker for {image_path}; tag={tag_type}"
+            f"Starting metadata worker for {image_path}; type={metadata_type} tag={tag_type}"
         )
-        worker = MetadataWorker(image_path, tag_type)
+        worker = MetadataWorker(image_path, tag_type, metadata_type)
         worker.metadata_ready.connect(self.on_metadata_ready)
         worker.metadata_failed.connect(self.on_metadata_failed)
         worker.finished.connect(lambda: self._on_metadata_worker_finished(worker))
@@ -2100,9 +2099,7 @@ class IPTCEditor(QMainWindow):
         elapsed = (
             time.perf_counter() - start_time if start_time is not None else None
         )
-        current_tag_type = (
-            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
-        )
+        current_metadata_type, current_tag_type = self.get_current_tag_and_type()
         if (
             image_path != self.current_image_path
             or tag_type != current_tag_type
@@ -2144,9 +2141,7 @@ class IPTCEditor(QMainWindow):
         elapsed = (
             time.perf_counter() - start_time if start_time is not None else None
         )
-        current_tag_type = (
-            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
-        )
+        current_metadata_type, current_tag_type = self.get_current_tag_and_type()
         if (
             image_path != self.current_image_path
             or tag_type != current_tag_type
@@ -2163,7 +2158,7 @@ class IPTCEditor(QMainWindow):
         self.cleaned_keywords = []
         self.last_loaded_keywords = ""
         self.set_tag_input_html([])
-        self.iptc_text_edit.setPlaceholderText("Unable to load IPTC tags.")
+        self.iptc_text_edit.setPlaceholderText(f"Unable to load {current_metadata_type.upper()} tags.")
         self.iptc_text_edit.setEnabled(True)
         if self._metadata_pending_key == (image_path, tag_type):
             self._metadata_pending_key = None
@@ -2598,12 +2593,12 @@ class IPTCEditor(QMainWindow):
 
     def load_previous_tags(self):
         # Load unique tags for the selected tag type from the SQLite database and populate the list widget.
-        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+        metadata_type, tag_type = self.get_current_tag_and_type()
         load_start = time.perf_counter()
         self.all_tags = self.db.get_tags(tag_type)
         elapsed = time.perf_counter() - load_start
         self._log_selection_event(
-            f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags for type '{tag_type}' in {elapsed:.3f}s",
+            f"{self.current_image_path or 'N/A'} - Loaded {len(self.all_tags)} tags for type '{metadata_type.upper()}:{tag_type}' in {elapsed:.3f}s",
         )
 
     def _find_tag_insert_index(self, tag):
@@ -2803,7 +2798,8 @@ class IPTCEditor(QMainWindow):
         search_start = time.perf_counter()
         text = self.search_bar.toPlainText().strip()
         tags = [t.strip() for t in re.split(r",|\s", text) if t.strip()]
-        tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
+        metadata_type, tag_name = self.get_current_tag_and_type()
+        tag_type = tag_name
         truncated = text[:40] + ("…" if len(text) > 40 else "")
         self._log_search_event(
             f"Search update start: query='{truncated}' tags={len(tags)} tag_type={tag_type or 'ALL'}"
@@ -2828,26 +2824,51 @@ class IPTCEditor(QMainWindow):
         # Debounce: restart timer on every keystroke
         self.search_debounce_timer.start(350)  # 400ms delay
 
-    def on_iptc_tag_changed(self, index):
-        # Prompt to save unsaved changes before switching tag type
-        if not self.handle_save_events():
-            # Revert dropdown to previous index if cancelled
-            self.iptc_tag_dropdown.blockSignals(True)
-            for i in range(self.iptc_tag_dropdown.count()):
-                if self.iptc_tag_dropdown.itemData(i)["tag"] == (
-                    self.selected_iptc_tag["tag"]
-                    if self.selected_iptc_tag
-                    else "Keywords"
-                ):
-                    self.iptc_tag_dropdown.setCurrentIndex(i)
-                    break
-            self.iptc_tag_dropdown.blockSignals(False)
+    def on_metadata_field_changed(self, index):
+        # Get the selected field data
+        field_data = self.metadata_type_dropdown.itemData(index)
+        if not field_data:
             return
-        self.selected_iptc_tag = self.iptc_tag_dropdown.itemData(index)
+            
+        # Prompt to save unsaved changes before switching
+        if not self.handle_save_events():
+            # Revert to previous selection
+            self.metadata_type_dropdown.blockSignals(True)
+            # Find previous field index
+            for i in range(self.metadata_type_dropdown.count()):
+                data = self.metadata_type_dropdown.itemData(i)
+                if data:
+                    if (self.current_metadata_type == "iptc" and data["type"] == "iptc" and 
+                        data["tag"] == self.selected_iptc_tag):
+                        self.metadata_type_dropdown.setCurrentIndex(i)
+                        break
+                    elif (self.current_metadata_type == "exif" and data["type"] == "exif" and 
+                          data["tag"] == self.selected_exif_tag):
+                        self.metadata_type_dropdown.setCurrentIndex(i)
+                        break
+            self.metadata_type_dropdown.blockSignals(False)
+            return
+        
+        # Update current metadata type and selected tag
+        self.current_metadata_type = field_data["type"]
+        if field_data["type"] == "iptc":
+            self.selected_iptc_tag = field_data["tag"]
+        else:
+            self.selected_exif_tag = field_data["tag"]
+            
         self.load_previous_tags()
         
         # Use QTimer to defer UI updates and keep interface responsive
         QTimer.singleShot(0, lambda: self._deferred_tag_type_update())
+    
+    def get_current_tag_and_type(self):
+        """Returns (metadata_type, tag_name) tuple based on active tab."""
+        if self.current_metadata_type == "iptc":
+            tag = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
+            return ("iptc", tag)
+        else:
+            tag = self.selected_exif_tag["tag"] if self.selected_exif_tag else "Artist"
+            return ("exif", tag)
     
     def _deferred_tag_type_update(self):
         """Deferred update after tag type change to keep UI responsive."""
@@ -3057,6 +3078,10 @@ class IPTCEditor(QMainWindow):
         Unified save handler for switching images/tag types. Only saves if there are unsaved changes and user chooses Yes.
         Returns "saved" if save occurred, True if no save needed or user chose No, False if cancelled or failed.
         """
+        # Check if iptc_text_edit exists (may not during initialization)
+        if not hasattr(self, 'iptc_text_edit'):
+            return True
+            
         current_input = self.iptc_text_edit.toPlainText().strip()
         if (
             hasattr(self, "last_loaded_keywords")
@@ -3094,18 +3119,27 @@ class IPTCEditor(QMainWindow):
             return True
         total_start = time.perf_counter()
         raw_input = self.iptc_text_edit.toPlainText().strip()
-        tag_type = (
-            self.selected_iptc_tag["tag"] if self.selected_iptc_tag else "Keywords"
-        )
-        multi_valued = (
-            self.selected_iptc_tag.get("multi_valued", False)
-            if self.selected_iptc_tag
-            else False
-        )
+        metadata_type, tag_type = self.get_current_tag_and_type()
+        
+        # Get multi_valued flag from current tag
+        if metadata_type == "iptc":
+            multi_valued = (
+                self.selected_iptc_tag.get("multi_valued", False)
+                if self.selected_iptc_tag
+                else False
+            )
+        else:
+            # EXIF fields are typically single-valued
+            multi_valued = (
+                self.selected_exif_tag.get("multi_valued", False)
+                if self.selected_exif_tag
+                else False
+            )
+        
         keywords = [kw.strip() for kw in raw_input.splitlines() if kw.strip()]
         invalid_tags = [kw for kw in keywords if not self.is_valid_tag(kw)]
         self._log_save_event(
-            f"Start save for {self.current_image_path} tag={tag_type} keywords={len(keywords)} force={force} refresh_ui={refresh_ui}"
+            f"Start save for {self.current_image_path} type={metadata_type} tag={tag_type} keywords={len(keywords)} force={force} refresh_ui={refresh_ui}"
         )
         if not raw_input and not force:
             # No changes to save
@@ -3113,16 +3147,16 @@ class IPTCEditor(QMainWindow):
             return True
         try:
             meta = Exiv2Bind(self.current_image_path)
-            meta.from_dict({"iptc": {tag_type: []}})
+            meta.from_dict({metadata_type: {tag_type: []}})
             self._log_save_event(
-                f"Cleared IPTC {tag_type} in {time.perf_counter() - total_start:.3f}s"
+                f"Cleared {metadata_type.upper()} {tag_type} in {time.perf_counter() - total_start:.3f}s"
             )
         except Exception as e:
             self._log_save_event(
-                f"Failed clearing IPTC {tag_type}: {e}", level="warning"
+                f"Failed clearing {metadata_type.upper()} {tag_type}: {e}", level="warning"
             )
             self.show_custom_popup(
-                "exiv2 Error", f"Failed to delete IPTC tag {tag_type}:\n{e}"
+                "exiv2 Error", f"Failed to delete {metadata_type.upper()} tag {tag_type}:\n{e}"
             )
             return False
         if not raw_input:
@@ -3182,7 +3216,7 @@ class IPTCEditor(QMainWindow):
         try:
             write_start = time.perf_counter()
             if multi_valued:
-                meta.from_dict({"iptc": {tag_type: keywords}})
+                meta.from_dict({metadata_type: {tag_type: keywords}})
                 metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(self.current_image_path, keywords, tag_type)
                 # Ensure database commit completes
@@ -3195,7 +3229,7 @@ class IPTCEditor(QMainWindow):
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             else:
                 single_value = keywords[-1] if keywords else ""
-                meta.from_dict({"iptc": {tag_type: [single_value]}})
+                meta.from_dict({metadata_type: {tag_type: [single_value]}})
                 metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(
                     self.current_image_path,
@@ -3261,9 +3295,9 @@ class IPTCEditor(QMainWindow):
             )
             return True
         except Exception as e:
-            self._log_save_event(f"Failed to write IPTC {tag_type}: {e}", level="warning")
+            self._log_save_event(f"Failed to write {metadata_type.upper()} {tag_type}: {e}", level="warning")
             self.show_custom_popup(
-                "exiv2 Error", f"Failed to write IPTC tag {tag_type}:\n{e}"
+                "exiv2 Error", f"Failed to write {metadata_type.upper()} tag {tag_type}:\n{e}"
             )
             return False
 
