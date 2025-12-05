@@ -1235,7 +1235,7 @@ class IPTCEditor(QMainWindow):
         self.search_bar = QTextEdit()
         self.search_bar.setFont(self.font())
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.search_bar.setPlaceholderText("ENTER TAGS(S) TO SEARCH IMAGES FOR ...")
+        self.search_bar.setPlaceholderText("Search library for tag(s)")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         self.search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.search_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1546,6 +1546,25 @@ class IPTCEditor(QMainWindow):
                 margin-bottom: 6px;
                 margin-right: 12px;
             }}
+            QScrollBar:vertical {{
+                background: {COLOR_BG_DARK_GREY};
+                width: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {COLOR_LIGHT_BLUE};
+                border-radius: 6px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {COLOR_LIGHT_BLUE};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
             """
         )
         iptc_layout.addWidget(self.tag_display_list)
@@ -1553,20 +1572,23 @@ class IPTCEditor(QMainWindow):
         # Bottom part: Single-line input field for editing
         self.iptc_text_edit = QLineEdit()
         self.iptc_text_edit.setFont(self.font())
-        self.iptc_text_edit.setPlaceholderText("Click tag above to edit, or type new tag here...")
+        self.iptc_text_edit.setPlaceholderText("Add new tag")
         self.iptc_text_edit.setMinimumHeight(45)
         self.iptc_text_edit.setTextMargins(8, 0, 8, 0)
         self.iptc_text_edit.setStyleSheet(
             f"""
             QLineEdit {{
-                background-color: {COLOR_BG_DARK_GREY};
+                background-color: transparent;
                 border: 1px solid {COLOR_TAG_INPUT_BORDER};
                 border-radius: 8px;
-                color: {COLOR_CREAM};
+                color: {COLOR_BG_DARK_GREY};
                 font-weight: bold;
                 font-size: {FONT_SIZE_TAG_INPUT}pt;
                 padding: 10px 18px;
                 outline: none;
+            }}
+            QLineEdit::placeholder {{
+                color: #888888;
             }}
             """
         )
@@ -1636,13 +1658,12 @@ class IPTCEditor(QMainWindow):
         right_panel.setContentsMargins(8, 8, 8, 8)
 
         # Add tag search bar before anything that uses it
-        self.tags_search_bar = QTextEdit()
+        self.tags_search_bar = QLineEdit()
         self.tags_search_bar.setFont(self.font())
-        self.tags_search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.tags_search_bar.setPlaceholderText("ENTER TAGS TO SEARCH LIST FOR ...")
+        self.tags_search_bar.setMinimumHeight(45)
+        self.tags_search_bar.setTextMargins(8, 0, 8, 0)
+        self.tags_search_bar.setPlaceholderText("Search library for tag(s)")
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
-        self.tags_search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tags_search_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         right_panel.addWidget(self.tags_search_bar)
 
         # Create tags_list_widget early so it's available for other methods
@@ -1711,7 +1732,7 @@ class IPTCEditor(QMainWindow):
         skyblue_css = (
             f"background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; "
             f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; "
-            f"padding-left: 18px; padding-right: 18px; padding-top: 10px; padding-bottom: 10px;"
+            f"padding-left: 18px; padding-right: 18px; padding-top: 4px; padding-bottom: 4px;"
         )
         # Make search input font match tag input
         search_font = QFont()
@@ -1720,14 +1741,28 @@ class IPTCEditor(QMainWindow):
         self.tags_search_bar.setFont(search_font)
         self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_TAG_INPUT}pt;}}")
         self.tags_search_bar.setStyleSheet(
-            f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
+            f"""
+            QLineEdit {{
+                background: {COLOR_SEARCH_INPUT_BG};
+                border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER};
+                border-radius: {self.corner_radius - 4}px;
+                color: {COLOR_SEARCH_INPUT_TEXT};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding: 10px 18px;
+                outline: none;
+            }}
+            QLineEdit::placeholder {{
+                color: #888888;
+            }}
+            """
         )
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QLineEdit {{ background: {COLOR_BG_DARK_GREY}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_CREAM}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }}"
+            f"QLineEdit {{ background: transparent; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
@@ -2288,7 +2323,7 @@ class IPTCEditor(QMainWindow):
         except Exception as e:
             self._log_metadata_event(f"Failed to sync DB with metadata: {e}", level="warning")
         
-        self.iptc_text_edit.setPlaceholderText("")
+        self.iptc_text_edit.setPlaceholderText("Add new tag")
         self.iptc_text_edit.setEnabled(True)
         if tags:
             self.set_tag_input_html(tags)
@@ -2901,7 +2936,7 @@ class IPTCEditor(QMainWindow):
         tag_type = self.selected_iptc_tag["tag"] if self.selected_iptc_tag else None
         if not hasattr(self, "all_tags") or not self.all_tags:
             self.all_tags = self.db.get_tags(tag_type)
-        search_text = self.tags_search_bar.toPlainText().strip().lower()
+        search_text = self.tags_search_bar.text().strip().lower()
         if not search_text:
             filtered = self.all_tags
         else:
@@ -3093,7 +3128,7 @@ class IPTCEditor(QMainWindow):
         else:
             self.set_tag_input_html([])
             self.last_loaded_keywords = ""
-            self.iptc_text_edit.setPlaceholderText("")
+            self.iptc_text_edit.setPlaceholderText("Add new tag")
             self.iptc_text_edit.setEnabled(True)
 
     def _create_tag_widget(self, tag_text, index):
