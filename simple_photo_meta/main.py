@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QCompleter,
     QScrollArea,
-    QStyledItemDelegate
+    QStyledItemDelegate,
+    QFrame
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -1601,39 +1602,59 @@ class IPTCEditor(QMainWindow):
         # CENTER PANEL: image display and IPTC metadata editor in a vertical splitter
         center_splitter = QSplitter(Qt.Vertical)
 
-        # Canvas for image display (expandable)
+        # Canvas for image display (expandable) with buttons overlaid at bottom
+        image_widget = QWidget()
+        image_widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        # Don't use layout for image_widget, manage children manually for proper overlay positioning
+
         self.image_label = QLabel("Image preview will appear here ...")
         self.image_label.setAlignment(Qt.AlignCenter)
-        # Restore border-radius in stylesheet for rounded corners (no border in CSS)
         self.image_label.setStyleSheet(style_image_label)
         self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        # Enable mouse tracking and make clickable
         self.image_label.setCursor(Qt.PointingHandCursor)
         self.image_label.mouseDoubleClickEvent = self.on_preview_image_clicked
-        # Add rotation controls below image_label
-        rotate_controls = QHBoxLayout()
+        self.image_label.setParent(image_widget)
+
+        # Create overlay widget for buttons (positioned at bottom with absolute positioning)
+        button_overlay = QWidget(image_widget)
+        button_overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        button_overlay.setStyleSheet("background: transparent;")
+        button_overlay_layout = QHBoxLayout(button_overlay)
+        button_overlay_layout.setContentsMargins(0, 0, 0, 8)
+        button_overlay_layout.setSpacing(12)
+        button_overlay_layout.addStretch()
+        
         self.btn_rotate_left = QPushButton("⟲")
         self.btn_rotate_right = QPushButton("⟳")
         self.btn_rotate_left.setToolTip("Rotate Left")
         self.btn_rotate_right.setToolTip("Rotate Right")
-        self.btn_rotate_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_rotate_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_rotate_left.setFixedHeight(36)
-        self.btn_rotate_right.setFixedHeight(36)
+        self.btn_rotate_left.setMinimumSize(48, 48)
+        self.btn_rotate_right.setMinimumSize(48, 48)
+        # Set font size for the button text (the symbols)
+        btn_font = QFont()
+        btn_font.setPointSize(24)
+        self.btn_rotate_left.setFont(btn_font)
+        self.btn_rotate_right.setFont(btn_font)
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
-        rotate_controls.addWidget(self.btn_rotate_left)
-        rotate_controls.addWidget(self.btn_rotate_right)
-        rotate_controls.setContentsMargins(5, 0, 5, 0)  # Add left and right margins
-        image_widget = QWidget()
-        image_layout = QVBoxLayout(image_widget)
-        image_layout.setContentsMargins(
-            0, 8, 0, 0  # Reduced top margin for better alignment
-        )
-        image_layout.addWidget(self.image_label)
-        image_layout.addLayout(rotate_controls)
+        button_overlay_layout.addWidget(self.btn_rotate_left)
+        button_overlay_layout.addWidget(self.btn_rotate_right)
+        button_overlay_layout.addStretch()
+        
+        # Use resizeEvent to position elements properly
+        def reposition_overlay():
+            if image_widget.width() > 0 and image_widget.height() > 0:
+                self.image_label.setGeometry(0, 0, image_widget.width(), image_widget.height())
+                button_overlay.setGeometry(0, image_widget.height() - 60, image_widget.width(), 60)
+                button_overlay.raise_()
+        
+        # Connect resize event
+        image_widget.resizeEvent = lambda event: (reposition_overlay(), QWidget.resizeEvent(image_widget, event))
+
         center_splitter.addWidget(image_widget)
+        # Initial positioning
+        QTimer.singleShot(100, reposition_overlay)
 
         # --- Tag Input Pane with persistent rounded corners and matching width ---
         iptc_input_container = QWidget()
