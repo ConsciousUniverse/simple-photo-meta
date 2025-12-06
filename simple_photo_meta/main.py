@@ -156,7 +156,6 @@ COLOR_GOLD_HOVER = "#add8e6"
 COLOR_GOLD_PRESSED = "#87ceeb"
 COLOR_DARK_GREY = "#343434"
 COLOR_PAPER = "#333333"
-COLOR_CREAM = "#E8E6D5"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
 COLOR_WHITE = "white"
@@ -172,7 +171,7 @@ COLOR_IMAGE_PREVIEW_BORDER = COLOR_LIGHT_BLUE
 COLOR_IMAGE_PREVIEW_TEXT = COLOR_LIGHT_BLUE
 
 # Tag input pane
-COLOR_TAG_INPUT_BG = COLOR_CREAM
+COLOR_TAG_INPUT_BG = COLOR_WHITE
 COLOR_TAG_INPUT_TEXT = COLOR_PAPER
 COLOR_TAG_INPUT_BORDER = COLOR_LIGHT_BLUE
 
@@ -195,7 +194,7 @@ COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
 COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
 
 # Search bars (thumbs and tags)
-COLOR_SEARCH_INPUT_BG = COLOR_CREAM
+COLOR_SEARCH_INPUT_BG = COLOR_WHITE
 COLOR_SEARCH_INPUT_TEXT = COLOR_PAPER
 COLOR_SEARCH_INPUT_BORDER = COLOR_LIGHT_BLUE
 
@@ -255,7 +254,7 @@ class ComboBoxItemDelegate(QStyledItemDelegate):
     
     def paint(self, painter, option, index):
         # Force text color to cream
-        option.palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        option.palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
         option.palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
         super().paint(painter, option, index)
 
@@ -1175,6 +1174,11 @@ class IPTCEditor(QMainWindow):
         return result["value"]
 
     def create_widgets(self):
+        # ============================================================================
+        # CENTRALIZED STYLESHEETS - All widget styles defined here
+        # ============================================================================
+        
+        # Scrollbar styles (used by multiple widgets)
         scrollbar_style = (
             f"QScrollBar:vertical {{"
             f"    background: {COLOR_SCROLLBAR_BG};"
@@ -1195,9 +1199,269 @@ class IPTCEditor(QMainWindow):
             f"    background: none;"
             f"}}"
         )
+        
+        scrollbar_style_wide = (
+            f"QScrollBar:vertical {{"
+            f"    background: {COLOR_SCROLLBAR_BG};"
+            f"    width: {COLOR_SCROLLBAR_WIDTH_WIDE};"
+            f"    margin: 0px 5px 0px 0px;"
+            f"    border-radius: 8px;"
+            f"}}"
+            f"QScrollBar::handle:vertical {{"
+            f"    background: {COLOR_SCROLLBAR_HANDLE};"
+            f"    min-height: 24px;"
+            f"    border-radius: 8px;"
+            f"}}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{"
+            f"    background: none;"
+            f"    height: 0px;"
+            f"}}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{"
+            f"    background: none;"
+            f"}}"
+        )
+        
+        # Main window and container styles
+        style_central_widget = "background: transparent;"
+        
+        style_outer_container = f"QWidget {{ background-color: {COLOR_BG_DARK_GREY}; border-radius: {self.corner_radius}px; }}"
+        
+        style_bottom_spacer = "background: transparent;"
+        
+        # Metadata dropdown styles
+        style_metadata_format_dropdown = f"""
+            QComboBox {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_COMBOBOX_BORDER};
+                padding: 10px 12px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+        """
+        
+        style_metadata_format_dropdown_view = f"""
+            QListView {{
+                background: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                padding: 6px;
+                outline: none;
+                min-width: 120px;
+            }}
+            QListView::item {{
+                color: {COLOR_PAPER};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                border-radius: 4px;
+            }}
+            QListView::item:selected {{
+                background: {COLOR_GOLD_HOVER};
+                color: {COLOR_BG_DARK_GREY};
+            }}
+        """
+        
+        style_metadata_type_dropdown = f"""
+            QComboBox {{
+                color: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_COMBOBOX_BORDER};
+                padding: 10px 12px;
+                background: {COLOR_LIGHT_BLUE};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-top-right-radius: {self.corner_radius - 4}px;
+                border-bottom-right-radius: {self.corner_radius - 4}px;
+                border: none;
+                background: transparent;
+            }}
+        """
+        
+        style_metadata_type_dropdown_view = f"""
+            QListView {{
+                background: {COLOR_BG_DARK_GREY};
+                border-radius: {self.corner_radius - 4}px;
+                padding: 6px;
+                outline: none;
+            }}
+            QListView::item {{
+                color: {COLOR_PAPER};
+                font-size: {FONT_SIZE_COMBOBOX}pt;
+                font-weight: bold;
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                border-radius: 4px;
+            }}
+            QListView::item:selected {{
+                background: {COLOR_GOLD_HOVER};
+                color: {COLOR_BG_DARK_GREY};
+            }}
+        """
+        
+        # Scan status label
+        style_scan_status_label = f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; border-radius: {self.corner_radius - 6}px; padding: 6px 12px;"
+        
+        # Thumbnail list view
+        style_list_view = f"QListView {{ background: {COLOR_THUMB_LIST_PANE_BG}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_THUMB_LIST_PANE_BORDER}; padding: 16px; }}" + scrollbar_style
+        
+        # Image preview label
+        style_image_label = f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin: 5px;"
+        
+        # Tag input container
+        style_iptc_input_container = f"""
+            QWidget#IptcInputContainer {{
+                background: {COLOR_LIGHT_BLUE};
+                border-radius: {self.corner_radius - 4}px;
+                border: 2px solid {COLOR_TAG_INPUT_BORDER};
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-bottom: 12px;
+            }}
+        """
+        
+        # Tag display list
+        style_tag_display_list = f"""
+            QListWidget {{
+                background: {COLOR_BG_DARK_GREY};
+                border: none;
+                color: {COLOR_TAG_INPUT_TEXT};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding-left: 18px;
+                padding-right: 6px;
+                padding-top: 10px;
+                padding-bottom: 4px;
+            }}
+            QListWidget::item {{
+                background: transparent;
+                border: none;
+                padding: 0px;
+                margin-bottom: 6px;
+                margin-right: 12px;
+            }}
+            QScrollBar:vertical {{
+                background: {COLOR_BG_DARK_GREY};
+                width: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {COLOR_LIGHT_BLUE};
+                border-radius: 6px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {COLOR_LIGHT_BLUE};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+        """
+        
+        # Tag input field
+        style_iptc_text_edit = f"QLineEdit {{ background: {COLOR_WHITE}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
+        
+        # Tag suggestions list
+        style_tag_suggestions_list = f"""
+            QListWidget {{
+                background: {COLOR_TAG_LIST_BG};
+                color: {COLOR_PAPER};
+                border: 2px solid {COLOR_LIGHT_BLUE};
+                padding: 8px;
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_LIST}pt;
+            }}
+            QListWidget::item {{
+                padding: 10px 12px;
+                margin-bottom: 4px;
+                color: {COLOR_PAPER};
+            }}
+            QListWidget::item:selected {{
+                background: {COLOR_TAG_LIST_SELECTED_BG};
+                color: {COLOR_TAG_LIST_SELECTED_TEXT};
+            }}
+        """
+        
+        # Tags list widget (right panel)
+        style_tags_list_widget = f"""
+            QListWidget {{
+                font-weight: bold;
+                padding: 12px 8px 12px 12px;
+                border: none;
+                border-radius: {self.corner_radius - 4}px;
+                border: 1px solid {COLOR_TAG_LIST_BORDER};
+            }}
+            QListWidget::item {{
+                background: transparent;
+                color: {COLOR_TAG_LIST_TEXT};
+                font-size: {FONT_SIZE_TAG_LIST}pt;
+                font-weight: bold;
+                border: none;
+                padding: 0px;
+                margin: 0px;
+                white-space: pre-wrap;
+                border-radius: {self.corner_radius - 8}px;
+            }}
+            QListWidget::item:selected {{
+                background: {COLOR_TAG_LIST_SELECTED_BG};
+                color: {COLOR_TAG_LIST_SELECTED_TEXT};
+            }}
+        """ + scrollbar_style_wide
+        
+        # Search bars
+        style_search_bar = f"QTextEdit {{background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 4px; padding-bottom: 4px; font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
+        
+        style_tags_search_bar = f"""
+            QLineEdit {{
+                background: {COLOR_SEARCH_INPUT_BG};
+                border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER};
+                border-radius: {self.corner_radius - 4}px;
+                color: {COLOR_SEARCH_INPUT_TEXT};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding: 10px 18px;
+                outline: none;
+            }}
+            QLineEdit::placeholder {{
+                color: #888888;
+            }}
+        """
+        
+        # Buttons
+        style_button = (
+            f"QPushButton {{ background-color: {COLOR_PAGINATION_BTN_BG}; color: {COLOR_PAGINATION_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
+            f"QPushButton:hover {{ background-color: {COLOR_PAGINATION_BTN_BG_HOVER}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }} "
+            f"QPushButton:pressed {{ background-color: {COLOR_PAGINATION_BTN_BG_PRESSED}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }}"
+        )
+        
+        # Page label
+        self.style_page_label = f"color: {COLOR_PAPER}"
+        
+        # ============================================================================
+        # END OF CENTRALIZED STYLESHEETS
+        # ============================================================================
+        
         central_widget = QWidget()
         central_widget.setAttribute(Qt.WA_TranslucentBackground)
-        central_widget.setStyleSheet("background: transparent;")
+        central_widget.setStyleSheet(style_central_widget)
         central_widget.setContentsMargins(0,0,0,0)
         self.setCentralWidget(central_widget)
 
@@ -1205,7 +1469,7 @@ class IPTCEditor(QMainWindow):
         outer_container = QWidget()
         outer_container.setAttribute(Qt.WA_StyledBackground)
         outer_container.setAutoFillBackground(True)
-        outer_container.setStyleSheet(f"QWidget {{ background-color: {COLOR_BG_DARK_GREY}; border-radius: {self.corner_radius}px; }}")
+        outer_container.setStyleSheet(style_outer_container)
         outer_layout = QVBoxLayout()
         outer_layout.setContentsMargins(8, 8, 8, 8)
         outer_layout.setSpacing(0)
@@ -1214,7 +1478,7 @@ class IPTCEditor(QMainWindow):
         # Add a bottom spacer to prevent widgets from extending to the very bottom
         bottom_spacer = QWidget()
         bottom_spacer.setFixedHeight(4)
-        bottom_spacer.setStyleSheet("background: transparent;")
+        bottom_spacer.setStyleSheet(style_bottom_spacer)
 
         # Use a QSplitter for user-adjustable left pane
         main_splitter = QSplitter(Qt.Horizontal)
@@ -1265,57 +1529,14 @@ class IPTCEditor(QMainWindow):
         format_view = self.metadata_format_dropdown.view()
         from PySide6.QtGui import QPalette
         palette = format_view.palette()
-        palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
         palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
         palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
         palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
         format_view.setPalette(palette)
-        self.metadata_format_dropdown.setStyleSheet(
-            f"""
-            QComboBox {{
-                color: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                border: 1px solid {COLOR_COMBOBOX_BORDER};
-                padding: 10px 12px;
-                background: {COLOR_LIGHT_BLUE};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 32px;
-                border-top-right-radius: {self.corner_radius - 4}px;
-                border-bottom-right-radius: {self.corner_radius - 4}px;
-                border: none;
-                background: transparent;
-            }}
-            """
-        )
+        self.metadata_format_dropdown.setStyleSheet(style_metadata_format_dropdown)
         # Set view style separately
-        self.metadata_format_dropdown.view().setStyleSheet(
-            f"""
-            QListView {{
-                background: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                padding: 6px;
-                outline: none;
-                min-width: 120px;
-            }}
-            QListView::item {{
-                color: {COLOR_CREAM};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border-radius: 4px;
-            }}
-            QListView::item:selected {{
-                background: {COLOR_GOLD_HOVER};
-                color: {COLOR_BG_DARK_GREY};
-            }}
-            """
-        )
+        self.metadata_format_dropdown.view().setStyleSheet(style_metadata_format_dropdown_view)
         # Apply custom delegate to force text color
         self.metadata_format_dropdown.setItemDelegate(ComboBoxItemDelegate())
         
@@ -1330,56 +1551,14 @@ class IPTCEditor(QMainWindow):
         type_view = self.metadata_type_dropdown.view()
         from PySide6.QtGui import QPalette
         palette = type_view.palette()
-        palette.setColor(QPalette.Text, QColor(COLOR_CREAM))
+        palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
         palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
         palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
         palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
         type_view.setPalette(palette)
-        self.metadata_type_dropdown.setStyleSheet(
-            f"""
-            QComboBox {{
-                color: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                border: 1px solid {COLOR_COMBOBOX_BORDER};
-                padding: 10px 12px;
-                background: {COLOR_LIGHT_BLUE};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 32px;
-                border-top-right-radius: {self.corner_radius - 4}px;
-                border-bottom-right-radius: {self.corner_radius - 4}px;
-                border: none;
-                background: transparent;
-            }}
-            """
-        )
+        self.metadata_type_dropdown.setStyleSheet(style_metadata_type_dropdown)
         # Set view style separately
-        self.metadata_type_dropdown.view().setStyleSheet(
-            f"""
-            QListView {{
-                background: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                padding: 6px;
-                outline: none;
-            }}
-            QListView::item {{
-                color: {COLOR_CREAM};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border-radius: 4px;
-            }}
-            QListView::item:selected {{
-                background: {COLOR_GOLD_HOVER};
-                color: {COLOR_BG_DARK_GREY};
-            }}
-            """
-        )
+        self.metadata_type_dropdown.view().setStyleSheet(style_metadata_type_dropdown_view)
         # Apply custom delegate to force text color
         self.metadata_type_dropdown.setItemDelegate(ComboBoxItemDelegate())
         
@@ -1406,9 +1585,7 @@ class IPTCEditor(QMainWindow):
         left_panel.addWidget(self.search_bar)
         self.scan_status_label = QLabel()
         self.scan_status_label.setFont(self.font())
-        self.scan_status_label.setStyleSheet(
-            f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; border-radius: {self.corner_radius - 6}px; padding: 6px 12px;"
-        )
+        self.scan_status_label.setStyleSheet(style_scan_status_label)
         self.scan_status_label.setVisible(False)
         left_panel.addWidget(self.scan_status_label)
 
@@ -1432,9 +1609,7 @@ class IPTCEditor(QMainWindow):
         self.list_view.customContextMenuRequested.connect(
             self.show_image_filename_context_menu
         )
-        self.list_view.setStyleSheet(
-            f"QListView {{ background: {COLOR_THUMB_LIST_PANE_BG}; border-radius: {self.corner_radius}px; border: 1px solid {COLOR_THUMB_LIST_PANE_BORDER}; padding: 16px; }}" + scrollbar_style
-        )
+        self.list_view.setStyleSheet(style_list_view)
         left_panel.addWidget(self.list_view)
 
         # Pagination controls
@@ -1467,9 +1642,7 @@ class IPTCEditor(QMainWindow):
         self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
         # Restore border-radius in stylesheet for rounded corners (no border in CSS)
-        self.image_label.setStyleSheet(
-            f"background-color: {COLOR_IMAGE_PREVIEW_BG}; color: {COLOR_IMAGE_PREVIEW_TEXT}; border-radius: {self.corner_radius}px;margin: 5px;"
-        )
+        self.image_label.setStyleSheet(style_image_label)
         self.image_label.setScaledContents(True)
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Enable mouse tracking and make clickable
@@ -1505,18 +1678,7 @@ class IPTCEditor(QMainWindow):
         iptc_input_container = QWidget()
         iptc_input_container.setContentsMargins(0,0,0,0)
         iptc_input_container.setObjectName("IptcInputContainer")
-        iptc_input_container.setStyleSheet(
-            f"""
-            QWidget#IptcInputContainer {{
-                background: {COLOR_LIGHT_BLUE};
-                border-radius: {self.corner_radius - 4}px;
-                border: 2px solid {COLOR_TAG_INPUT_BORDER};
-                margin-left: 5px;
-                margin-right: 5px;
-                margin-bottom: 12px;
-            }}
-            """
-        )
+        iptc_input_container.setStyleSheet(style_iptc_input_container)
         iptc_layout = QVBoxLayout(iptc_input_container)
         iptc_layout.setContentsMargins(8, 8, 8, 18)
         iptc_layout.setSpacing(8)
@@ -1526,47 +1688,7 @@ class IPTCEditor(QMainWindow):
         self.tag_display_list.setFont(self.font())
         self.tag_display_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.tag_display_list.setFocusPolicy(Qt.NoFocus)
-        self.tag_display_list.setStyleSheet(
-            f"""
-            QListWidget {{
-                background: {COLOR_BG_DARK_GREY};
-                border: none;
-                color: {COLOR_TAG_INPUT_TEXT};
-                font-weight: bold;
-                font-size: {FONT_SIZE_TAG_INPUT}pt;
-                padding-left: 18px;
-                padding-right: 6px;
-                padding-top: 10px;
-                padding-bottom: 4px;
-            }}
-            QListWidget::item {{
-                background: transparent;
-                border: none;
-                padding: 0px;
-                margin-bottom: 6px;
-                margin-right: 12px;
-            }}
-            QScrollBar:vertical {{
-                background: {COLOR_BG_DARK_GREY};
-                width: 12px;
-                border-radius: 6px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: {COLOR_LIGHT_BLUE};
-                border-radius: 6px;
-                min-height: 20px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: {COLOR_LIGHT_BLUE};
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
-            }}
-            """
-        )
+        self.tag_display_list.setStyleSheet(style_tag_display_list)
         iptc_layout.addWidget(self.tag_display_list)
         
         # Bottom part: Single-line input field for editing
@@ -1575,23 +1697,6 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit.setPlaceholderText("Add new tag")
         self.iptc_text_edit.setMinimumHeight(50)
         self.iptc_text_edit.setTextMargins(8, 0, 8, 0)
-        self.iptc_text_edit.setStyleSheet(
-            f"""
-            QLineEdit {{
-                background-color: {COLOR_CREAM};
-                border: 1px solid {COLOR_TAG_INPUT_BORDER};
-                border-radius: 8px;
-                color: {COLOR_BG_DARK_GREY};
-                font-weight: bold;
-                font-size: {FONT_SIZE_TAG_INPUT}pt;
-                padding: 10px 18px;
-                outline: none;
-            }}
-            QLineEdit::placeholder {{
-                color: #888888;
-            }}
-            """
-        )
         
         # Set up autocomplete for tags - use custom implementation for stability
         self.tag_completer_model = QStringListModel()
@@ -1604,27 +1709,7 @@ class IPTCEditor(QMainWindow):
         self.tag_suggestions_list.setMouseTracking(True)
         self.tag_suggestions_list.setAttribute(Qt.WA_ShowWithoutActivating)
         self.tag_suggestions_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-        self.tag_suggestions_list.setStyleSheet(
-            f"""
-            QListWidget {{
-                background: {COLOR_TAG_LIST_BG};
-                color: {COLOR_CREAM};
-                border: 2px solid {COLOR_LIGHT_BLUE};
-                padding: 8px;
-                font-weight: bold;
-                font-size: {FONT_SIZE_TAG_LIST}pt;
-            }}
-            QListWidget::item {{
-                padding: 10px 12px;
-                margin-bottom: 4px;
-                color: {COLOR_CREAM};
-            }}
-            QListWidget::item:selected {{
-                background: {COLOR_TAG_LIST_SELECTED_BG};
-                color: {COLOR_TAG_LIST_SELECTED_TEXT};
-            }}
-            """
-        )
+        self.tag_suggestions_list.setStyleSheet(style_tag_suggestions_list)
         self.tag_suggestions_list.itemClicked.connect(self.on_suggestion_clicked)
         self.tag_suggestions_list.hide()
         
@@ -1671,38 +1756,11 @@ class IPTCEditor(QMainWindow):
         self.tags_list_widget.setFont(self.font())
         # Use itemClicked instead of clicked for more reliable tag selection
         self.tags_list_widget.itemClicked.connect(self.tag_clicked)
-        self.tags_list_widget.setStyleSheet(
-            f"""
-            QListWidget {{
-                font-weight: bold;
-                padding: 12px 8px 12px 12px;
-                border: none;
-            }}
-            QListWidget::item {{
-                background: transparent;
-                color: {COLOR_TAG_LIST_TEXT};
-                font-size: {FONT_SIZE_TAG_LIST}pt;
-                font-weight: bold;
-                border: none;
-                padding: 0px;
-                margin: 0px;
-                white-space: pre-wrap;
-            }}
-            QListWidget::item:selected {{
-                background: {COLOR_TAG_LIST_SELECTED_BG};
-                color: {COLOR_TAG_LIST_SELECTED_TEXT};
-            }}
-            """
-            + scrollbar_style
-        )
+        self.tags_list_widget.setStyleSheet(style_tags_list_widget)
         self.tags_list_widget.setWordWrap(True)
         self.tags_list_widget.setSpacing(10)
         self.tags_list_widget.setSizeAdjustPolicy(QListWidget.AdjustToContents)
         self.tags_list_widget.setViewportMargins(0, 0, 0, 0)
-        self.tags_list_widget.setStyleSheet(
-            self.tags_list_widget.styleSheet()
-            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
-        )
         right_panel.addWidget(self.tags_list_widget)
 
         right_panel_widget = QWidget()
@@ -1739,77 +1797,25 @@ class IPTCEditor(QMainWindow):
         search_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.search_bar.setFont(search_font)
         self.tags_search_bar.setFont(search_font)
-        self.search_bar.setStyleSheet(f"QTextEdit {{{skyblue_css} font-size: {FONT_SIZE_TAG_INPUT}pt;}}")
-        self.tags_search_bar.setStyleSheet(
-            f"""
-            QLineEdit {{
-                background: {COLOR_SEARCH_INPUT_BG};
-                border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER};
-                border-radius: {self.corner_radius - 4}px;
-                color: {COLOR_SEARCH_INPUT_TEXT};
-                font-weight: bold;
-                font-size: {FONT_SIZE_TAG_INPUT}pt;
-                padding: 10px 18px;
-                outline: none;
-            }}
-            QLineEdit::placeholder {{
-                color: #888888;
-            }}
-            """
-        )
+        self.search_bar.setStyleSheet(style_search_bar)
+        self.tags_search_bar.setStyleSheet(style_tags_search_bar)
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
-        self.iptc_text_edit.setStyleSheet(
-            f"QLineEdit {{ background: {COLOR_CREAM}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
-        )
-        # Style QListWidget (tags_list_widget) for rounded corners
-        self.tags_list_widget.setStyleSheet(
-            self.tags_list_widget.styleSheet()
-            + f"QListWidget {{ border-radius: {self.corner_radius - 4}px; border: 1px solid {COLOR_TAG_LIST_BORDER}; }} "
-            f"QListWidget::item {{ border-radius: {self.corner_radius - 8}px; }} "
-        )
+        self.iptc_text_edit.setStyleSheet(style_iptc_text_edit)
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
         # Dropdown stylesheets now applied immediately after creation (lines ~1260 and ~1290)
 
-        button_style = (
-            f"QPushButton {{ background-color: {COLOR_PAGINATION_BTN_BG}; color: {COLOR_PAGINATION_BTN_TEXT} !important; font-weight: bold; border-radius: {self.corner_radius - 10}px; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; padding: 6px 18px; font-size: {FONT_SIZE_BUTTON}pt; }} "
-            f"QPushButton:hover {{ background-color: {COLOR_PAGINATION_BTN_BG_HOVER}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }} "
-            f"QPushButton:pressed {{ background-color: {COLOR_PAGINATION_BTN_BG_PRESSED}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }}"
-        )
-        self.btn_select_folder.setStyleSheet(button_style)
-        self.btn_scan_directory.setStyleSheet(button_style)
-        self.btn_prev.setStyleSheet(button_style)
-        self.btn_next.setStyleSheet(button_style)
-        self.btn_rotate_left.setStyleSheet(button_style)
-        self.btn_rotate_right.setStyleSheet(button_style)
+        self.btn_select_folder.setStyleSheet(style_button)
+        self.btn_scan_directory.setStyleSheet(style_button)
+        self.btn_prev.setStyleSheet(style_button)
+        self.btn_next.setStyleSheet(style_button)
+        self.btn_rotate_left.setStyleSheet(style_button)
+        self.btn_rotate_right.setStyleSheet(style_button)
 
-        # Gold scrollbar for tag list and thumbnail list
-        scrollbar_style = (
-            f"QScrollBar:vertical {{"
-            f"    background: {COLOR_SCROLLBAR_BG};"
-            f"    width: {COLOR_SCROLLBAR_WIDTH_WIDE};"
-            f"    margin: 0px 5px 0px 0px;"
-            f"    border-radius: 8px;"
-            f"}}"
-            f"QScrollBar::handle:vertical {{"
-            f"    background: {COLOR_SCROLLBAR_HANDLE};"
-            f"    min-height: 24px;"
-            f"    border-radius: 8px;"
-            f"}}"
-            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{"
-            f"    background: none;"
-            f"    height: 0px;"
-            f"}}"
-            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{"
-            f"    background: none;"
-            f"}}"
-        )
-        self.tags_list_widget.setStyleSheet(
-            self.tags_list_widget.styleSheet() + scrollbar_style
-        )
-        self.list_view.setStyleSheet(self.list_view.styleSheet() + scrollbar_style)
+        # Apply wide scrollbar to list_view
+        self.list_view.setStyleSheet(self.list_view.styleSheet() + scrollbar_style_wide)
 
     def rotate_left(self):
         if self.current_image_path:
@@ -1899,7 +1905,7 @@ class IPTCEditor(QMainWindow):
             f"Pagination updated: total_images={total_images} page={self.current_page + 1}/{self.total_pages} tags_mode={'yes' if query_text else 'no'} in {elapsed:.3f}s"
         )
         self.page_label.setText(f"Page {self.current_page + 1} / {self.total_pages}")
-        self.page_label.setStyleSheet(f"color: {COLOR_CREAM}")
+        self.page_label.setStyleSheet(self.style_page_label)
         self.btn_prev.setEnabled(self.current_page > 0)
         self.btn_next.setEnabled(self.current_page < self.total_pages - 1)
 
