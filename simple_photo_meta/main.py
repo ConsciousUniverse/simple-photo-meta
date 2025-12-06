@@ -246,6 +246,9 @@ FONT_SIZE_COMBOBOX = 14
 FONT_SIZE_BUTTON = 14
 FONT_SIZE_POPUP = 12
 
+# Shared UI strings
+TAG_SEARCH_PLACEHOLDER = "Search library for tag(s)"
+
 
 # Custom delegate for dropdown items
 class ComboBoxItemDelegate(QStyledItemDelegate):
@@ -1229,7 +1232,7 @@ class IPTCEditor(QMainWindow):
         style_bottom_spacer = "background: transparent;"
         
         # Metadata dropdown styles
-        style_metadata_format_dropdown = f"""
+        style_metadata_dropdown = f"""
             QComboBox {{
                 color: {COLOR_BG_DARK_GREY};
                 border-radius: {self.corner_radius - 4}px;
@@ -1249,70 +1252,49 @@ class IPTCEditor(QMainWindow):
                 background: transparent;
             }}
         """
-        
-        style_metadata_format_dropdown_view = f"""
-            QListView {{
-                background: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                padding: 6px;
-                outline: none;
-                min-width: 120px;
-            }}
-            QListView::item {{
-                color: {COLOR_PAPER};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border-radius: 4px;
-            }}
-            QListView::item:selected {{
-                background: {COLOR_GOLD_HOVER};
-                color: {COLOR_BG_DARK_GREY};
-            }}
-        """
-        
-        style_metadata_type_dropdown = f"""
-            QComboBox {{
-                color: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                border: 1px solid {COLOR_COMBOBOX_BORDER};
-                padding: 10px 12px;
-                background: {COLOR_LIGHT_BLUE};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 32px;
-                border-top-right-radius: {self.corner_radius - 4}px;
-                border-bottom-right-radius: {self.corner_radius - 4}px;
-                border: none;
-                background: transparent;
-            }}
-        """
-        
-        style_metadata_type_dropdown_view = f"""
-            QListView {{
-                background: {COLOR_BG_DARK_GREY};
-                border-radius: {self.corner_radius - 4}px;
-                padding: 6px;
-                outline: none;
-            }}
-            QListView::item {{
-                color: {COLOR_PAPER};
-                font-size: {FONT_SIZE_COMBOBOX}pt;
-                font-weight: bold;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border-radius: 4px;
-            }}
-            QListView::item:selected {{
-                background: {COLOR_GOLD_HOVER};
-                color: {COLOR_BG_DARK_GREY};
-            }}
-        """
+
+        def build_metadata_view_stylesheet(min_width=None):
+            width_rule = f"min-width: {min_width}px;" if min_width else ""
+            return f"""
+                QListView {{
+                    background: {COLOR_BG_DARK_GREY};
+                    border-radius: {self.corner_radius - 4}px;
+                    padding: 6px;
+                    outline: none;
+                    {width_rule}
+                }}
+                QListView::item {{
+                    color: {COLOR_PAPER};
+                    font-size: {FONT_SIZE_COMBOBOX}pt;
+                    font-weight: bold;
+                    padding: 8px 12px;
+                    margin-bottom: 4px;
+                    border-radius: 4px;
+                }}
+                QListView::item:selected {{
+                    background: {COLOR_GOLD_HOVER};
+                    color: {COLOR_BG_DARK_GREY};
+                }}
+            """
+
+        style_metadata_format_dropdown_view = build_metadata_view_stylesheet(min_width=120)
+        style_metadata_type_dropdown_view = build_metadata_view_stylesheet()
+
+        def apply_metadata_combobox_style(combo, view_stylesheet):
+            view = combo.view()
+            palette = view.palette()
+            palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
+            palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
+            palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
+            palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
+            view.setPalette(palette)
+            combo.setStyleSheet(style_metadata_dropdown)
+            view.setStyleSheet(view_stylesheet)
+            combo.setItemDelegate(ComboBoxItemDelegate())
+
+        def apply_default_font(widgets):
+            for widget in widgets:
+                widget.setFont(self.font())
         
         # Scan status label
         style_scan_status_label = f"background: {COLOR_INFO_BANNER_BG}; color: {COLOR_INFO_BANNER_TEXT}; border-radius: {self.corner_radius - 6}px; padding: 6px 12px;"
@@ -1441,7 +1423,23 @@ class IPTCEditor(QMainWindow):
         """ + scrollbar_style_wide
         
         # Search bars
-        style_search_bar = f"QTextEdit {{background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 7px; padding-bottom: 4px; font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
+        style_search_bar = f"QTextEdit {{background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 7px; padding-bottom: 4px;}}"
+
+        style_tags_search_bar = f"""
+            QLineEdit {{
+                background: {COLOR_SEARCH_INPUT_BG};
+                border: 1px solid {COLOR_SEARCH_INPUT_BORDER};
+                border-radius: {self.corner_radius - 4}px;
+                color: {COLOR_SEARCH_INPUT_TEXT};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding: 10px 18px;
+                outline: none;
+            }}
+            QLineEdit::placeholder {{
+                color: #888888;
+            }}
+        """
         
         # Buttons
         style_button = (
@@ -1449,9 +1447,13 @@ class IPTCEditor(QMainWindow):
             f"QPushButton:hover {{ background-color: {COLOR_PAGINATION_BTN_BG_HOVER}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }} "
             f"QPushButton:pressed {{ background-color: {COLOR_PAGINATION_BTN_BG_PRESSED}; color: {COLOR_PAGINATION_BTN_TEXT} !important; border: 2px solid {COLOR_PAGINATION_BTN_BORDER}; }}"
         )
+
+        def apply_button_style(buttons):
+            for button in buttons:
+                button.setStyleSheet(style_button)
         
         # Page label
-        self.style_page_label = f"color: {COLOR_PAPER}"
+        self.style_page_label = f"color: {COLOR_WHITE}"
         
         # ============================================================================
         # END OF CENTRALIZED STYLESHEETS
@@ -1489,15 +1491,12 @@ class IPTCEditor(QMainWindow):
         self.current_metadata_type = "iptc"  # Start with IPTC
         
         self.btn_select_folder = QPushButton("Select Folder")
-        self.btn_select_folder.setFont(self.font())
         self.btn_select_folder.clicked.connect(self.select_folder)
         self.btn_scan_directory = QPushButton("Scan Directory")
-        self.btn_scan_directory.setFont(self.font())
         self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
-        self.search_bar.setFont(self.font())
         self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
-        self.search_bar.setPlaceholderText("Search library for tag(s)")
+        self.search_bar.setPlaceholderText(TAG_SEARCH_PLACEHOLDER)
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         self.search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.search_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1515,7 +1514,6 @@ class IPTCEditor(QMainWindow):
         
         # Metadata format selector (IPTC/EXIF) - left side
         self.metadata_format_dropdown = QComboBox()
-        self.metadata_format_dropdown.setFont(self.font())
         self.metadata_format_dropdown.setToolTip("Select metadata format")
         self.metadata_format_dropdown.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.metadata_format_dropdown.setMinimumHeight(38)
@@ -1523,42 +1521,15 @@ class IPTCEditor(QMainWindow):
         self.metadata_format_dropdown.addItem("IPTC", "iptc")
         self.metadata_format_dropdown.addItem("EXIF", "exif")
         self.metadata_format_dropdown.currentIndexChanged.connect(self.on_metadata_format_changed)
-        # Get the view and set palette
-        format_view = self.metadata_format_dropdown.view()
-        from PySide6.QtGui import QPalette
-        palette = format_view.palette()
-        palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
-        palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
-        palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
-        palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
-        format_view.setPalette(palette)
-        self.metadata_format_dropdown.setStyleSheet(style_metadata_format_dropdown)
-        # Set view style separately
-        self.metadata_format_dropdown.view().setStyleSheet(style_metadata_format_dropdown_view)
-        # Apply custom delegate to force text color
-        self.metadata_format_dropdown.setItemDelegate(ComboBoxItemDelegate())
+        apply_metadata_combobox_style(self.metadata_format_dropdown, style_metadata_format_dropdown_view)
         
         # Metadata field selector (tag type within selected format) - right side
         self.metadata_type_dropdown = QComboBox()
-        self.metadata_type_dropdown.setFont(self.font())
         self.metadata_type_dropdown.setToolTip("Select metadata field to edit")
         self.metadata_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.metadata_type_dropdown.setMinimumHeight(38)
         self.metadata_type_dropdown.currentIndexChanged.connect(self.on_metadata_field_changed)
-        # Get the view and set palette
-        type_view = self.metadata_type_dropdown.view()
-        from PySide6.QtGui import QPalette
-        palette = type_view.palette()
-        palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
-        palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
-        palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
-        palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
-        type_view.setPalette(palette)
-        self.metadata_type_dropdown.setStyleSheet(style_metadata_type_dropdown)
-        # Set view style separately
-        self.metadata_type_dropdown.view().setStyleSheet(style_metadata_type_dropdown_view)
-        # Apply custom delegate to force text color
-        self.metadata_type_dropdown.setItemDelegate(ComboBoxItemDelegate())
+        apply_metadata_combobox_style(self.metadata_type_dropdown, style_metadata_type_dropdown_view)
         
         # Populate IPTC fields initially
         keyword_index = 0
@@ -1582,14 +1553,12 @@ class IPTCEditor(QMainWindow):
         left_panel.addWidget(metadata_selector_container)
         left_panel.addWidget(self.search_bar)
         self.scan_status_label = QLabel()
-        self.scan_status_label.setFont(self.font())
         self.scan_status_label.setStyleSheet(style_scan_status_label)
         self.scan_status_label.setVisible(False)
         left_panel.addWidget(self.scan_status_label)
 
         # Thumbnails list
         self.list_view = QListView()
-        self.list_view.setFont(self.font())
         self.list_view.setViewMode(QListView.IconMode)
         # Increase icon size for two-abreast layout
         self.list_view.setIconSize(QPixmap(175, 175).size())
@@ -1613,13 +1582,10 @@ class IPTCEditor(QMainWindow):
         # Pagination controls
         self.pagination_layout = QHBoxLayout()
         self.btn_prev = QPushButton("Previous")
-        self.btn_prev.setFont(self.font())
         self.btn_prev.clicked.connect(self.prev_page)
         self.btn_next = QPushButton("Next")
-        self.btn_next.setFont(self.font())
         self.btn_next.clicked.connect(self.next_page)
         self.page_label = QLabel()
-        self.page_label.setFont(self.font())
         self.page_label.setAlignment(Qt.AlignCenter)
         self.pagination_layout.addWidget(self.btn_prev)
         self.pagination_layout.addWidget(self.page_label, 1)  # Stretch factor 1 to center
@@ -1637,7 +1603,6 @@ class IPTCEditor(QMainWindow):
 
         # Canvas for image display (expandable)
         self.image_label = QLabel("Image preview will appear here ...")
-        self.image_label.setFont(self.font())
         self.image_label.setAlignment(Qt.AlignCenter)
         # Restore border-radius in stylesheet for rounded corners (no border in CSS)
         self.image_label.setStyleSheet(style_image_label)
@@ -1652,8 +1617,6 @@ class IPTCEditor(QMainWindow):
         self.btn_rotate_right = QPushButton("⟳")
         self.btn_rotate_left.setToolTip("Rotate Left")
         self.btn_rotate_right.setToolTip("Rotate Right")
-        self.btn_rotate_left.setFont(self.font())
-        self.btn_rotate_right.setFont(self.font())
         self.btn_rotate_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_rotate_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_rotate_left.setFixedHeight(36)
@@ -1683,7 +1646,6 @@ class IPTCEditor(QMainWindow):
         
         # Top part: Read-only display of existing tags (clickable)
         self.tag_display_list = QListWidget()
-        self.tag_display_list.setFont(self.font())
         self.tag_display_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.tag_display_list.setFocusPolicy(Qt.NoFocus)
         self.tag_display_list.setStyleSheet(style_tag_display_list)
@@ -1741,13 +1703,12 @@ class IPTCEditor(QMainWindow):
         # Add tag search bar before anything that uses it
         self.tags_search_bar = QLineEdit()
         self.tags_search_bar.setMinimumHeight(50)
-        self.tags_search_bar.setPlaceholderText("Search library for tag(s)")
+        self.tags_search_bar.setPlaceholderText(TAG_SEARCH_PLACEHOLDER)
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
 
         # Create tags_list_widget early so it's available for other methods
         self.tags_list_widget = QListWidget()
-        self.tags_list_widget.setFont(self.font())
         # Use itemClicked instead of clicked for more reliable tag selection
         self.tags_list_widget.itemClicked.connect(self.tag_clicked)
         self.tags_list_widget.setStyleSheet(style_tags_list_widget)
@@ -1764,6 +1725,25 @@ class IPTCEditor(QMainWindow):
         
         # Hide the right panel - using autocomplete instead
         right_panel_widget.setVisible(False)
+
+        apply_default_font(
+            [
+                self.btn_select_folder,
+                self.btn_scan_directory,
+                self.metadata_format_dropdown,
+                self.metadata_type_dropdown,
+                self.scan_status_label,
+                self.list_view,
+                self.btn_prev,
+                self.btn_next,
+                self.page_label,
+                self.image_label,
+                self.btn_rotate_left,
+                self.btn_rotate_right,
+                self.tag_display_list,
+                self.tags_list_widget,
+            ]
+        )
 
         # Add the splitter to the outer layout
         outer_layout.addWidget(main_splitter)
@@ -1786,6 +1766,7 @@ class IPTCEditor(QMainWindow):
         self.search_bar.setFont(search_font)
         self.tags_search_bar.setFont(search_font)
         self.search_bar.setStyleSheet(style_search_bar)
+        self.tags_search_bar.setStyleSheet(style_tags_search_bar)
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
@@ -1794,12 +1775,16 @@ class IPTCEditor(QMainWindow):
         # Style QComboBox (iptc_tag_dropdown) for rounded corners
         # Dropdown stylesheets now applied immediately after creation (lines ~1260 and ~1290)
 
-        self.btn_select_folder.setStyleSheet(style_button)
-        self.btn_scan_directory.setStyleSheet(style_button)
-        self.btn_prev.setStyleSheet(style_button)
-        self.btn_next.setStyleSheet(style_button)
-        self.btn_rotate_left.setStyleSheet(style_button)
-        self.btn_rotate_right.setStyleSheet(style_button)
+        apply_button_style(
+            [
+                self.btn_select_folder,
+                self.btn_scan_directory,
+                self.btn_prev,
+                self.btn_next,
+                self.btn_rotate_left,
+                self.btn_rotate_right,
+            ]
+        )
 
         # Apply wide scrollbar to list_view
         self.list_view.setStyleSheet(self.list_view.styleSheet() + scrollbar_style_wide)
