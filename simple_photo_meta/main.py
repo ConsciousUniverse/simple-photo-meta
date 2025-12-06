@@ -1377,7 +1377,21 @@ class IPTCEditor(QMainWindow):
         """
         
         # Tag input field
-        style_iptc_text_edit = f"QLineEdit {{ background: {COLOR_WHITE}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
+        style_iptc_text_edit = f"""
+            QLineEdit {{
+                background: {COLOR_WHITE};
+                border: 1px solid {COLOR_TAG_INPUT_BORDER};
+                border-radius: {self.corner_radius - 4}px;
+                color: {COLOR_BG_DARK_GREY};
+                font-weight: bold;
+                font-size: {FONT_SIZE_TAG_INPUT}pt;
+                padding: 10px 18px;
+                outline: none;
+            }}
+            QLineEdit::placeholder {{
+                color: #888888;
+            }}
+        """
         
         # Tag suggestions list
         style_tag_suggestions_list = f"""
@@ -1427,23 +1441,7 @@ class IPTCEditor(QMainWindow):
         """ + scrollbar_style_wide
         
         # Search bars
-        style_search_bar = f"QTextEdit {{background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 4px; padding-bottom: 4px; font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
-        
-        style_tags_search_bar = f"""
-            QLineEdit {{
-                background: {COLOR_SEARCH_INPUT_BG};
-                border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER};
-                border-radius: {self.corner_radius - 4}px;
-                color: {COLOR_SEARCH_INPUT_TEXT};
-                font-weight: bold;
-                font-size: {FONT_SIZE_TAG_INPUT}pt;
-                padding: 10px 18px;
-                outline: none;
-            }}
-            QLineEdit::placeholder {{
-                color: #888888;
-            }}
-        """
+        style_search_bar = f"QTextEdit {{background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; padding-left: 18px; padding-right: 18px; padding-top: 7px; padding-bottom: 4px; font-size: {FONT_SIZE_TAG_INPUT}pt;}}"
         
         # Buttons
         style_button = (
@@ -1693,10 +1691,8 @@ class IPTCEditor(QMainWindow):
         
         # Bottom part: Single-line input field for editing
         self.iptc_text_edit = QLineEdit()
-        self.iptc_text_edit.setFont(self.font())
         self.iptc_text_edit.setPlaceholderText("Add new tag")
         self.iptc_text_edit.setMinimumHeight(50)
-        self.iptc_text_edit.setTextMargins(8, 0, 8, 0)
         
         # Set up autocomplete for tags - use custom implementation for stability
         self.tag_completer_model = QStringListModel()
@@ -1744,9 +1740,7 @@ class IPTCEditor(QMainWindow):
 
         # Add tag search bar before anything that uses it
         self.tags_search_bar = QLineEdit()
-        self.tags_search_bar.setFont(self.font())
-        self.tags_search_bar.setMinimumHeight(45)
-        self.tags_search_bar.setTextMargins(8, 0, 8, 0)
+        self.tags_search_bar.setMinimumHeight(50)
         self.tags_search_bar.setPlaceholderText("Search library for tag(s)")
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
@@ -1786,19 +1780,12 @@ class IPTCEditor(QMainWindow):
         self._preview_rotation_angle = 0
         self._preview_image_cache = None
 
-        # Set background color for all input fields (search bars and tag input) to match tag blue
-        skyblue_css = (
-            f"background: {COLOR_SEARCH_INPUT_BG}; color: {COLOR_SEARCH_INPUT_TEXT}; font-size: {FONT_SIZE_TAG_INPUT}pt; font-weight: bold; "
-            f"border-radius: {self.corner_radius - 4}px; border: 1.5px solid {COLOR_SEARCH_INPUT_BORDER}; "
-            f"padding-left: 18px; padding-right: 18px; padding-top: 4px; padding-bottom: 4px;"
-        )
         # Make search input font match tag input
         search_font = QFont()
         search_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.search_bar.setFont(search_font)
         self.tags_search_bar.setFont(search_font)
         self.search_bar.setStyleSheet(style_search_bar)
-        self.tags_search_bar.setStyleSheet(style_tags_search_bar)
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
