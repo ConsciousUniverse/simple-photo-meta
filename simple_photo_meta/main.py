@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, sqlite3, subprocess, re, time
+import sys, os, sqlite3, subprocess, re, time, io
 from appdirs import user_data_dir
 
 # Register HEIF support for HEIC/HEIF images
@@ -97,8 +97,35 @@ def ensure_thumbnail_image(image_path, size=(250, 250)):
     if not os.path.exists(thumb_path):
         try:
             with Image.open(image_path) as img:
+                # Handle multi-frame images (like animated GIFs)
+                if hasattr(img, "n_frames") and img.n_frames > 1:
+                    img.seek(0)
+                
+                # Handle EXIF orientation
+                img = ImageOps.exif_transpose(img)
+                
+                # Convert to RGB for compatibility with all modes
+                if img.mode == "CMYK":
+                    # CMYK requires inversion before conversion
+                    from PIL import ImageChops
+                    img = ImageChops.invert(img)
+                    img = img.convert("RGB")
+                    img = ImageChops.invert(img)
+                elif img.mode.startswith("I;") or img.mode == "I":
+                    # 16-bit or 32-bit integer modes - normalize to full range
+                    img = img.point(lambda x: x / 256).convert("L")
+                    img = ImageOps.autocontrast(img)  # Stretch to full 0-255 range
+                    img = img.convert("RGB")
+                elif img.mode not in ("RGB", "RGBA", "L"):
+                    img = img.convert("RGB")
+                
+                # Create thumbnail
                 img.thumbnail(size, Image.LANCZOS)
-                img = img.convert("RGB")
+                
+                # Ensure RGB for JPEG save
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                
                 img.save(thumb_path, "JPEG", quality=85)
         except Exception as exc:
             print(f"Failed to create thumbnail for {image_path}: {exc}")
@@ -122,15 +149,36 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
     sys.stdout.flush()
     try:
         with Image.open(image_path) as img:
+            # Handle multi-frame images (like animated GIFs)
             if hasattr(img, "n_frames") and img.n_frames > 1:
                 img.seek(0)
+            
+            # Handle EXIF orientation
             img = ImageOps.exif_transpose(img)
+            
+            # Convert to RGB for compatibility with all modes
+            if img.mode == "CMYK":
+                # CMYK requires inversion before conversion
+                from PIL import ImageChops
+                img = ImageChops.invert(img)
+                img = img.convert("RGB")
+                img = ImageChops.invert(img)
+            elif img.mode.startswith("I;") or img.mode == "I":
+                # 16-bit or 32-bit integer modes - normalize to full range
+                img = img.point(lambda x: x / 256).convert("L")
+                img = ImageOps.autocontrast(img)  # Stretch to full 0-255 range
+                img = img.convert("RGB")
+            elif img.mode not in ("RGB", "RGBA", "L"):
+                img = img.convert("RGB")
+            
+            # Create thumbnail
             target_size = (edge_length, edge_length)
             img.thumbnail(target_size, Image.LANCZOS)
-            if img.mode not in ("RGB", "RGBA"):
+            
+            # Ensure RGB for JPEG save
+            if img.mode != "RGB":
                 img = img.convert("RGB")
-            else:
-                img = img.convert("RGB")
+            
             img.save(preview_path, "JPEG", quality=90)
         try:
             mtime = os.path.getmtime(image_path)
@@ -346,16 +394,62 @@ class TagDatabase:
         self.conn.execute("BEGIN IMMEDIATE")
         self.conn.commit()
 
+    def cleanup_invalid_tags(self):
+        """Remove tags that are empty, whitespace-only, or contain only invalid characters."""
+        try:
+            c = self.conn.cursor()
+            # Get all tags
+            c.execute("SELECT id, tag FROM tags")
+            all_tags = c.fetchall()
+            
+            deleted_count = 0
+            for tag_id, tag_text in all_tags:
+                # Delete if empty, whitespace-only, or doesn't match valid pattern
+                if not tag_text or not tag_text.strip():
+                    c.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+                    deleted_count += 1
+                elif not re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]+$", tag_text):
+                    c.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+                    deleted_count += 1
+            
+            self.conn.commit()
+            if deleted_count > 0:
+                print(f"[DB Cleanup] Removed {deleted_count} invalid/empty tags from database")
+                sys.stdout.flush()
+        except Exception as e:
+            print(f"[DB Cleanup] Error during cleanup: {e}")
+            sys.stdout.flush()
+
     def add_tag(self, tag, tag_type):
         try:
             c = self.conn.cursor()
+            # Check if tag already exists
+            c.execute("SELECT id FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
+            existing = c.fetchone()
+            if existing:
+                print(f"[DB] Tag '{tag}' already exists in DB with id={existing[0]}")
+                sys.stdout.flush()
+                return
+            
             c.execute(
                 "INSERT OR IGNORE INTO tags (tag, tag_type) VALUES (?, ?)",
                 (tag, tag_type),
             )
             self.conn.commit()
+            print(f"[DB] Inserted tag '{tag}' for tag_type '{tag_type}' into database")
+            sys.stdout.flush()
+            
+            # Verify it was inserted
+            c.execute("SELECT id FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
+            verify = c.fetchone()
+            if verify:
+                print(f"[DB] Verified: Tag '{tag}' now in DB with id={verify[0]}")
+            else:
+                print(f"[DB] WARNING: Tag '{tag}' was NOT found after insertion!")
+            sys.stdout.flush()
         except Exception as e:
             print("Error inserting tag", tag, tag_type, e)
+            sys.stdout.flush()
 
     def get_tag_id(self, tag, tag_type):
         c = self.conn.cursor()
@@ -458,9 +552,16 @@ class TagDatabase:
             c.execute(
                 "SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,)
             )
+            result = [row[0] for row in c.fetchall()]
+            print(f"[DB] get_tags(tag_type='{tag_type}'): Found {len(result)} tags")
+            sys.stdout.flush()
+            return result
         else:
             c.execute("SELECT tag FROM tags ORDER BY tag ASC")
-        return [row[0] for row in c.fetchall()]
+            result = [row[0] for row in c.fetchall()]
+            print(f"[DB] get_tags(tag_type=None): Found {len(result)} tags")
+            sys.stdout.flush()
+            return result
 
     def get_images_with_tags(self, tags, tag_type=None):
         c = self.conn.cursor()
@@ -1018,6 +1119,7 @@ class IPTCEditor(QMainWindow):
         self.cleaned_keywords = []
         # Create or open the SQLite database
         self.db = TagDatabase()
+        self.db.cleanup_invalid_tags()  # Clean up any invalid/empty tags on startup
         self.db.purge_cache_images()
         self._preview_log_path = self._init_preview_log()
         self.worker = None
@@ -1391,7 +1493,7 @@ class IPTCEditor(QMainWindow):
         style_tag_suggestions_list = f"""
             QListWidget {{
                 background: {COLOR_TAG_LIST_BG};
-                color: {COLOR_PAPER};
+                color: {COLOR_WHITE};
                 border: 2px solid {COLOR_LIGHT_BLUE};
                 padding: 8px;
                 font-weight: bold;
@@ -1400,7 +1502,7 @@ class IPTCEditor(QMainWindow):
             QListWidget::item {{
                 padding: 10px 12px;
                 margin-bottom: 4px;
-                color: {COLOR_PAPER};
+                color: {COLOR_WHITE};
             }}
             QListWidget::item:selected {{
                 background: {COLOR_TAG_LIST_SELECTED_BG};
@@ -2878,7 +2980,13 @@ class IPTCEditor(QMainWindow):
         list_widget.setUpdatesEnabled(True)
 
     def add_tag_to_input(self, tag):
-        # Insert tag at the end of the input (plain text, then update HTML)
+        # Check if tag already exists (case-insensitive)
+        existing_tags_lower = [t.lower() for t in (self.cleaned_keywords or [])]
+        if tag.lower() in existing_tags_lower:
+            # Tag already exists, don't add it again
+            return
+        
+        # Insert tag at the end of the input
         if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
             tags = self.cleaned_keywords + [tag]
         else:
@@ -2905,7 +3013,9 @@ class IPTCEditor(QMainWindow):
 
     def is_valid_tag(self, tag):
         """Check if tag contains only allowed characters."""
-        return bool(re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]*$", tag))
+        if not tag or not tag.strip():
+            return False
+        return bool(re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]+$", tag))
 
     def show_loading_dialog(self, message="Scanning directories..."):
         """Display a modal loading dialog with indeterminate progress bar."""
@@ -3212,10 +3322,13 @@ class IPTCEditor(QMainWindow):
                 self.tag_display_list.takeItem(self.editing_tag_index)
             self.editing_tag_index = None
         elif input_text:
-            # Adding a new tag
-            new_index = len(self.cleaned_keywords)
-            self.cleaned_keywords.append(input_text)
-            self._add_tag_item_to_list(input_text, new_index)
+            # Check for duplicate (case-insensitive)
+            existing_tags_lower = [t.lower() for t in self.cleaned_keywords]
+            if input_text.lower() not in existing_tags_lower:
+                # Adding a new tag - only if not duplicate
+                new_index = len(self.cleaned_keywords)
+                self.cleaned_keywords.append(input_text)
+                self._add_tag_item_to_list(input_text, new_index)
         
         # Clear the input field and save
         self.iptc_text_edit.clear()
@@ -3233,10 +3346,13 @@ class IPTCEditor(QMainWindow):
                 self._update_tag_item_widget(item, input_text, self.editing_tag_index)
                 self.editing_tag_index = None
             else:
-                # Adding a new tag
-                new_index = len(self.cleaned_keywords)
-                self.cleaned_keywords.append(input_text)
-                self._add_tag_item_to_list(input_text, new_index)
+                # Check for duplicate (case-insensitive)
+                existing_tags_lower = [t.lower() for t in self.cleaned_keywords]
+                if input_text.lower() not in existing_tags_lower:
+                    # Adding a new tag - only if not duplicate
+                    new_index = len(self.cleaned_keywords)
+                    self.cleaned_keywords.append(input_text)
+                    self._add_tag_item_to_list(input_text, new_index)
             
             self.iptc_text_edit.clear()
         
@@ -3252,22 +3368,39 @@ class IPTCEditor(QMainWindow):
                 self.tag_suggestions_list.hide()
                 return
             
-            # Get all available tags and filter out ones already in the display list
-            existing_tags = set(self.tag_display_list.item(i).text() 
-                              for i in range(self.tag_display_list.count()))
-            all_tags = self.all_tags or []
+            # Reload tag list to ensure we have the latest tags including newly added ones
+            metadata_type, tag_type = self.get_current_tag_and_type()
+            all_tags = self.db.get_tags(tag_type)
+            # Filter out empty/whitespace-only tags
+            all_tags = [t for t in all_tags if t and t.strip()]
+            print(f"[DEBUG] update_tag_completer: loaded {len(all_tags)} tags from DB for tag_type '{tag_type}'")
+            print(f"[DEBUG] update_tag_completer: tags = {sorted(all_tags)[:20]}...")  # Show first 20 sorted
+            sys.stdout.flush()
+            
+            # Get all tags already in the display list to exclude them
+            existing_tags = set(self.cleaned_keywords or [])
+            print(f"[DEBUG] update_tag_completer: current_line='{current_line}'")
+            print(f"[DEBUG] update_tag_completer: existing_tags={existing_tags}")
+            sys.stdout.flush()
             
             # Filter suggestions: match partial string anywhere in tag and exclude already-added tags
             suggestions = [
                 tag for tag in all_tags
                 if current_line.lower() in tag.lower() and tag not in existing_tags
             ]
+            print(f"[DEBUG] update_tag_completer: found {len(suggestions)} suggestions: {suggestions[:10]}")
+            sys.stdout.flush()
             
             if suggestions:
                 # Update list widget with suggestions
                 self.tag_suggestions_list.clear()
-                for tag in sorted(suggestions, key=str.lower)[:10]:  # Show max 10
+                sorted_suggestions = sorted(suggestions, key=str.lower)[:10]
+                for tag in sorted_suggestions:  # Show max 10
                     self.tag_suggestions_list.addItem(tag)
+                
+                print(f"[DEBUG] update_tag_completer: added {self.tag_suggestions_list.count()} items to list widget")
+                print(f"[DEBUG] update_tag_completer: widget size={self.tag_suggestions_list.size()}, visible={self.tag_suggestions_list.isVisible()}")
+                sys.stdout.flush()
                 
                 # Position widget above the text input field - anchor to the top of the text edit widget
                 text_edit_rect = self.iptc_text_edit.rect()
@@ -3304,10 +3437,13 @@ class IPTCEditor(QMainWindow):
                 self._update_tag_item_widget(list_item, tag_text, self.editing_tag_index)
                 self.editing_tag_index = None
             else:
-                # Add as new tag
-                new_index = len(self.cleaned_keywords)
-                self.cleaned_keywords.append(tag_text)
-                self._add_tag_item_to_list(tag_text, new_index)
+                # Check for duplicate (case-insensitive)
+                existing_tags_lower = [t.lower() for t in self.cleaned_keywords]
+                if tag_text.lower() not in existing_tags_lower:
+                    # Add as new tag - only if not duplicate
+                    new_index = len(self.cleaned_keywords)
+                    self.cleaned_keywords.append(tag_text)
+                    self._add_tag_item_to_list(tag_text, new_index)
             
             self.iptc_text_edit.clear()
             self.tag_suggestions_list.hide()
@@ -3510,17 +3646,28 @@ class IPTCEditor(QMainWindow):
             )
             # Add new tags to tag DB and update tag list
             tag_insert_start = time.perf_counter()
+            valid_tags_added = 0
             for tag in keywords:
-                self.db.add_tag(tag, tag_type)
+                # Only add valid, non-empty tags to database
+                if tag and tag.strip() and self.is_valid_tag(tag):
+                    self.db.add_tag(tag, tag_type)
+                    valid_tags_added += 1
+                    print(f"[DEBUG] Added tag '{tag}' to database for tag_type '{tag_type}'")
+                    sys.stdout.flush()
+                else:
+                    print(f"[DEBUG] Skipped invalid/empty tag: '{tag}'")
+                    sys.stdout.flush()
             tag_insert_elapsed = time.perf_counter() - tag_insert_start
-            if keywords:
+            if valid_tags_added > 0:
                 self._log_save_event(
-                    f"Ensured {len(keywords)} tag entries in {tag_insert_elapsed:.3f}s"
+                    f"Ensured {valid_tags_added} tag entries in {tag_insert_elapsed:.3f}s"
                 )
             # Always reload tag list for autocomplete
             load_start = time.perf_counter()
             self.load_previous_tags()
             load_elapsed = time.perf_counter() - load_start
+            print(f"[DEBUG] Reloaded tags, now have {len(self.all_tags)} tags in all_tags")
+            sys.stdout.flush()
             
             if refresh_ui:
                 refresh_start = time.perf_counter()
