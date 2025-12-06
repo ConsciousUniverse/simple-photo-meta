@@ -1485,8 +1485,8 @@ class IPTCEditor(QMainWindow):
         self.btn_rotate_right.setFont(self.font())
         self.btn_rotate_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_rotate_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_rotate_left.setFixedHeight(28)
-        self.btn_rotate_right.setFixedHeight(28)
+        self.btn_rotate_left.setFixedHeight(36)
+        self.btn_rotate_right.setFixedHeight(36)
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         rotate_controls.addWidget(self.btn_rotate_left)
@@ -1508,7 +1508,7 @@ class IPTCEditor(QMainWindow):
         iptc_input_container.setStyleSheet(
             f"""
             QWidget#IptcInputContainer {{
-                background: {COLOR_TAG_INPUT_BG};
+                background: {COLOR_LIGHT_BLUE};
                 border-radius: {self.corner_radius - 4}px;
                 border: 2px solid {COLOR_TAG_INPUT_BORDER};
                 margin-left: 5px;
@@ -1573,12 +1573,12 @@ class IPTCEditor(QMainWindow):
         self.iptc_text_edit = QLineEdit()
         self.iptc_text_edit.setFont(self.font())
         self.iptc_text_edit.setPlaceholderText("Add new tag")
-        self.iptc_text_edit.setMinimumHeight(45)
+        self.iptc_text_edit.setMinimumHeight(50)
         self.iptc_text_edit.setTextMargins(8, 0, 8, 0)
         self.iptc_text_edit.setStyleSheet(
             f"""
             QLineEdit {{
-                background-color: transparent;
+                background-color: {COLOR_CREAM};
                 border: 1px solid {COLOR_TAG_INPUT_BORDER};
                 border-radius: 8px;
                 color: {COLOR_BG_DARK_GREY};
@@ -1762,7 +1762,7 @@ class IPTCEditor(QMainWindow):
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
         self.iptc_text_edit.setFont(tag_input_font)
         self.iptc_text_edit.setStyleSheet(
-            f"QLineEdit {{ background: transparent; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
+            f"QLineEdit {{ background: {COLOR_CREAM}; border: 1px solid {COLOR_TAG_INPUT_BORDER}; border-radius: 8px; color: {COLOR_BG_DARK_GREY}; font-weight: bold; font-size: {FONT_SIZE_TAG_INPUT}pt; padding: 10px 18px; outline: none; }} QLineEdit::placeholder {{ color: #888888; }}"
         )
         # Style QListWidget (tags_list_widget) for rounded corners
         self.tags_list_widget.setStyleSheet(
