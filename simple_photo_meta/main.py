@@ -32,7 +32,8 @@ from PySide6.QtWidgets import (
     QCompleter,
     QScrollArea,
     QStyledItemDelegate,
-    QFrame
+    QFrame,
+    QProgressBar,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -47,6 +48,11 @@ from PySide6.QtGui import (
     QTextBlockFormat,
     QFontMetrics,
     QPalette,
+    QImage,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QGuiApplication,
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
 import hashlib
@@ -235,6 +241,7 @@ COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
 # Buttons
 SIZE_ADD_BUTTON_WIDTH = 75
 SIZE_ADD_BUTTON_HEIGHT = 45
+SIZE_TAG_ITEM_HEIGHT = 56  # Height for tag list items in display list
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
 FONT_SIZE_DEFAULT = 12
@@ -331,6 +338,12 @@ class TagDatabase:
             )
             """
         )
+        self.conn.commit()
+
+    def flush_commit(self):
+        """Commit and force flush any pending transactions."""
+        self.conn.commit()
+        self.conn.execute("BEGIN IMMEDIATE")
         self.conn.commit()
 
     def add_tag(self, tag, tag_type):
@@ -979,7 +992,6 @@ class IPTCEditor(QMainWindow):
         super().__init__()
         self.setWindowTitle("Simple Photo Meta (alpha)")
         # Dynamically set initial window size based on available screen size
-        from PySide6.QtGui import QGuiApplication
         screen = QGuiApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         # Use 80% of available screen, but max 1200x800, min 800x600
@@ -1032,11 +1044,6 @@ class IPTCEditor(QMainWindow):
         self._tag_item_cache = {}
         self._tag_order = []
         
-        # Timer to debounce tag input HTML formatting
-        self._tag_format_timer = QTimer()
-        self._tag_format_timer.setSingleShot(True)
-        self._tag_format_timer.timeout.connect(self._apply_tag_formatting)
-        
         self.create_widgets()
         self.load_previous_tags()
         self._scan_refresh_timer = QTimer(self)
@@ -1063,8 +1070,6 @@ class IPTCEditor(QMainWindow):
             f"QPushButton:pressed {{ background-color: {COLOR_GOLD_PRESSED}; }} "
         )
         # If it's a QMessageBox, set word wrap and margins for the label and icon, but do not force fixed size
-        from PySide6.QtWidgets import QMessageBox, QLabel
-
         if isinstance(dialog, QMessageBox):
             dialog.setMinimumWidth(max(min_width, 380))
             dialog.setMinimumHeight(max(min_height, 120))
@@ -1728,10 +1733,8 @@ class IPTCEditor(QMainWindow):
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
 
-        # Create tags_list_widget early so it's available for other methods
+        # Create tags_list_widget for displaying available tags
         self.tags_list_widget = QListWidget()
-        # Use itemClicked instead of clicked for more reliable tag selection
-        self.tags_list_widget.itemClicked.connect(self.tag_clicked)
         self.tags_list_widget.setStyleSheet(style_tags_list_widget)
         self.tags_list_widget.setWordWrap(True)
         self.tags_list_widget.setSpacing(10)
@@ -2378,8 +2381,9 @@ class IPTCEditor(QMainWindow):
             )
             return None
 
-    def _log_preview_event(self, message, level="info"):
-        prefix = "[Preview]"
+    def _log_event(self, category, message, level="info"):
+        """Unified logging method for all event types (Preview, Metadata, Selection, Search, Save)."""
+        prefix = f"[{category}]"
         if level == "warning":
             print(f"{prefix} WARNING: {message}")
         else:
@@ -2391,62 +2395,22 @@ class IPTCEditor(QMainWindow):
                     log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
             except OSError:
                 self._preview_log_path = None
+
+    # Convenience wrappers for backward compatibility
+    def _log_preview_event(self, message, level="info"):
+        self._log_event("Preview", message, level)
 
     def _log_metadata_event(self, message, level="info"):
-        prefix = "[Metadata]"
-        if level == "warning":
-            print(f"{prefix} WARNING: {message}")
-        else:
-            print(f"{prefix} {message}")
-        if getattr(self, "_preview_log_path", None):
-            try:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
-            except OSError:
-                self._preview_log_path = None
+        self._log_event("Metadata", message, level)
 
     def _log_selection_event(self, message, level="info"):
-        prefix = "[Selection]"
-        if level == "warning":
-            print(f"{prefix} WARNING: {message}")
-        else:
-            print(f"{prefix} {message}")
-        if getattr(self, "_preview_log_path", None):
-            try:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
-            except OSError:
-                self._preview_log_path = None
+        self._log_event("Selection", message, level)
 
     def _log_search_event(self, message, level="info"):
-        prefix = "[Search]"
-        if level == "warning":
-            print(f"{prefix} WARNING: {message}")
-        else:
-            print(f"{prefix} {message}")
-        if getattr(self, "_preview_log_path", None):
-            try:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
-            except OSError:
-                self._preview_log_path = None
+        self._log_event("Search", message, level)
 
     def _log_save_event(self, message, level="info"):
-        prefix = "[Save]"
-        if level == "warning":
-            print(f"{prefix} WARNING: {message}")
-        else:
-            print(f"{prefix} {message}")
-        if getattr(self, "_preview_log_path", None):
-            try:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(self._preview_log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{timestamp} {prefix} {level.upper()}: {message}\n")
-            except OSError:
-                self._preview_log_path = None
+        self._log_event("Save", message, level)
 
     def _format_duration_message(self, image_path, message):
         start = self._preview_timers.pop(image_path, None)
@@ -2485,13 +2449,12 @@ class IPTCEditor(QMainWindow):
         self._apply_rotation()
 
     def _load_full_pixmap(self, path):
+        """Load full resolution pixmap, using PIL for large/special format files."""
         FILESIZE_THRESHOLD = 25 * 1024 * 1024  # 25MB
         file_size = os.path.getsize(path)
         ext = os.path.splitext(path)[1].lower()
         if file_size > FILESIZE_THRESHOLD or ext in [".tif", ".tiff", ".heic", ".heif"]:
-            from PySide6.QtGui import QImage
             import io
-
             with Image.open(path) as pil_img:
                 if hasattr(pil_img, "n_frames") and pil_img.n_frames > 1:
                     pil_img.seek(0)
@@ -2509,17 +2472,17 @@ class IPTCEditor(QMainWindow):
         return pixmap
 
     def _apply_rotation(self):
+        """Apply current rotation angle to cached preview image."""
         if not getattr(self, "_preview_image_cache", None):
             return
         pixmap = self._preview_image_cache
         if getattr(self, "_preview_rotation_angle", 0):
-            from PySide6.QtGui import QTransform
-
             transform = QTransform().rotate(self._preview_rotation_angle)
             pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
         self._render_pixmap_to_label(pixmap)
 
     def _render_pixmap_to_label(self, pixmap):
+        """Scale pixmap to fit label with rounded corners and shadow effect."""
         if pixmap.isNull():
             return
         label_width = max(self.image_label.width(), 1)
@@ -2535,8 +2498,6 @@ class IPTCEditor(QMainWindow):
         )
         final_pixmap = QPixmap(label_width, label_height)
         final_pixmap.fill(Qt.transparent)
-        from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
-
         painter = QPainter(final_pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
         radius = self.corner_radius
@@ -2752,12 +2713,11 @@ class IPTCEditor(QMainWindow):
             else:
                 self.display_image(self.current_image_path)
         else:
+            # Draw empty preview with border
             label_width = self.image_label.width()
             label_height = self.image_label.height()
             final_pixmap = QPixmap(label_width, label_height)
             final_pixmap.fill(Qt.transparent)
-            from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
-
             painter = QPainter(final_pixmap)
             painter.setRenderHint(QPainter.Antialiasing)
             radius = self.corner_radius
@@ -2942,17 +2902,12 @@ class IPTCEditor(QMainWindow):
             filtered = [tag for tag in self.all_tags if search_text in tag.lower()]
         self.update_tags_list_widget(filtered)
 
-    def tag_clicked(self, item):
-        # Do nothing when a tag is clicked (only the Add button should add the tag)
-        pass
-
     def is_valid_tag(self, tag):
-        # Only allow alphanumeric and dashes
+        """Check if tag contains only allowed characters."""
         return bool(re.fullmatch(r"^[A-Za-z0-9\-\(\):\'\?\|\ ]*$", tag))
 
     def show_loading_dialog(self, message="Scanning directories..."):
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
-
+        """Display a modal loading dialog with indeterminate progress bar."""
         self.loading_dialog = QDialog(self)
         self.loading_dialog.setModal(True)
         self.loading_dialog.setWindowTitle("Please Wait")
@@ -3188,6 +3143,23 @@ class IPTCEditor(QMainWindow):
         
         return widget
     
+    def _add_tag_item_to_list(self, tag_text, index, list_widget=None):
+        """Add a tag widget to the display list. Returns (item, widget) tuple."""
+        if list_widget is None:
+            list_widget = self.tag_display_list
+        item = QListWidgetItem()
+        widget = self._create_tag_widget(tag_text, index)
+        item.setSizeHint(QSize(widget.sizeHint().width(), SIZE_TAG_ITEM_HEIGHT))
+        list_widget.addItem(item)
+        list_widget.setItemWidget(item, widget)
+        return item, widget
+    
+    def _update_tag_item_widget(self, item, tag_text, index):
+        """Update an existing tag item with new widget."""
+        widget = self._create_tag_widget(tag_text, index)
+        item.setSizeHint(QSize(widget.sizeHint().width(), SIZE_TAG_ITEM_HEIGHT))
+        self.tag_display_list.setItemWidget(item, widget)
+    
     def _on_tag_label_clicked(self, index):
         """Handle clicking on a tag label for editing."""
         if index < len(self.cleaned_keywords):
@@ -3206,39 +3178,24 @@ class IPTCEditor(QMainWindow):
             # Rebuild the entire display list to fix indices
             self.tag_display_list.clear()
             for i, tag in enumerate(self.cleaned_keywords):
-                item = QListWidgetItem()
-                widget = self._create_tag_widget(tag, i)
-                # Set explicit height to prevent clipping
-                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.addItem(item)
-                self.tag_display_list.setItemWidget(item, widget)
+                self._add_tag_item_to_list(tag, i)
             
             # Save to file immediately without popup
             self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
     
     def set_tag_input_html(self, tags):
-        # Update the read-only tag display list
+        """Update the read-only tag display list with given tags."""
         self.tag_display_list.clear()
-        if tags:
-            for i, tag in enumerate(tags):
-                item = QListWidgetItem()
-                widget = self._create_tag_widget(tag, i)
-                # Set explicit height to prevent clipping
-                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.addItem(item)
-                self.tag_display_list.setItemWidget(item, widget)
+        for i, tag in enumerate(tags or []):
+            self._add_tag_item_to_list(tag, i)
         
         # Clear the input field
         self.iptc_text_edit.clear()
         self.editing_tag_index = None
 
     def on_tag_input_text_changed(self):
-        # Update autocomplete as you type
+        """Update autocomplete suggestions as user types."""
         self.update_tag_completer()
-    
-    def on_existing_tag_clicked(self, item):
-        """Handle clicking on an existing tag in the display list - no longer used with custom widgets."""
-        pass
     
     def on_tag_input_return_pressed(self):
         """Handle Return key in the input field - save the tag and update file."""
@@ -3247,37 +3204,26 @@ class IPTCEditor(QMainWindow):
         if self.editing_tag_index is not None:
             # Editing an existing tag
             if input_text:
-                # Update the tag
                 self.cleaned_keywords[self.editing_tag_index] = input_text
                 item = self.tag_display_list.item(self.editing_tag_index)
-                widget = self._create_tag_widget(input_text, self.editing_tag_index)
-                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.setItemWidget(item, widget)
+                self._update_tag_item_widget(item, input_text, self.editing_tag_index)
             else:
                 # Empty input = delete the tag
                 del self.cleaned_keywords[self.editing_tag_index]
                 self.tag_display_list.takeItem(self.editing_tag_index)
-            
             self.editing_tag_index = None
         elif input_text:
             # Adding a new tag
             new_index = len(self.cleaned_keywords)
             self.cleaned_keywords.append(input_text)
-            item = QListWidgetItem()
-            widget = self._create_tag_widget(input_text, new_index)
-            item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-            self.tag_display_list.addItem(item)
-            self.tag_display_list.setItemWidget(item, widget)
+            self._add_tag_item_to_list(input_text, new_index)
         
-        # Clear the input field
+        # Clear the input field and save
         self.iptc_text_edit.clear()
-        
-        # Save to file immediately without popup
         self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
     
     def on_save_edits_clicked(self):
         """Handle Save Edits button click - commit any pending input first, then save."""
-        # If there's text in the input field, process it first
         if self.iptc_text_edit.text().strip():
             input_text = self.iptc_text_edit.text().strip()
             
@@ -3285,28 +3231,18 @@ class IPTCEditor(QMainWindow):
                 # Editing an existing tag
                 self.cleaned_keywords[self.editing_tag_index] = input_text
                 item = self.tag_display_list.item(self.editing_tag_index)
-                widget = self._create_tag_widget(input_text, self.editing_tag_index)
-                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.setItemWidget(item, widget)
+                self._update_tag_item_widget(item, input_text, self.editing_tag_index)
                 self.editing_tag_index = None
             else:
                 # Adding a new tag
                 new_index = len(self.cleaned_keywords)
                 self.cleaned_keywords.append(input_text)
-                item = QListWidgetItem()
-                widget = self._create_tag_widget(input_text, new_index)
-                item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.addItem(item)
-                self.tag_display_list.setItemWidget(item, widget)
+                self._add_tag_item_to_list(input_text, new_index)
             
             self.iptc_text_edit.clear()
         
-        # Now save everything to file
+        # Save to file
         self.save_tags_and_notify(force=True, refresh_ui=True)
-
-    def _apply_tag_formatting(self):
-        """No longer used - formatting is handled by QListWidget styles."""
-        pass
 
     def update_tag_completer(self):
         """Update the completer based on the current word being typed."""
@@ -3362,35 +3298,21 @@ class IPTCEditor(QMainWindow):
         try:
             tag_text = item.text()
             
-            # Add the tag directly instead of just populating the input
             if self.editing_tag_index is not None:
-                # If editing, replace the existing tag
+                # Replace the existing tag being edited
                 self.cleaned_keywords[self.editing_tag_index] = tag_text
                 list_item = self.tag_display_list.item(self.editing_tag_index)
-                widget = self._create_tag_widget(tag_text, self.editing_tag_index)
-                list_item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.setItemWidget(list_item, widget)
+                self._update_tag_item_widget(list_item, tag_text, self.editing_tag_index)
                 self.editing_tag_index = None
             else:
                 # Add as new tag
                 new_index = len(self.cleaned_keywords)
                 self.cleaned_keywords.append(tag_text)
-                list_item = QListWidgetItem()
-                widget = self._create_tag_widget(tag_text, new_index)
-                list_item.setSizeHint(QSize(widget.sizeHint().width(), 56))
-                self.tag_display_list.addItem(list_item)
-                self.tag_display_list.setItemWidget(list_item, widget)
+                self._add_tag_item_to_list(tag_text, new_index)
             
-            # Clear the input field
             self.iptc_text_edit.clear()
-            
-            # Hide suggestions
             self.tag_suggestions_list.hide()
-            
-            # Save immediately without popup
             self.save_tags_and_notify(force=True, refresh_ui=True, show_notification=False)
-            
-            # Return focus to text edit
             self.iptc_text_edit.setFocus()
         except Exception as e:
             print(f"[Autocomplete] Error inserting suggestion: {e}")
@@ -3511,12 +3433,8 @@ class IPTCEditor(QMainWindow):
             return False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
-            # Ensure database commit completes
             try:
-                self.db.conn.commit()
-                # Force database to flush any cached queries
-                self.db.conn.execute("BEGIN IMMEDIATE")
-                self.db.conn.commit()
+                self.db.flush_commit()
             except Exception as e:
                 self._log_save_event(f"DB commit failed: {e}", level="warning")
             self._log_save_event(
@@ -3570,12 +3488,8 @@ class IPTCEditor(QMainWindow):
                 meta.from_dict({metadata_type: {tag_type: keywords}})
                 metadata_elapsed = time.perf_counter() - write_start
                 self.db.set_image_tags(self.current_image_path, keywords, tag_type)
-                # Ensure database commit completes
                 try:
-                    self.db.conn.commit()
-                    # Force database to flush any cached queries
-                    self.db.conn.execute("BEGIN IMMEDIATE")
-                    self.db.conn.commit()
+                    self.db.flush_commit()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             else:
@@ -3587,12 +3501,8 @@ class IPTCEditor(QMainWindow):
                     [single_value] if single_value else [],
                     tag_type,
                 )
-                # Ensure database commit completes
                 try:
-                    self.db.conn.commit()
-                    # Force database to flush any cached queries
-                    self.db.conn.execute("BEGIN IMMEDIATE")
-                    self.db.conn.commit()
+                    self.db.flush_commit()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             db_elapsed = time.perf_counter() - write_start - metadata_elapsed
