@@ -389,8 +389,13 @@ class TagDatabase:
         self.conn.commit()
 
     def flush_commit(self):
-        """Commit and force flush any pending transactions."""
+        """Commit and force flush any pending transactions, including WAL checkpoint."""
         self.conn.commit()
+        # Force WAL checkpoint to ensure data is written to main database
+        try:
+            self.conn.execute("PRAGMA wal_checkpoint(FULL)")
+        except:
+            pass
         self.conn.execute("BEGIN IMMEDIATE")
         self.conn.commit()
 
@@ -500,6 +505,11 @@ class TagDatabase:
                     (image_id, tag_id),
                 )
         self.conn.commit()
+        # Force WAL checkpoint to ensure search sees updated data
+        try:
+            self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except:
+            pass
 
     def bulk_update_image_tags(self, image_path, tags_by_type):
         """Update all tag associations for an image in a single transaction."""
@@ -666,7 +676,15 @@ class TagDatabase:
             params.append(os.path.join(os.path.abspath(folder_path), "%"))
             query += " GROUP BY i.id ORDER BY i.path ASC LIMIT ? OFFSET ?"
             params.extend([page_size, offset])
+            print(f"[DB Query] Searching for tags={tags}, tag_type={tag_type}")
+            print(f"[DB Query] SQL: {query}")
+            print(f"[DB Query] Params: {params}")
+            sys.stdout.flush()
             c.execute(query, params)
+            results = [row[0] for row in c.fetchall()]
+            print(f"[DB Query] Found {len(results)} matching images")
+            sys.stdout.flush()
+            return results
         else:
             query = "SELECT path FROM images WHERE path LIKE ? ORDER BY path ASC LIMIT ? OFFSET ?"
             c.execute(
