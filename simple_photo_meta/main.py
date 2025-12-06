@@ -165,7 +165,7 @@ COLOR_DARK_GREY = "#343434"
 COLOR_PAPER = "#333333"
 COLOR_ORANGE = "orange"
 COLOR_BLACK = "black"
-COLOR_WHITE = "white"
+COLOR_WHITE = "#FFFFFF"
 COLOR_GRAY = "#bdbdbd"
 
 # Thumbnails pane
@@ -264,8 +264,8 @@ class ComboBoxItemDelegate(QStyledItemDelegate):
         super().__init__(parent)
     
     def paint(self, painter, option, index):
-        # Force text color to cream
-        option.palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
+        # Force text color to white for visibility on dark background
+        option.palette.setColor(QPalette.Text, QColor(COLOR_WHITE))
         option.palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
         super().paint(painter, option, index)
 
@@ -1257,6 +1257,12 @@ class IPTCEditor(QMainWindow):
                 border: none;
                 background: transparent;
             }}
+            QComboBox QAbstractItemView {{
+                background: {COLOR_BG_DARK_GREY};
+                color: {COLOR_WHITE};
+                selection-background-color: {COLOR_GOLD_HOVER};
+                selection-color: {COLOR_BG_DARK_GREY};
+            }}
         """
 
         def build_metadata_view_stylesheet(min_width=None):
@@ -1270,7 +1276,7 @@ class IPTCEditor(QMainWindow):
                     {width_rule}
                 }}
                 QListView::item {{
-                    color: {COLOR_PAPER};
+                    color: {COLOR_WHITE};
                     font-size: {FONT_SIZE_COMBOBOX}pt;
                     font-weight: bold;
                     padding: 8px 12px;
@@ -1289,7 +1295,7 @@ class IPTCEditor(QMainWindow):
         def apply_metadata_combobox_style(combo, view_stylesheet):
             view = combo.view()
             palette = view.palette()
-            palette.setColor(QPalette.Text, QColor(COLOR_PAPER))
+            palette.setColor(QPalette.Text, QColor(COLOR_WHITE))
             palette.setColor(QPalette.Base, QColor(COLOR_BG_DARK_GREY))
             palette.setColor(QPalette.Highlight, QColor(COLOR_GOLD_HOVER))
             palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
