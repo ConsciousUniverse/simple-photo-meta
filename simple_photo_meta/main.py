@@ -1472,7 +1472,7 @@ class IPTCEditor(QMainWindow):
         # ============================================================================
         
         central_widget = QWidget()
-        central_widget.setAttribute(Qt.WA_TranslucentBackground)
+        # Note: WA_TranslucentBackground removed - was causing tooltip transparency issues on Linux
         central_widget.setStyleSheet(style_central_widget)
         central_widget.setContentsMargins(0,0,0,0)
         self.setCentralWidget(central_widget)
@@ -1526,7 +1526,6 @@ class IPTCEditor(QMainWindow):
         
         # Metadata format selector (IPTC/EXIF) - left side
         self.metadata_format_dropdown = QComboBox()
-        self.metadata_format_dropdown.setToolTip("Select metadata format")
         self.metadata_format_dropdown.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.metadata_format_dropdown.setMinimumHeight(38)
         self.metadata_format_dropdown.setMaximumWidth(100)
@@ -1537,7 +1536,6 @@ class IPTCEditor(QMainWindow):
         
         # Metadata field selector (tag type within selected format) - right side
         self.metadata_type_dropdown = QComboBox()
-        self.metadata_type_dropdown.setToolTip("Select metadata field to edit")
         self.metadata_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.metadata_type_dropdown.setMinimumHeight(38)
         self.metadata_type_dropdown.currentIndexChanged.connect(self.on_metadata_field_changed)
@@ -1548,7 +1546,6 @@ class IPTCEditor(QMainWindow):
         for i, tag in enumerate(iptc_tags.iptc_writable_tags):
             display_name = tag["name"].upper()
             self.metadata_type_dropdown.addItem(display_name, tag)
-            self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
             if tag["tag"] == "Keywords":
                 keyword_index = i
         
@@ -1638,8 +1635,6 @@ class IPTCEditor(QMainWindow):
         
         self.btn_rotate_left = QPushButton("⟲")
         self.btn_rotate_right = QPushButton("⟳")
-        self.btn_rotate_left.setToolTip("Rotate Left")
-        self.btn_rotate_right.setToolTip("Rotate Right")
         self.btn_rotate_left.setMinimumSize(48, 48)
         self.btn_rotate_right.setMinimumSize(48, 48)
         # Set font size for the button text (the symbols)
@@ -3011,7 +3006,6 @@ class IPTCEditor(QMainWindow):
             for i, tag in enumerate(iptc_tags.iptc_writable_tags):
                 display_name = tag["name"].upper()
                 self.metadata_type_dropdown.addItem(display_name, tag)
-                self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
                 if tag["tag"] == "Keywords":
                     keyword_index = i
             self.metadata_type_dropdown.setCurrentIndex(keyword_index)
@@ -3022,7 +3016,6 @@ class IPTCEditor(QMainWindow):
             for i, tag in enumerate(exif_tags.exif_writable_tags):
                 display_name = tag["name"].upper()
                 self.metadata_type_dropdown.addItem(display_name, tag)
-                self.metadata_type_dropdown.setItemData(i, tag["description"], Qt.ToolTipRole)
                 if tag["tag"] == "Artist":
                     artist_index = i
             self.metadata_type_dropdown.setCurrentIndex(artist_index)
