@@ -354,6 +354,8 @@ class TagDatabase:
         except sqlite3.DatabaseError as pragma_err:
             print(f"Warning: failed to configure SQLite pragmas: {pragma_err}")
         self._create_table()
+        # Simple in-memory cache: tag_type -> sorted list of tags
+        self._tag_cache = {}
 
     def _create_table(self):
         c = self.conn.cursor()
@@ -428,6 +430,8 @@ class TagDatabase:
             if deleted_count > 0:
                 print(f"[DB Cleanup] Removed {deleted_count} invalid/empty tags from database")
                 sys.stdout.flush()
+                # Invalidate cache when tags change
+                self._tag_cache.clear()
         except Exception as e:
             print(f"[DB Cleanup] Error during cleanup: {e}")
             sys.stdout.flush()
@@ -450,6 +454,8 @@ class TagDatabase:
             self.conn.commit()
             print(f"[DB] Inserted tag '{tag}' for tag_type '{tag_type}' into database")
             sys.stdout.flush()
+            # Invalidate cache for this tag_type
+            self._tag_cache.pop(tag_type, None)
             
             # Verify it was inserted
             c.execute("SELECT id FROM tags WHERE tag=? AND tag_type=?", (tag, tag_type))
@@ -512,6 +518,8 @@ class TagDatabase:
                     (image_id, tag_id),
                 )
         self.conn.commit()
+        # Invalidate cache for this tag_type
+        self._tag_cache.pop(tag_type, None)
         # Force WAL checkpoint to ensure search sees updated data
         try:
             self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
@@ -562,21 +570,34 @@ class TagDatabase:
                             "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)",
                             (image_id, row[0]),
                         )
+            # Invalidate caches for all modified tag types
+            for tag_type in tag_types:
+                self._tag_cache.pop(tag_type, None)
 
     def get_tags(self, tag_type=None):
+        # Return cached tags when available to avoid repeated DB fetch for large tag sets
+        if tag_type in self._tag_cache:
+            cached = self._tag_cache[tag_type]
+            print(f"[DB] get_tags(tag_type='{tag_type}') cache hit: {len(cached)} tags")
+            sys.stdout.flush()
+            return cached
+
         c = self.conn.cursor()
         if tag_type:
             c.execute(
                 "SELECT tag FROM tags WHERE tag_type=? ORDER BY tag ASC", (tag_type,)
             )
             result = [row[0] for row in c.fetchall()]
-            print(f"[DB] get_tags(tag_type='{tag_type}'): Found {len(result)} tags")
+            self._tag_cache[tag_type] = result
+            print(f"[DB] get_tags(tag_type='{tag_type}'): Found {len(result)} tags (cached)")
             sys.stdout.flush()
             return result
         else:
             c.execute("SELECT tag FROM tags ORDER BY tag ASC")
             result = [row[0] for row in c.fetchall()]
-            print(f"[DB] get_tags(tag_type=None): Found {len(result)} tags")
+            # Cache under None for 'all tags'
+            self._tag_cache[None] = result
+            print(f"[DB] get_tags(tag_type=None): Found {len(result)} tags (cached)")
             sys.stdout.flush()
             return result
 
