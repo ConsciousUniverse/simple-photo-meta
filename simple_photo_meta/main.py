@@ -129,7 +129,14 @@ def ensure_thumbnail_image(image_path, size=(250, 250)):
                 img.save(thumb_path, "JPEG", quality=85)
         except Exception as exc:
             print(f"Failed to create thumbnail for {image_path}: {exc}")
-            return None
+            # Write a lightweight placeholder so we do not retry (avoids repeated failures on unsupported formats like HEIC without plugins)
+            try:
+                placeholder = Image.new("RGB", size, (210, 210, 210))
+                placeholder.save(thumb_path, "JPEG", quality=60)
+                print(f"Wrote placeholder thumbnail for {image_path} -> {thumb_path}")
+            except Exception as placeholder_exc:
+                print(f"Failed to write placeholder thumbnail for {image_path}: {placeholder_exc}")
+                return None
     return thumb_path
 
 
@@ -2075,23 +2082,27 @@ class IPTCEditor(QMainWindow):
         self.cancel_thumbnail_worker()
         self.image_list = page_items  # Store full paths, not just basenames
         build_start = time.perf_counter()
-        model = QStandardItemModel()
-        supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic", ".heif")
-        thumbnail_tasks = []
-        placeholder_icon = QIcon()
-        for fpath in page_items:
-            if not fpath.lower().endswith(supported):
-                continue
-            row_index = model.rowCount()
-            item = QStandardItem()
-            item.setEditable(False)
-            item.setText("")
-            item.setSizeHint(QSize(175, 175))
-            item.setData(fpath, Qt.UserRole + 1)  # Store full path
-            item.setIcon(placeholder_icon)
-            model.appendRow(item)
-            thumbnail_tasks.append((row_index, fpath))
-        self.list_view.setModel(model)
+        self.list_view.setUpdatesEnabled(False)
+        try:
+            model = QStandardItemModel()
+            supported = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic", ".heif")
+            thumbnail_tasks = []
+            placeholder_icon = QIcon()
+            for fpath in page_items:
+                if not fpath.lower().endswith(supported):
+                    continue
+                row_index = model.rowCount()
+                item = QStandardItem()
+                item.setEditable(False)
+                item.setText("")
+                item.setSizeHint(QSize(175, 175))
+                item.setData(fpath, Qt.UserRole + 1)  # Store full path
+                item.setIcon(placeholder_icon)
+                model.appendRow(item)
+                thumbnail_tasks.append((row_index, fpath))
+            self.list_view.setModel(model)
+        finally:
+            self.list_view.setUpdatesEnabled(True)
         self.update_pagination()
         build_elapsed = time.perf_counter() - build_start
         total_elapsed = time.perf_counter() - page_start
@@ -3151,9 +3162,19 @@ class IPTCEditor(QMainWindow):
         
         self.metadata_type_dropdown.blockSignals(False)
         self.load_previous_tags()
+        self.update_tags_search()
         
-        # Use QTimer to defer UI updates and keep interface responsive
-        QTimer.singleShot(0, lambda: self._deferred_tag_type_update())
+        # Always update the preview pane for the current image and tag type
+        if self.current_image_path:
+            self._prepare_metadata_ui_loading()
+            self.start_metadata_loading(self.current_image_path)
+        else:
+            self.set_tag_input_html([])
+            self.last_loaded_keywords = ""
+            self.iptc_text_edit.setPlaceholderText("Add new tag")
+            self.iptc_text_edit.setEnabled(True)
+        # Refresh search results for the newly selected metadata format/tag type
+        QTimer.singleShot(0, self.update_search)
     
     def on_metadata_field_changed(self, index):
         # Get the selected field data
@@ -3188,6 +3209,10 @@ class IPTCEditor(QMainWindow):
         
         # Use QTimer to defer UI updates and keep interface responsive
         QTimer.singleShot(0, lambda: self._deferred_tag_type_update())
+
+    def _deferred_tag_type_update(self):
+        """Refresh search results after tag field changes."""
+        self.update_search()
     
     def get_current_tag_and_type(self):
         """Returns (metadata_type, tag_name) tuple based on active tab."""
@@ -3198,20 +3223,6 @@ class IPTCEditor(QMainWindow):
             tag = self.selected_exif_tag["tag"] if self.selected_exif_tag else "Artist"
             return ("exif", tag)
     
-    def _deferred_tag_type_update(self):
-        """Deferred update after tag type change to keep UI responsive."""
-        self.update_search()
-        self.update_tags_search()
-        # Always update the preview pane for the current image and tag type
-        if self.current_image_path:
-            self._prepare_metadata_ui_loading()
-            self.start_metadata_loading(self.current_image_path)
-        else:
-            self.set_tag_input_html([])
-            self.last_loaded_keywords = ""
-            self.iptc_text_edit.setPlaceholderText("Add new tag")
-            self.iptc_text_edit.setEnabled(True)
-
     def _create_tag_widget(self, tag_text, index):
         """Create a custom widget for a tag with text and delete button."""
         widget = QWidget()

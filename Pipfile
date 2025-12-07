@@ -8,6 +8,7 @@ pyside6 = "*"
 pillow = "*"
 simple-photo-meta = {file = ".", editable = true}
 appdirs = "*"
+pillow-heif = "*"
 
 [dev-packages]
 setuptools = "*"
