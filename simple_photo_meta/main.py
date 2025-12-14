@@ -208,90 +208,7 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
             pass
         return None
 
-# === COLOUR VARIABLES (ALL COLOURS DEFINED HERE) ===
-
-# Base palette
-#COLOR_BG_DARK_OLIVE = "#232d18"
-COLOR_BG_DARK_GREY = "#282828"
-COLOR_LIGHT_BLUE = "lightblue"
-COLOR_GOLD_HOVER = "#add8e6"
-COLOR_GOLD_PRESSED = "#87ceeb"
-COLOR_DARK_GREY = "#343434"
-COLOR_PAPER = "#333333"
-COLOR_ORANGE = "orange"
-COLOR_BLACK = "black"
-COLOR_WHITE = "#FFFFFF"
-COLOR_GRAY = "#bdbdbd"
-
-# Thumbnails pane
-COLOR_THUMB_LIST_PANE_BG = COLOR_PAPER
-COLOR_THUMB_LIST_PANE_BORDER = COLOR_LIGHT_BLUE
-
-# Image preview
-COLOR_IMAGE_PREVIEW_BG = COLOR_PAPER
-COLOR_IMAGE_PREVIEW_BORDER = COLOR_LIGHT_BLUE
-COLOR_IMAGE_PREVIEW_TEXT = COLOR_LIGHT_BLUE
-
-# Tag input pane
-COLOR_TAG_INPUT_BG = COLOR_WHITE
-COLOR_TAG_INPUT_TEXT = COLOR_PAPER
-COLOR_TAG_INPUT_BORDER = COLOR_LIGHT_BLUE
-
-# Tag list widget
-COLOR_TAG_LIST_BG = COLOR_PAPER
-COLOR_TAG_LIST_TEXT = COLOR_BLACK
-COLOR_TAG_LIST_SELECTED_BG = COLOR_LIGHT_BLUE
-COLOR_TAG_LIST_SELECTED_TEXT = COLOR_BG_DARK_GREY
-COLOR_TAG_LIST_BORDER = COLOR_LIGHT_BLUE
-COLOR_TAG_LIST_ITEM_BORDER = COLOR_LIGHT_BLUE
-
-# Tag label in tag list
-COLOR_TAG_LABEL_TEXT = COLOR_BG_DARK_GREY
-
-# Tag add button in tag list
-COLOR_TAG_ADD_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_TAG_ADD_BTN_TEXT = COLOR_BG_DARK_GREY
-COLOR_TAG_ADD_BTN_BORDER = COLOR_LIGHT_BLUE
-COLOR_TAG_ADD_BTN_BG_HOVER = COLOR_GOLD_HOVER
-COLOR_TAG_ADD_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
-
-# Search bars (thumbs and tags)
-COLOR_SEARCH_INPUT_BG = COLOR_WHITE
-COLOR_SEARCH_INPUT_TEXT = COLOR_PAPER
-COLOR_SEARCH_INPUT_BORDER = COLOR_LIGHT_BLUE
-
-# Pagination controls
-COLOR_PAGINATION_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_PAGINATION_BTN_TEXT = COLOR_BG_DARK_GREY
-COLOR_PAGINATION_BTN_BORDER = COLOR_LIGHT_BLUE
-COLOR_PAGINATION_BTN_BG_HOVER = COLOR_GOLD_HOVER
-COLOR_PAGINATION_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
-
-# Info banner
-COLOR_INFO_BANNER_BG = COLOR_ORANGE
-COLOR_INFO_BANNER_TEXT = COLOR_BG_DARK_GREY
-COLOR_INFO_BANNER_BORDER = COLOR_LIGHT_BLUE
-
-# Dialogs
-COLOR_DIALOG_BG = COLOR_BG_DARK_GREY
-COLOR_DIALOG_TEXT = COLOR_LIGHT_BLUE
-COLOR_DIALOG_BTN_BG = COLOR_LIGHT_BLUE
-COLOR_DIALOG_BTN_TEXT = COLOR_BG_DARK_GREY
-COLOR_DIALOG_BTN_BORDER = COLOR_LIGHT_BLUE
-COLOR_DIALOG_BTN_BG_HOVER = COLOR_GOLD_HOVER
-COLOR_DIALOG_BTN_BG_PRESSED = COLOR_GOLD_PRESSED
-
-# Combobox
-COLOR_COMBOBOX_BG = COLOR_BG_DARK_GREY
-COLOR_COMBOBOX_TEXT = COLOR_LIGHT_BLUE
-COLOR_COMBOBOX_BORDER = COLOR_LIGHT_BLUE
-
-# Scrollbars
-COLOR_SCROLLBAR_BG = "transparent"
-COLOR_SCROLLBAR_HANDLE = COLOR_LIGHT_BLUE
-COLOR_SCROLLBAR_BORDER = COLOR_LIGHT_BLUE
-COLOR_SCROLLBAR_WIDTH = "16px"
-COLOR_SCROLLBAR_WIDTH_WIDE = "21px"
+# === SIZE VARIABLES ===
 
 # Buttons
 SIZE_ADD_BUTTON_WIDTH = 75
@@ -311,18 +228,6 @@ FONT_SIZE_POPUP = 12
 
 # Shared UI strings
 TAG_SEARCH_PLACEHOLDER = "Search library for tag(s)"
-
-
-# Custom delegate for dropdown items
-class ComboBoxItemDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-    
-    def paint(self, painter, option, index):
-        # Force text color to white for visibility on dark background
-        option.palette.setColor(QPalette.Text, QColor(COLOR_WHITE))
-        option.palette.setColor(QPalette.HighlightedText, QColor(COLOR_BG_DARK_GREY))
-        super().paint(painter, option, index)
 
 
 class TagDatabase:
@@ -1349,13 +1254,13 @@ class IPTCEditor(QMainWindow):
         style_tag_display_list = """
             QListWidget {
                 background: palette(window);
-                border: 1px solid palette(mid);
+                border: 2px solid palette(dark);
                 border-radius: 6px;
                 padding: 4px;
             }
             QListWidget::item {
                 background: palette(base);
-                border: 1px solid palette(mid);
+                border: 1px solid palette(dark);
                 border-radius: 4px;
                 padding: 6px;
                 margin: 2px;
@@ -1366,7 +1271,7 @@ class IPTCEditor(QMainWindow):
         style_iptc_text_edit = """
             QLineEdit {
                 background: palette(base);
-                border: 1px solid palette(mid);
+                border: 2px solid palette(dark);
                 border-radius: 6px;
                 color: palette(text);
                 padding: 8px 12px;
@@ -1657,6 +1562,7 @@ class IPTCEditor(QMainWindow):
         self.tag_display_list = QListWidget()
         self.tag_display_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.tag_display_list.setFocusPolicy(Qt.NoFocus)
+        self.tag_display_list.setSpacing(3)
         self.tag_display_list.setStyleSheet(style_tag_display_list)
         iptc_layout.addWidget(self.tag_display_list)
         
@@ -2490,8 +2396,8 @@ class IPTCEditor(QMainWindow):
         radius = self.corner_radius
         path = QPainterPath()
         path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
-        painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
-        pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
+        painter.fillPath(path, self.palette().color(QPalette.Base))
+        pen = QPen(self.palette().color(QPalette.Mid))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
@@ -2710,8 +2616,8 @@ class IPTCEditor(QMainWindow):
             radius = self.corner_radius
             path = QPainterPath()
             path.addRoundedRect(1, 1, label_width - 2, label_height - 2, radius, radius)
-            painter.fillPath(path, QColor(COLOR_IMAGE_PREVIEW_BG))
-            pen = QPen(QColor(COLOR_IMAGE_PREVIEW_BORDER))
+            painter.fillPath(path, self.palette().color(QPalette.Base))
+            pen = QPen(self.palette().color(QPalette.Mid))
             pen.setWidth(2)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
@@ -3059,13 +2965,15 @@ class IPTCEditor(QMainWindow):
     
     def _create_tag_widget(self, tag_text, index):
         """Create a custom widget for a tag with text and delete button."""
-        widget = QWidget()
-        widget.setAttribute(Qt.WA_TranslucentBackground)
+        widget = QFrame()
+        widget.setFrameShape(QFrame.StyledPanel)
+        widget.setFrameShadow(QFrame.Raised)
+        widget.setLineWidth(1)
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(8)
         
-        # Use QLabel for the tag - no click action, inherits palette
+        # Use QLabel for the tag - no click action
         tag_label = QLabel(tag_text)
         tag_label.setFont(self.font())
         
@@ -3073,10 +2981,6 @@ class IPTCEditor(QMainWindow):
         delete_btn = QPushButton("✕")
         delete_btn.setFixedSize(24, 24)
         delete_btn.setCursor(Qt.PointingHandCursor)
-        delete_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid palette(mid); border-radius: 12px; color: palette(text); font-size: 12pt; }"
-            "QPushButton:hover { background: palette(mid); }"
-        )
         delete_btn.clicked.connect(lambda: self._on_tag_delete_clicked(index))
         
         layout.addWidget(tag_label)
