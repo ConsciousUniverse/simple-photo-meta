@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
     QFrame,
     QProgressBar,
+    QProgressDialog,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -1514,21 +1515,29 @@ class IPTCEditor(QMainWindow):
         # Create overlay widget for buttons (positioned at bottom with absolute positioning)
         button_overlay = QWidget(image_widget)
         button_overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        button_overlay.setStyleSheet("background: transparent;")
+        button_overlay.setAttribute(Qt.WA_TranslucentBackground, True)
         button_overlay_layout = QHBoxLayout(button_overlay)
         button_overlay_layout.setContentsMargins(0, 0, 0, 8)
         button_overlay_layout.setSpacing(12)
         button_overlay_layout.addStretch()
         
-        self.btn_rotate_left = QPushButton("⟲")
-        self.btn_rotate_right = QPushButton("⟳")
-        self.btn_rotate_left.setMinimumSize(48, 48)
-        self.btn_rotate_right.setMinimumSize(48, 48)
-        # Set font size for the button text (the symbols)
-        btn_font = QFont()
-        btn_font.setPointSize(24)
-        self.btn_rotate_left.setFont(btn_font)
-        self.btn_rotate_right.setFont(btn_font)
+        self.btn_rotate_left = QPushButton()
+        self.btn_rotate_right = QPushButton()
+        self.btn_rotate_left.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.btn_rotate_right.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.btn_rotate_left.setAutoFillBackground(True)
+        self.btn_rotate_right.setAutoFillBackground(True)
+        # Use system theme rotation icons with fallbacks to undo/redo
+        self.btn_rotate_left.setIcon(QIcon.fromTheme("object-rotate-left", QIcon.fromTheme("edit-undo")))
+        self.btn_rotate_right.setIcon(QIcon.fromTheme("object-rotate-right", QIcon.fromTheme("edit-redo")))
+        self.btn_rotate_left.setIconSize(QSize(24, 24))
+        self.btn_rotate_right.setIconSize(QSize(24, 24))
+        self.btn_rotate_left.setMinimumSize(44, 44)
+        self.btn_rotate_right.setMinimumSize(44, 44)
+        self.btn_rotate_left.setMaximumSize(44, 44)
+        self.btn_rotate_right.setMaximumSize(44, 44)
+        self.btn_rotate_left.setToolTip("Rotate Left")
+        self.btn_rotate_right.setToolTip("Rotate Right")
         self.btn_rotate_left.clicked.connect(self.rotate_left)
         self.btn_rotate_right.clicked.connect(self.rotate_right)
         button_overlay_layout.addWidget(self.btn_rotate_left)
@@ -3260,6 +3269,20 @@ class IPTCEditor(QMainWindow):
             return True
         total_start = time.perf_counter()
         
+        # Show modal progress immediately to avoid UI freeze perception
+        progress_dialog = QProgressDialog("Editing tags, please wait...", None, 0, 0, self)
+        progress_dialog.setWindowTitle("Please Wait")
+        progress_dialog.setCancelButton(None)
+        progress_dialog.setMinimumDuration(0)
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setValue(0)
+        progress_dialog.show()
+        QApplication.processEvents()
+        
+        def pump():
+            # Keep UI responsive while blocking work runs
+            QApplication.processEvents()
+        
         # Get tags from cleaned_keywords
         keywords = self.cleaned_keywords
         raw_input = "\n".join(keywords)
@@ -3288,10 +3311,12 @@ class IPTCEditor(QMainWindow):
         if not raw_input and not force:
             # No changes to save
             self._log_save_event("No changes detected; skipping save")
+            progress_dialog.close()
             return True
         try:
             meta = Exiv2Bind(self.current_image_path)
             meta.from_dict({metadata_type: {tag_type: []}})
+            pump()
             self._log_save_event(
                 f"Cleared {metadata_type.upper()} {tag_type} in {time.perf_counter() - total_start:.3f}s"
             )
@@ -3302,11 +3327,13 @@ class IPTCEditor(QMainWindow):
             self.show_custom_popup(
                 "exiv2 Error", f"Failed to delete {metadata_type.upper()} tag {tag_type}:\n{e}"
             )
+            progress_dialog.close()
             return False
         if not raw_input:
             self.db.set_image_tags(self.current_image_path, [], tag_type)
             try:
                 self.db.flush_commit()
+                pump()
             except Exception as e:
                 self._log_save_event(f"DB commit failed: {e}", level="warning")
             self._log_save_event(
@@ -3316,6 +3343,7 @@ class IPTCEditor(QMainWindow):
             load_start = time.perf_counter()
             self.load_previous_tags()
             load_elapsed = time.perf_counter() - load_start
+            pump()
             
             if refresh_ui:
                 refresh_start = time.perf_counter()
@@ -3334,6 +3362,7 @@ class IPTCEditor(QMainWindow):
                         timeout=1200,
                     )
                 message_elapsed = time.perf_counter() - message_start
+                pump()
                 self._log_save_event(
                     "UI refresh complete for empty tag save in "
                     f"{time.perf_counter() - refresh_start:.3f}s "
@@ -3344,6 +3373,7 @@ class IPTCEditor(QMainWindow):
             self._log_save_event(
                 f"Completed empty tag save in {time.perf_counter() - total_start:.3f}s"
             )
+            progress_dialog.close()
             return True
         if invalid_tags:
             self._log_save_event(
@@ -3353,21 +3383,25 @@ class IPTCEditor(QMainWindow):
                 "Invalid Tag(s)",
                 f"Invalid tag(s) found: {', '.join(invalid_tags)}. Tags must be alphanumeric or dashes only.",
             )
+            progress_dialog.close()
             return False
         try:
             write_start = time.perf_counter()
             if multi_valued:
                 meta.from_dict({metadata_type: {tag_type: keywords}})
                 metadata_elapsed = time.perf_counter() - write_start
+                pump()
                 self.db.set_image_tags(self.current_image_path, keywords, tag_type)
                 try:
                     self.db.flush_commit()
+                    pump()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             else:
                 single_value = keywords[-1] if keywords else ""
                 meta.from_dict({metadata_type: {tag_type: [single_value]}})
                 metadata_elapsed = time.perf_counter() - write_start
+                pump()
                 self.db.set_image_tags(
                     self.current_image_path,
                     [single_value] if single_value else [],
@@ -3375,6 +3409,7 @@ class IPTCEditor(QMainWindow):
                 )
                 try:
                     self.db.flush_commit()
+                    pump()
                 except Exception as e:
                     self._log_save_event(f"DB commit failed: {e}", level="warning")
             db_elapsed = time.perf_counter() - write_start - metadata_elapsed
@@ -3391,6 +3426,7 @@ class IPTCEditor(QMainWindow):
                     valid_tags_added += 1
                     print(f"[DEBUG] Added tag '{tag}' to database for tag_type '{tag_type}'")
                     sys.stdout.flush()
+                    pump()
                 else:
                     print(f"[DEBUG] Skipped invalid/empty tag: '{tag}'")
                     sys.stdout.flush()
@@ -3405,6 +3441,7 @@ class IPTCEditor(QMainWindow):
             load_elapsed = time.perf_counter() - load_start
             print(f"[DEBUG] Reloaded tags, now have {len(self.all_tags)} tags in all_tags")
             sys.stdout.flush()
+            pump()
             
             if refresh_ui:
                 refresh_start = time.perf_counter()
@@ -3423,6 +3460,7 @@ class IPTCEditor(QMainWindow):
                         timeout=1200,
                     )
                 message_elapsed = time.perf_counter() - message_start
+                pump()
                 
                 # Reload tags into input to ensure all are highlighted with blue background
                 self.iptc_text_edit.blockSignals(True)
@@ -3438,12 +3476,14 @@ class IPTCEditor(QMainWindow):
             self._log_save_event(
                 f"Save complete in {time.perf_counter() - total_start:.3f}s"
             )
+            progress_dialog.close()
             return True
         except Exception as e:
             self._log_save_event(f"Failed to write {metadata_type.upper()} {tag_type}: {e}", level="warning")
             self.show_custom_popup(
                 "exiv2 Error", f"Failed to write {metadata_type.upper()} tag {tag_type}:\n{e}"
             )
+            progress_dialog.close()
             return False
 
 
