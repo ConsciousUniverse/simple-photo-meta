@@ -3224,8 +3224,7 @@ class IPTCEditor(QMainWindow):
             elif result == "yes":
                 # Simulate pressing Enter to save the current input
                 self.on_tag_input_return_pressed()
-                save_success = self.save_tags_and_notify(force=True, refresh_ui=False)
-                return "saved" if save_success else False
+                return "saved"
             elif result == "no":
                 return True
         
