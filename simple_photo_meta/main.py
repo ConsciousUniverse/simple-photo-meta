@@ -2766,6 +2766,14 @@ class IPTCEditor(QMainWindow):
         if tag.lower() in existing_tags_lower:
             # Tag already exists, don't add it again
             return
+
+        # Block invalid tags before they reach the in-memory list
+        if not self.is_valid_tag(tag):
+            self.show_custom_popup(
+                "Invalid Tag",
+                "Tag contains invalid characters. Allowed: letters, numbers, spaces, dash, parentheses, colon, apostrophe, question mark, and vertical bar.",
+            )
+            return
         
         # Insert tag at the end of the input
         if hasattr(self, "cleaned_keywords") and self.cleaned_keywords:
@@ -2812,6 +2820,7 @@ class IPTCEditor(QMainWindow):
         layout.addWidget(progress)
         self.loading_dialog.setLayout(layout)
         self.loading_dialog.setStyleSheet("")
+        self.loading_dialog.setMinimumWidth(420)
         self.loading_dialog.show()
         QApplication.processEvents()
 
@@ -3056,6 +3065,14 @@ class IPTCEditor(QMainWindow):
     def on_tag_input_return_pressed(self):
         """Handle Return key in the input field - save the tag and update file."""
         input_text = self.iptc_text_edit.text().strip()
+
+        if input_text and not self.is_valid_tag(input_text):
+            self.show_custom_popup(
+                "Invalid Tag",
+                "Tag contains invalid characters. Allowed: letters, numbers, spaces, dash, parentheses, colon, apostrophe, question mark, and vertical bar.",
+            )
+            self.iptc_text_edit.setFocus()
+            return
         
         if self.editing_tag_index is not None:
             # Editing an existing tag
@@ -3085,6 +3102,14 @@ class IPTCEditor(QMainWindow):
         """Handle Save Edits button click - commit any pending input first, then save."""
         if self.iptc_text_edit.text().strip():
             input_text = self.iptc_text_edit.text().strip()
+
+            if not self.is_valid_tag(input_text):
+                self.show_custom_popup(
+                    "Invalid Tag",
+                    "Tag contains invalid characters. Allowed: letters, numbers, spaces, dash, parentheses, colon, apostrophe, question mark, and vertical bar.",
+                )
+                self.iptc_text_edit.setFocus()
+                return
             
             if self.editing_tag_index is not None:
                 # Editing an existing tag
@@ -3275,6 +3300,7 @@ class IPTCEditor(QMainWindow):
         progress_dialog.setCancelButton(None)
         progress_dialog.setMinimumDuration(0)
         progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setMinimumWidth(420)
         progress_dialog.setValue(0)
         progress_dialog.show()
         QApplication.processEvents()
