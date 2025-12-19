@@ -1038,6 +1038,10 @@ class IPTCEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Simple Photo Meta (alpha)")
+        
+        # Set window icon for taskbar
+        self._set_window_icon()
+        
         # Dynamically set initial window size based on available screen size
         screen = QGuiApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
@@ -1097,6 +1101,44 @@ class IPTCEditor(QMainWindow):
         self._scan_status_clear_timer = QTimer(self)
         self._scan_status_clear_timer.setSingleShot(True)
         self._scan_status_clear_timer.timeout.connect(self.clear_scan_status)
+
+    def _set_window_icon(self):
+        """Set window icon for taskbar display"""
+        # Try to find icon in different locations based on execution context
+        icon_paths = []
+        
+        if self._is_compiled_binary():
+            if sys.platform == 'darwin':
+                # macOS app bundle
+                app_bundle = self._find_macos_app_bundle()
+                if app_bundle:
+                    icon_paths.append(os.path.join(app_bundle, 'Contents', 'Resources', 'SimplePhotoMeta.icns'))
+            else:
+                # Linux AppImage
+                appdir = os.environ.get('APPDIR', '')
+                if appdir:
+                    icon_paths.extend([
+                        os.path.join(appdir, 'usr', 'share', 'icons', 'hicolor', '256x256', 'apps', 'simple-photo-meta.png'),
+                        os.path.join(appdir, 'simple-photo-meta.png'),
+                    ])
+                # Also check relative to executable
+                exe_dir = os.path.dirname(sys.executable)
+                icon_paths.append(os.path.join(exe_dir, 'simple-photo-meta.png'))
+        else:
+            # Running from source
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            icon_paths.extend([
+                os.path.join(base_dir, 'icons', 'icon_appimage.png'),
+                os.path.join(base_dir, 'icons', 'SimplePhotoMeta.icns'),
+            ])
+        
+        # Try each path and set the first valid icon found
+        for icon_path in icon_paths:
+            if os.path.exists(icon_path):
+                icon = QIcon(icon_path)
+                if not icon.isNull():
+                    self.setWindowIcon(icon)
+                    return
 
     def style_dialog(self, dialog, min_width=380, min_height=120, padding=18):
         """
@@ -3658,6 +3700,13 @@ class IPTCEditor(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    
+    # Set application metadata for proper desktop integration (Linux taskbar icon)
+    app.setApplicationName("simple-photo-meta")
+    app.setDesktopFileName("simple-photo-meta")
+    app.setOrganizationName("danbright")
+    app.setOrganizationDomain("danbright.uk")
+    
     window = IPTCEditor()
     window.show()
     sys.exit(app.exec())
