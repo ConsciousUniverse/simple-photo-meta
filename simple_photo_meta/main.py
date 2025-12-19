@@ -1572,6 +1572,7 @@ class IPTCEditor(QMainWindow):
         self.tag_display_list.setSelectionMode(QAbstractItemView.NoSelection)
         self.tag_display_list.setFocusPolicy(Qt.NoFocus)
         self.tag_display_list.setSpacing(3)
+        self.tag_display_list.setViewportMargins(0, 0, 12, 0)
         self.tag_display_list.setStyleSheet(style_tag_display_list)
         iptc_layout.addWidget(self.tag_display_list)
         
