@@ -1165,38 +1165,89 @@ class IPTCEditor(QMainWindow):
         self.style_dialog(msg_box, min_width=400, min_height=200)
         msg_box.exec()
     
+    def _is_compiled_binary(self):
+        """Check if running as a compiled Nuitka binary"""
+        # Nuitka sets __compiled__ on modules, or we can check for temp extraction
+        return (
+            getattr(sys, 'frozen', False) or 
+            '__compiled__' in dir() or
+            hasattr(sys, '__compiled__') or
+            'nuitka' in sys.executable.lower() or
+            '/var/folders/' in sys.executable or  # macOS temp extraction
+            '/tmp/' in sys.executable  # Linux temp extraction
+        )
+    
+    def _find_macos_app_bundle(self):
+        """Find the .app bundle path on macOS when running as Nuitka onefile"""
+        
+        # Method 1: Check lsappinfo for this process
+        try:
+            result = subprocess.run(
+                ['lsappinfo', 'info', '-only', 'bundlepath', '-app', 'SPM'],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                # Parse output like: "bundlepath"="/Applications/SPM.app"
+                for line in result.stdout.strip().split('\n'):
+                    if 'bundlepath' in line and '=' in line:
+                        path = line.split('=', 1)[1].strip().strip('"')
+                        if os.path.exists(path):
+                            return path
+        except Exception:
+            pass
+        
+        # Method 2: Check common install locations
+        common_paths = [
+            '/Applications/SPM.app',
+            os.path.expanduser('~/Applications/SPM.app'),
+            '/Applications/Simple Photo Meta.app',
+            os.path.expanduser('~/Applications/Simple Photo Meta.app'),
+        ]
+        for app_path in common_paths:
+            if os.path.exists(app_path):
+                return app_path
+        
+        return None
+    
     def open_licenses_folder(self):
         """Open the licenses directory in file manager"""
-        # Determine licenses path based on app structure
-        if getattr(sys, 'frozen', False):
+        licenses_path = None
+        
+        if self._is_compiled_binary():
             # Running as compiled binary
             if sys.platform == 'darwin':
-                # macOS .app bundle: licenses are in Contents/Resources/licenses
-                base_path = os.path.dirname(sys.executable)
-                licenses_path = os.path.join(base_path, '..', 'Resources', 'licenses')
+                # macOS: Find the .app bundle
+                app_bundle = self._find_macos_app_bundle()
+                if app_bundle:
+                    licenses_path = os.path.join(app_bundle, 'Contents', 'Resources', 'licenses')
             else:
-                # Linux AppImage: licenses are in usr/share/licenses/simple-photo-meta
-                base_path = os.path.dirname(sys.executable)
-                licenses_path = os.path.join(base_path, '..', 'share', 'licenses', 'simple-photo-meta')
+                # Linux AppImage: uses APPDIR environment variable
+                appdir = os.environ.get('APPDIR', '')
+                if appdir:
+                    licenses_path = os.path.join(appdir, 'usr', 'share', 'licenses', 'simple-photo-meta')
+                else:
+                    base_path = os.path.dirname(sys.executable)
+                    licenses_path = os.path.join(base_path, '..', 'share', 'licenses', 'simple-photo-meta')
         else:
             # Running from source: licenses are in repo root
             licenses_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'licenses')
         
         # Normalize and resolve the path
-        licenses_path = os.path.normpath(os.path.abspath(licenses_path))
+        if licenses_path:
+            licenses_path = os.path.normpath(os.path.abspath(licenses_path))
         
-        if not os.path.exists(licenses_path):
+        if not licenses_path or not os.path.exists(licenses_path):
             QMessageBox.warning(
                 self,
                 "Licenses Not Found",
-                f"Could not locate licenses directory.\n\nExpected path: {licenses_path}"
+                f"Could not locate licenses directory.\n\nSearched path: {licenses_path or 'None'}\n\n"
+                f"If installed, licenses should be in:\n/Applications/SPM.app/Contents/Resources/licenses"
             )
             return
         
         # Open in file manager
         try:
             if sys.platform == 'darwin':
-                # Use subprocess with proper error handling for macOS
                 result = subprocess.run(['open', licenses_path], capture_output=True, text=True)
                 if result.returncode != 0:
                     raise Exception(f"open command failed: {result.stderr}")
