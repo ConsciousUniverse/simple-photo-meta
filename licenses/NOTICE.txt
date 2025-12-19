@@ -1,0 +1,167 @@
+Third-Party Licenses and Components
+====================================
+
+This application includes or links to the following open-source components.
+Each component is listed under its applicable license below.
+
+================================================================================
+GNU LESSER GENERAL PUBLIC LICENSE v3.0 (LGPL-3.0)
+License file: LICENSE-LGPL-3.0.txt
+================================================================================
+
+Qt Framework Components (via PySide6):
+  • Qt6 Core libraries
+  • Qt6 GUI libraries
+  • Qt6 Widgets
+  • Qt6 Platform plugins
+  Purpose: Cross-platform GUI framework
+  Website: https://www.qt.io/
+
+PySide6
+  Purpose: Python bindings for Qt6
+  Website: https://pypi.org/project/PySide6/
+
+PySide6-Addons
+  Purpose: Additional Qt6 modules for Python
+  
+PySide6-Essentials
+  Purpose: Essential Qt6 modules for Python
+
+shiboken6
+  Purpose: CPython bindings generator for Qt
+  Website: https://pypi.org/project/shiboken6/
+
+================================================================================
+GNU GENERAL PUBLIC LICENSE v2.0 (GPL-2.0)
+License file: LICENSE-GPL-2.0.txt
+================================================================================
+
+Exiv2 (libexiv2)
+  Purpose: Image metadata library (EXIF, IPTC, XMP support)
+  Website: https://www.exiv2.org/
+  Note: Exiv2 is available under GPL-2.0 or later. Alternative licensing
+        options (GPL-3.0, LGPL-3.0) may apply depending on build configuration.
+        See LICENSE-GPL-3.0.txt and LICENSE-LGPL-3.0.txt for alternatives.
+
+================================================================================
+GNU GENERAL PUBLIC LICENSE v3.0 (GPL-3.0)
+License file: LICENSE-GPL-3.0.txt
+================================================================================
+
+Simple Photo Meta (this application)
+  Purpose: Main application code
+  Copyright: © 2025 Dan Bright
+  Website: [repository URL]
+
+Exiv2 (alternative licensing option)
+  Purpose: Image metadata library
+  Note: Included as GPL-3.0 option for Exiv2. See GPL-2.0 section above.
+
+================================================================================
+BSD 3-CLAUSE LICENSE (BSD-3-Clause)
+License file: LICENSE-BSD-3-Clause.txt
+================================================================================
+
+inih (INIReader)
+  Purpose: INI file parser (vendored C++ source)
+  Files: simple_photo_meta/inih/*.{h,cpp,c}
+  Website: https://github.com/benhoyt/inih
+  Copyright: © 2009 Ben Hoyt
+
+pybind11
+  Purpose: C++ to Python binding library (headers only at build-time)
+  Website: https://github.com/pybind/pybind11
+
+zstandard
+  Purpose: Zstandard compression library Python bindings
+  Website: https://pypi.org/project/zstandard/
+
+================================================================================
+MIT LICENSE
+License file: LICENSE-MIT.txt
+================================================================================
+
+Brotli (libbrotlidec, libbrotlicommon)
+  Purpose: Brotli compression library
+  Website: https://github.com/google/brotli
+
+pillow-heif
+  Purpose: Python library for HEIF/HEIC image support
+  Website: https://pypi.org/project/pillow-heif/
+
+appdirs
+  Purpose: Application directory management
+  Website: https://pypi.org/project/appdirs/
+
+packaging
+  Purpose: Python packaging utilities
+  Website: https://pypi.org/project/packaging/
+
+pyproject-hooks
+  Purpose: Build backend hook caller
+  Website: https://pypi.org/project/pyproject-hooks/
+
+setuptools
+  Purpose: Python package build system
+  Website: https://pypi.org/project/setuptools/
+
+wheel
+  Purpose: Python wheel package format
+  Website: https://pypi.org/project/wheel/
+
+ordered-set
+  Purpose: Ordered set data structure
+  Website: https://pypi.org/project/ordered-set/
+
+fmt (libfmt)
+  Purpose: C++ string formatting library
+  Website: https://github.com/fmtlib/fmt
+
+================================================================================
+HISTORICAL PERMISSION NOTICE AND DISCLAIMER (HPND)
+License file: LICENSE-HPND.txt
+================================================================================
+
+Pillow (PIL Fork)
+  Purpose: Python Imaging Library
+  Website: https://pypi.org/project/Pillow/
+  Note: Pillow includes contributions under various permissive licenses.
+        See Pillow's LICENSE file for complete attribution.
+
+================================================================================
+EXPAT LICENSE (MIT-style)
+License file: LICENSE-Expat.txt
+================================================================================
+
+libexpat
+  Purpose: XML parsing library
+  Website: https://libexpat.github.io/
+
+================================================================================
+APACHE LICENSE 2.0
+License file: LICENSE-Apache-2.0.txt
+================================================================================
+
+Nuitka (build-time only)
+  Purpose: Python-to-C compiler used to create standalone binaries
+  Website: https://nuitka.net/
+  Note: Nuitka is a build tool and is not redistributed with binaries.
+
+================================================================================
+ADDITIONAL NOTES
+================================================================================
+
+1. Qt Framework: This application uses Qt under the LGPL-3.0 open-source
+   license. Users are free to dynamically link and relink the application
+   with modified Qt libraries.
+
+2. Exiv2 Licensing: Exiv2 offers multiple licensing options (GPL-2.0+,
+   GPL-3.0, LGPL-3.0). This distribution includes license texts for all
+   options. The actual license depends on build configuration.
+
+3. Build Tools: Some components (Nuitka, setuptools, wheel, build) are
+   used only during compilation and are not included in binary distributions.
+   They are listed here for completeness.
+
+4. For complete license texts, see the individual LICENSE-*.txt files in
+   this directory.

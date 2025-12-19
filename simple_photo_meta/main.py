@@ -35,6 +35,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QProgressBar,
     QProgressDialog,
+    QMenuBar,
+    QMenu,
 )
 from PySide6.QtGui import (
     QPixmap,
@@ -1086,6 +1088,7 @@ class IPTCEditor(QMainWindow):
         self._tag_item_cache = {}
         self._tag_order = []
         
+        self.create_menu_bar()
         self.create_widgets()
         self.load_previous_tags()
         self._scan_refresh_timer = QTimer(self)
@@ -1119,6 +1122,95 @@ class IPTCEditor(QMainWindow):
                         if widget.pixmap() is not None:
                             widget.setContentsMargins(24, 24, 24, 24)
 
+    def create_menu_bar(self):
+        """Create menu bar with Help menu"""
+        menu_bar = self.menuBar()
+        
+        # Help menu
+        help_menu = menu_bar.addMenu("&Help")
+        
+        # About action
+        about_action = help_menu.addAction("&About Simple Photo Meta")
+        about_action.triggered.connect(self.show_about_dialog)
+        
+        # View Licenses action
+        licenses_action = help_menu.addAction("View &Licenses")
+        licenses_action.triggered.connect(self.open_licenses_folder)
+    
+    def show_about_dialog(self):
+        """Show About dialog with app info"""
+        about_text = (
+            "<h3>Simple Photo Meta</h3>"
+            "<p>Version 0.1.0 (alpha)</p>"
+            "<p>A GUI tool for editing IPTC and EXIF metadata in images.</p>"
+            "<p>Copyright © 2025 Dan Bright</p>"
+            "<p>Licensed under GNU General Public License v3.0</p>"
+            "<p><a href='licenses'>View Third-Party Licenses</a></p>"
+        )
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("About Simple Photo Meta")
+        msg_box.setTextFormat(Qt.RichText)
+        msg_box.setText(about_text)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        
+        # Enable link interaction and connect to licenses folder
+        for label in msg_box.findChildren(QLabel):
+            if label.textFormat() == Qt.RichText:
+                label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+                label.setOpenExternalLinks(False)
+                label.linkActivated.connect(lambda url: self.open_licenses_folder())
+        
+        self.style_dialog(msg_box, min_width=400, min_height=200)
+        msg_box.exec()
+    
+    def open_licenses_folder(self):
+        """Open the licenses directory in file manager"""
+        # Determine licenses path based on app structure
+        if getattr(sys, 'frozen', False):
+            # Running as compiled binary
+            if sys.platform == 'darwin':
+                # macOS .app bundle: licenses are in Contents/Resources/licenses
+                base_path = os.path.dirname(sys.executable)
+                licenses_path = os.path.join(base_path, '..', 'Resources', 'licenses')
+            else:
+                # Linux AppImage: licenses are in usr/share/licenses/simple-photo-meta
+                base_path = os.path.dirname(sys.executable)
+                licenses_path = os.path.join(base_path, '..', 'share', 'licenses', 'simple-photo-meta')
+        else:
+            # Running from source: licenses are in repo root
+            licenses_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'licenses')
+        
+        # Normalize and resolve the path
+        licenses_path = os.path.normpath(os.path.abspath(licenses_path))
+        
+        if not os.path.exists(licenses_path):
+            QMessageBox.warning(
+                self,
+                "Licenses Not Found",
+                f"Could not locate licenses directory.\n\nExpected path: {licenses_path}"
+            )
+            return
+        
+        # Open in file manager
+        try:
+            if sys.platform == 'darwin':
+                # Use subprocess with proper error handling for macOS
+                result = subprocess.run(['open', licenses_path], capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise Exception(f"open command failed: {result.stderr}")
+            elif sys.platform.startswith('linux'):
+                subprocess.run(['xdg-open', licenses_path], check=True)
+            elif sys.platform == 'win32':
+                os.startfile(licenses_path)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error Opening Licenses",
+                f"Could not open licenses folder:\n{e}\n\nPath: {licenses_path}"
+            )
+    
     def _refresh_view_after_scan(self):
         if self.folder_path:
             self.show_current_page()

@@ -36,3 +36,22 @@ pybind11
 Notes:
 - For full license texts, see the LICENSE file in this repository and the respective project homepages.
 - Some dependencies (e.g., Qt via PySide6) may be available under commercial licenses; this project uses the open source (LGPL/GPL) versions.
+
+Full License Texts Directory
+----------------------------
+For distribution packages (DMG, AppImage, etc.), full third‑party license
+texts are included in the repository at:
+
+licenses/
+
+Included files:
+- LICENSE-GPL-3.0.txt
+- LICENSE-GPL-2.0.txt
+- LICENSE-LGPL-3.0.txt
+- LICENSE-BSD-3-Clause.txt
+- LICENSE-MIT.txt
+- LICENSE-HPND.txt
+- NOTICE.txt (dependency → license mapping)
+
+If you change linked libraries (e.g., Exiv2 option or Qt modules), ensure the
+corresponding license text is present in licenses/.
