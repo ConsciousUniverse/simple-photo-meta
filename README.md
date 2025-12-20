@@ -4,11 +4,15 @@ This is a desktop photograph metadata management software, for MacOS and Linux. 
 
 The software is written in Python (3.13), and uses the Qt GUI framework. It is powered by the excellent [Exiv2 metadata library](https://github.com/exiv2/exiv2).
 
-This software was written for MacOS and Linux. It is untested on Windows.
+This software was written for MacOS (Apple Silicon) and Linux. It is untested on Windows.
 
 ## ⚠️ Currently Potentially Unsafe - Use with Caution
 
 This is an Alpha version of this software, and as such is made available for testing purposes only. It is unsafe to use on valuable images - please do not test on the only copy of your most cherished photos as they may be destroyed!
+
+## Download Binaries (Mac and Linux)
+
+Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The MacOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as an AppImage.
 
 ## Produced Using AI
 
@@ -63,8 +67,8 @@ This version was produced with the considerable assistance of artificial intelli
 
 Download alpha releases from the Releases page:
 
-- **macOS (Apple Silicon)**: DMG installer
-- **Linux**: AppImage (universal)
+- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
+- **Linux**: [AppImage (universal)](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
 
 ### From Source
 
@@ -162,7 +166,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v0.1.125-alpha+1fe4ae2
+v0.1.128-alpha+c538fe5
 
 ## Contributing
 
