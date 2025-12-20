@@ -215,19 +215,41 @@ def ensure_preview_image(image_path, edge_length=DEFAULT_PREVIEW_MAX_EDGE):
 
 # Buttons
 SIZE_ADD_BUTTON_WIDTH = 75
+
+def get_scaled_tag_item_height():
+    """Get tag item height scaled to current font size"""
+    return int(FONT_SIZE_TAG_INPUT * 3.1)
+
+def get_scaled_add_button_height():
+    """Get add button height scaled to current font size"""
+    return int(FONT_SIZE_BUTTON * 3.2)
+
+# Legacy constants (use functions for dynamic sizing)
 SIZE_ADD_BUTTON_HEIGHT = 45
 SIZE_TAG_ITEM_HEIGHT = 56  # Height for tag list items in display list
 
 # === FONT SIZE VARIABLES (ALL FONT SIZES DEFINED HERE) ===
-FONT_SIZE_DEFAULT = 12
-FONT_SIZE_TAG_INPUT = 18
-FONT_SIZE_TAG_LIST = 14
-FONT_SIZE_INFO_BANNER = 12
-FONT_SIZE_TAG_LABEL = 12
-FONT_SIZE_TAG_LIST_ITEM = 12
-FONT_SIZE_COMBOBOX = 14
-FONT_SIZE_BUTTON = 14
-FONT_SIZE_POPUP = 12
+# Base font size (can be adjusted via Preferences menu)
+FONT_SIZE_BASE = 12
+# Derived font sizes (scaled from base)
+FONT_SIZE_DEFAULT = FONT_SIZE_BASE
+FONT_SIZE_TAG_INPUT = FONT_SIZE_BASE
+FONT_SIZE_TAG_LIST = FONT_SIZE_BASE + 2
+FONT_SIZE_INFO_BANNER = FONT_SIZE_BASE
+FONT_SIZE_TAG_LABEL = FONT_SIZE_BASE
+FONT_SIZE_TAG_LIST_ITEM = FONT_SIZE_BASE
+FONT_SIZE_COMBOBOX = FONT_SIZE_BASE + 2
+FONT_SIZE_BUTTON = FONT_SIZE_BASE + 2
+FONT_SIZE_POPUP = FONT_SIZE_BASE
+
+# Font size presets for preferences
+FONT_SIZE_PRESETS = {
+    "Small": 10,
+    "Medium": 12,
+    "Large": 14,
+    "Extra Large": 16,
+    "Massive": 18,
+}
 
 # Shared UI strings
 TAG_SEARCH_PLACEHOLDER = "Search library for tag(s)"
@@ -303,7 +325,42 @@ class TagDatabase:
             )
             """
         )
+        # Preferences table for storing application settings
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS preferences (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """
+        )
         self.conn.commit()
+
+    def get_preference(self, key, default=None):
+        """Get a preference value from the database"""
+        try:
+            c = self.conn.cursor()
+            c.execute("SELECT value FROM preferences WHERE key = ?", (key,))
+            row = c.fetchone()
+            if row:
+                return row[0]
+        except Exception:
+            pass
+        return default
+    
+    def set_preference(self, key, value):
+        """Set a preference value in the database"""
+        try:
+            c = self.conn.cursor()
+            c.execute(
+                "INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)",
+                (key, str(value))
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Warning: could not save preference {key}: {e}")
+            return False
 
     def flush_commit(self):
         """Commit and force flush any pending transactions, including WAL checkpoint."""
@@ -1092,6 +1149,9 @@ class IPTCEditor(QMainWindow):
         self._tag_item_cache = {}
         self._tag_order = []
         
+        # Apply saved font size preference on startup
+        self._apply_saved_font_size()
+        
         self.create_menu_bar()
         self.create_widgets()
         self.load_previous_tags()
@@ -1165,8 +1225,22 @@ class IPTCEditor(QMainWindow):
                             widget.setContentsMargins(24, 24, 24, 24)
 
     def create_menu_bar(self):
-        """Create menu bar with Help menu"""
+        """Create menu bar with Preferences and Help menus"""
         menu_bar = self.menuBar()
+        
+        # Preferences menu
+        prefs_menu = menu_bar.addMenu("&Preferences")
+        
+        # Font Size submenu
+        font_size_menu = prefs_menu.addMenu("Font Size")
+        self.font_size_action_group = []
+        current_size = self._get_saved_font_size()
+        for name, size in FONT_SIZE_PRESETS.items():
+            action = font_size_menu.addAction(name)
+            action.setCheckable(True)
+            action.setChecked(size == current_size)
+            action.triggered.connect(lambda checked, s=size, n=name: self._set_font_size(s, n))
+            self.font_size_action_group.append(action)
         
         # Help menu
         help_menu = menu_bar.addMenu("&Help")
@@ -1178,6 +1252,101 @@ class IPTCEditor(QMainWindow):
         # View Licenses action
         licenses_action = help_menu.addAction("View &Licences")
         licenses_action.triggered.connect(self.open_licenses_folder)
+    
+    def _get_saved_font_size(self):
+        """Get saved font size from database, or return default"""
+        value = self.db.get_preference("font_size", "12")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 12  # Default medium size
+    
+    def _save_font_size(self, size):
+        """Save font size preference to database"""
+        self.db.set_preference("font_size", size)
+    
+    def _set_font_size(self, size, name):
+        """Set application font size and update UI"""
+        global FONT_SIZE_BASE, FONT_SIZE_DEFAULT, FONT_SIZE_TAG_INPUT, FONT_SIZE_TAG_LIST
+        global FONT_SIZE_INFO_BANNER, FONT_SIZE_TAG_LABEL, FONT_SIZE_TAG_LIST_ITEM
+        global FONT_SIZE_COMBOBOX, FONT_SIZE_BUTTON, FONT_SIZE_POPUP
+        
+        # Update global font size variables
+        FONT_SIZE_BASE = size
+        FONT_SIZE_DEFAULT = size
+        FONT_SIZE_TAG_INPUT = size
+        FONT_SIZE_TAG_LIST = size + 2
+        FONT_SIZE_INFO_BANNER = size
+        FONT_SIZE_TAG_LABEL = size
+        FONT_SIZE_TAG_LIST_ITEM = size
+        FONT_SIZE_COMBOBOX = size + 2
+        FONT_SIZE_BUTTON = size + 2
+        FONT_SIZE_POPUP = size
+        
+        # Update menu checkmarks
+        for action in self.font_size_action_group:
+            action.setChecked(action.text() == name)
+        
+        # Save preference
+        self._save_font_size(size)
+        
+        # Apply to application
+        app = QApplication.instance()
+        font = app.font()
+        font.setPointSize(size)
+        app.setFont(font)
+        
+        # Update suggestions list stylesheet with new font size
+        if hasattr(self, 'tag_suggestions_list'):
+            style = f"""
+                QListWidget {{
+                    background: palette(base);
+                    color: palette(text);
+                    border: 1px solid palette(mid);
+                    border-radius: 6px;
+                    padding: 4px;
+                    font-size: {size}pt;
+                }}
+                QListWidget::item {{
+                    padding: 8px;
+                    margin: 2px;
+                }}
+                QListWidget::item:selected {{
+                    background: palette(highlight);
+                    color: palette(highlighted-text);
+                }}
+            """
+            self.tag_suggestions_list.setStyleSheet(style)
+        
+        # Show confirmation
+        self.show_custom_popup("Font Size Changed", f"Font size set to {name}.\n\nSome elements may require restart to update fully.")
+    
+    def _apply_saved_font_size(self):
+        """Apply saved font size preference on startup"""
+        global FONT_SIZE_BASE, FONT_SIZE_DEFAULT, FONT_SIZE_TAG_INPUT, FONT_SIZE_TAG_LIST
+        global FONT_SIZE_INFO_BANNER, FONT_SIZE_TAG_LABEL, FONT_SIZE_TAG_LIST_ITEM
+        global FONT_SIZE_COMBOBOX, FONT_SIZE_BUTTON, FONT_SIZE_POPUP
+        
+        size = self._get_saved_font_size()
+        
+        # Update global font size variables
+        FONT_SIZE_BASE = size
+        FONT_SIZE_DEFAULT = size
+        FONT_SIZE_TAG_INPUT = size
+        FONT_SIZE_TAG_LIST = size + 2
+        FONT_SIZE_INFO_BANNER = size
+        FONT_SIZE_TAG_LABEL = size
+        FONT_SIZE_TAG_LIST_ITEM = size
+        FONT_SIZE_COMBOBOX = size + 2
+        FONT_SIZE_BUTTON = size + 2
+        FONT_SIZE_POPUP = size
+        
+        # Apply to application
+        app = QApplication.instance()
+        if app:
+            font = app.font()
+            font.setPointSize(size)
+            app.setFont(font)
     
     def show_about_dialog(self):
         """Show About dialog with app info"""
@@ -1437,6 +1606,7 @@ class IPTCEditor(QMainWindow):
         style_iptc_input_container = ""
         
         # Tag display list - palette colors with row separation
+        # Note: padding on ::item removed - the widget inside handles its own margins
         style_tag_display_list = """
             QListWidget {
                 background: palette(window);
@@ -1448,42 +1618,49 @@ class IPTCEditor(QMainWindow):
                 background: palette(base);
                 border: 1px solid palette(dark);
                 border-radius: 4px;
-                padding: 6px;
+                padding: 0px;
                 margin: 2px;
             }
         """
         
-        # Tag input field - palette colors
-        style_iptc_text_edit = """
-            QLineEdit {
+        # Tag input field - palette colors (dynamic padding and height based on font size)
+        scaled_padding_v = max(6, int(FONT_SIZE_TAG_INPUT * 0.4))
+        scaled_padding_h = max(8, int(FONT_SIZE_TAG_INPUT * 0.5))
+        # Calculate minimum height for input fields
+        scaled_min_height = max(36, int(FONT_SIZE_TAG_INPUT * 2.5))
+        
+        style_iptc_text_edit = f"""
+            QLineEdit {{
                 background: palette(base);
                 border: 2px solid palette(dark);
                 border-radius: 6px;
                 color: palette(text);
-                padding: 8px 12px;
-            }
-            QLineEdit:focus {
+                padding: {scaled_padding_v}px {scaled_padding_h}px;
+                min-height: {scaled_min_height - (scaled_padding_v * 2) - 4}px;
+            }}
+            QLineEdit:focus {{
                 border-color: palette(highlight);
-            }
+            }}
         """
         
-        # Tag suggestions list - palette colors
-        style_tag_suggestions_list = """
-            QListWidget {
+        # Tag suggestions list - palette colors with dynamic font size
+        style_tag_suggestions_list = f"""
+            QListWidget {{
                 background: palette(base);
                 color: palette(text);
                 border: 1px solid palette(mid);
                 border-radius: 6px;
                 padding: 4px;
-            }
-            QListWidget::item {
+                font-size: {FONT_SIZE_BASE}pt;
+            }}
+            QListWidget::item {{
                 padding: 8px;
                 margin: 2px;
-            }
-            QListWidget::item:selected {
+            }}
+            QListWidget::item:selected {{
                 background: palette(highlight);
                 color: palette(highlighted-text);
-            }
+            }}
         """
         
         # Tags list widget (right panel) - palette colors
@@ -1503,31 +1680,33 @@ class IPTCEditor(QMainWindow):
             }
         """
         
-        # Search bars - palette colors
-        style_search_bar = """
-            QTextEdit {
+        # Search bars - palette colors (dynamic padding based on font size)
+        style_search_bar = f"""
+            QTextEdit {{
                 background: palette(base);
                 color: palette(text);
                 border: 1px solid palette(mid);
                 border-radius: 6px;
-                padding: 6px;
-            }
-            QTextEdit:focus {
+                padding: {scaled_padding_v}px;
+                min-height: {scaled_min_height - (scaled_padding_v * 2) - 2}px;
+            }}
+            QTextEdit:focus {{
                 border-color: palette(highlight);
-            }
+            }}
         """
 
-        style_tags_search_bar = """
-            QLineEdit {
+        style_tags_search_bar = f"""
+            QLineEdit {{
                 background: palette(base);
                 border: 1px solid palette(mid);
                 border-radius: 6px;
                 color: palette(text);
-                padding: 8px 12px;
-            }
-            QLineEdit:focus {
+                padding: {scaled_padding_v}px {scaled_padding_h}px;
+                min-height: {scaled_min_height - (scaled_padding_v * 2) - 2}px;
+            }}
+            QLineEdit:focus {{
                 border-color: palette(highlight);
-            }
+            }}
         """
         
         # Buttons - native
@@ -1580,7 +1759,6 @@ class IPTCEditor(QMainWindow):
         self.btn_scan_directory = QPushButton("Scan Directory")
         self.btn_scan_directory.clicked.connect(self.scan_directory)
         self.search_bar = QTextEdit()
-        self.search_bar.setMaximumHeight(50)  # Increased from 30 to 50
         self.search_bar.setPlaceholderText(TAG_SEARCH_PLACEHOLDER)
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         self.search_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1600,7 +1778,7 @@ class IPTCEditor(QMainWindow):
         # Metadata format selector (IPTC/EXIF) - left side
         self.metadata_format_dropdown = QComboBox()
         self.metadata_format_dropdown.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        self.metadata_format_dropdown.setMinimumHeight(38)
+        self.metadata_format_dropdown.setMinimumHeight(int(FONT_SIZE_COMBOBOX * 2.7))  # Scale with font size
         self.metadata_format_dropdown.setMaximumWidth(100)
         self.metadata_format_dropdown.addItem("IPTC", "iptc")
         self.metadata_format_dropdown.addItem("EXIF", "exif")
@@ -1610,7 +1788,7 @@ class IPTCEditor(QMainWindow):
         # Metadata field selector (tag type within selected format) - right side
         self.metadata_type_dropdown = QComboBox()
         self.metadata_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.metadata_type_dropdown.setMinimumHeight(38)
+        self.metadata_type_dropdown.setMinimumHeight(int(FONT_SIZE_COMBOBOX * 2.7))  # Scale with font size
         self.metadata_type_dropdown.currentIndexChanged.connect(self.on_metadata_field_changed)
         apply_metadata_combobox_style(self.metadata_type_dropdown, style_metadata_type_dropdown_view)
         
@@ -1764,7 +1942,6 @@ class IPTCEditor(QMainWindow):
         # Bottom part: Single-line input field for editing
         self.iptc_text_edit = QLineEdit()
         self.iptc_text_edit.setPlaceholderText("Add new tag")
-        self.iptc_text_edit.setMinimumHeight(50)
         
         # Set up autocomplete for tags - use custom implementation for stability
         self.tag_completer_model = QStringListModel()
@@ -1791,7 +1968,7 @@ class IPTCEditor(QMainWindow):
         
         # Ensure the container expands horizontally to match the image preview
         iptc_input_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        iptc_input_container.setMinimumHeight(150)
+        iptc_input_container.setMinimumHeight(int(FONT_SIZE_TAG_INPUT * 8))  # Scale with font size
         center_splitter.addWidget(iptc_input_container)
         
         # Make tag input section collapsible
@@ -1812,7 +1989,6 @@ class IPTCEditor(QMainWindow):
 
         # Add tag search bar before anything that uses it
         self.tags_search_bar = QLineEdit()
-        self.tags_search_bar.setMinimumHeight(50)
         self.tags_search_bar.setPlaceholderText(TAG_SEARCH_PLACEHOLDER)
         self.tags_search_bar.textChanged.connect(self.update_tags_search)
         right_panel.addWidget(self.tags_search_bar)
@@ -1875,6 +2051,22 @@ class IPTCEditor(QMainWindow):
         self.tags_search_bar.setFont(search_font)
         self.search_bar.setStyleSheet(style_search_bar)
         self.tags_search_bar.setStyleSheet(style_tags_search_bar)
+        
+        # Set proper heights AFTER fonts and stylesheets are applied
+        # Use font metrics to calculate proper height - be generous!
+        fm = self.tags_search_bar.fontMetrics()
+        line_height = fm.height()
+        # Height = line height + padding top + padding bottom + border + extra margin
+        proper_height = line_height + (scaled_padding_v * 2) + 10  # extra 10px buffer
+        # Ensure minimum of 50px or 3x the font size, whichever is larger
+        proper_height = max(proper_height, 50, int(FONT_SIZE_TAG_INPUT * 3))
+        self.tags_search_bar.setMinimumHeight(proper_height)
+        self.tags_search_bar.setFixedHeight(proper_height)
+        self.search_bar.setMinimumHeight(proper_height)
+        self.search_bar.setMaximumHeight(proper_height)
+        self.iptc_text_edit.setMinimumHeight(proper_height)
+        self.iptc_text_edit.setFixedHeight(proper_height)
+        
         # Only increase font size for the tag input pane
         tag_input_font = QFont()
         tag_input_font.setPointSize(FONT_SIZE_TAG_INPUT)
@@ -2876,7 +3068,7 @@ class IPTCEditor(QMainWindow):
 
         btn_add = QPushButton("Add")
         btn_add.setStyleSheet("")
-        btn_add.setMinimumHeight(36)
+        btn_add.setMinimumHeight(int(FONT_SIZE_BUTTON * 2.6))  # Scale with font size
         btn_add.setMinimumWidth(SIZE_ADD_BUTTON_WIDTH)
         btn_add.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_add.clicked.connect(lambda checked=False, t=tag: self.add_tag_to_input(t))
@@ -3173,23 +3365,24 @@ class IPTCEditor(QMainWindow):
         widget.setFrameShape(QFrame.StyledPanel)
         widget.setFrameShadow(QFrame.Raised)
         widget.setLineWidth(1)
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(8)
         
-        # Use QLabel for the tag - no click action
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+        
+        # Tag label
         tag_label = QLabel(tag_text)
         tag_label.setFont(self.font())
         
-        # Delete button
+        # Delete button - simple fixed size
         delete_btn = QPushButton("✕")
         delete_btn.setFixedSize(24, 24)
         delete_btn.setCursor(Qt.PointingHandCursor)
         delete_btn.clicked.connect(lambda: self._on_tag_delete_clicked(index))
         
         layout.addWidget(tag_label)
-        layout.addWidget(delete_btn)
         layout.addStretch()
+        layout.addWidget(delete_btn)
         
         return widget
     
@@ -3199,7 +3392,10 @@ class IPTCEditor(QMainWindow):
             list_widget = self.tag_display_list
         item = QListWidgetItem()
         widget = self._create_tag_widget(tag_text, index)
-        item.setSizeHint(QSize(widget.sizeHint().width(), SIZE_TAG_ITEM_HEIGHT))
+        # Add 8px extra to size hint to prevent text truncation
+        size = widget.sizeHint()
+        size.setHeight(size.height() + 8)
+        item.setSizeHint(size)
         list_widget.addItem(item)
         list_widget.setItemWidget(item, widget)
         return item, widget
@@ -3207,7 +3403,7 @@ class IPTCEditor(QMainWindow):
     def _update_tag_item_widget(self, item, tag_text, index):
         """Update an existing tag item with new widget."""
         widget = self._create_tag_widget(tag_text, index)
-        item.setSizeHint(QSize(widget.sizeHint().width(), SIZE_TAG_ITEM_HEIGHT))
+        item.setSizeHint(widget.sizeHint())
         self.tag_display_list.setItemWidget(item, widget)
     
     def _on_tag_label_clicked(self, index):
