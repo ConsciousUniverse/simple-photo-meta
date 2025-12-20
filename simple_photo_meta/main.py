@@ -1176,7 +1176,7 @@ class IPTCEditor(QMainWindow):
         about_action.triggered.connect(self.show_about_dialog)
         
         # View Licenses action
-        licenses_action = help_menu.addAction("View &Licenses")
+        licenses_action = help_menu.addAction("View &Licences")
         licenses_action.triggered.connect(self.open_licenses_folder)
     
     def show_about_dialog(self):
@@ -1186,8 +1186,8 @@ class IPTCEditor(QMainWindow):
             "<p>Version 0.1.0 (alpha)</p>"
             "<p>A GUI tool for editing IPTC and EXIF metadata in images.</p>"
             "<p>Copyright © 2025 Dan Bright</p>"
-            "<p>Licensed under GNU General Public License v3.0</p>"
-            "<p><a href='licenses'>View Third-Party Licenses</a></p>"
+            "<p>Licensed under GNU General Public Licence v3.0</p>"
+            "<p><a href='licenses'>View Third-Party Licences</a></p>"
         )
         
         msg_box = QMessageBox(self)
