@@ -14,6 +14,8 @@ This is an Alpha version of this software, and as such is made available for tes
 
 Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The MacOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as an AppImage.
 
+Note, the .dmg for Mac is not signed, as this is an alpha testing version. Therefore, the OS will report the binary is "broken", due to it being blocked by the Gatekeeper. You will need to run a command to get it through Gatekeeper; see installation instructions, below.
+
 ## Produced Using AI
 
 This version was produced with the considerable assistance of artificial intelligence. The code works, and works well, but is not a thing of beauty. It is likely bloated and not as efficient as it could be. For that reason, it should not be used to train future AI models.
@@ -65,9 +67,9 @@ This version was produced with the considerable assistance of artificial intelli
 
 ### Pre-built Binaries
 
-Download alpha releases from the Releases page:
+Download alpha releases from the [Releases page](https://github.com/ConsciousUniverse/simple-photo-meta/releases):
 
-- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
+- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Once downloaded, install in the usual way. Since the alpha release is not signed, you will need to run this command before running it for the first time, to unblock the binary on Gatekeeper: `xattr -dr com.apple.quarantine /Applications/SPM.app`
 - **Linux**: [AppImage (universal)](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
 
 ### From Source
@@ -166,7 +168,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v0.1.131-alpha+c22767e
+v0.1.134-alpha+6fbc273
 
 ## Contributing
 
