@@ -166,7 +166,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v0.1.128-alpha+c538fe5
+v0.1.130-alpha+59fecae
 
 ## Contributing
 
