@@ -875,8 +875,10 @@ class ScanWorker(QThread):
                     try:
                         meta = Exiv2Bind(fpath)
                         result = meta.to_dict()
-                        iptc_data = result.get("iptc", {})
                         tags_by_type = {}
+                        
+                        # Index IPTC fields
+                        iptc_data = result.get("iptc", {})
                         for field in iptc_tags.iptc_writabable_fields_list:
                             value = iptc_data.get(field)
                             if isinstance(value, list):
@@ -886,6 +888,19 @@ class ScanWorker(QThread):
                             else:
                                 tags = []
                             tags_by_type[field] = tags
+                        
+                        # Index EXIF fields
+                        exif_data = result.get("exif", {})
+                        for field in exif_tags.exif_writable_fields_list:
+                            value = exif_data.get(field)
+                            if isinstance(value, list):
+                                tags = [tag for tag in value if tag]
+                            elif isinstance(value, str):
+                                tags = [value] if value else []
+                            else:
+                                tags = []
+                            tags_by_type[field] = tags
+                        
                         db.bulk_update_image_tags(fpath, tags_by_type)
                     except Exception as e:
                         print(f"Error: {e}")
