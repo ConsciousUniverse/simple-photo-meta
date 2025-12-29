@@ -57,7 +57,8 @@ from PySide6.QtGui import (
     QPen,
     QGuiApplication,
 )
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel
+from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QStringListModel, QUrl
+from PySide6.QtGui import QDesktopServices
 import hashlib
 from PIL import Image, ImageOps
 from datetime import datetime
@@ -2115,42 +2116,12 @@ class IPTCEditor(QMainWindow):
             self._apply_rotation()
 
     def on_preview_image_clicked(self, event):
-        """Open full-size image in a new window when preview is clicked"""
+        """Open full-size image in system's default viewer when preview is clicked"""
         if not self.current_image_path or not os.path.exists(self.current_image_path):
             return
         
-        # Create a new top-level window
-        full_image_window = QDialog(self)
-        full_image_window.setWindowTitle(os.path.basename(self.current_image_path))
-        full_image_window.setModal(False)
-        full_image_window.resize(1200, 900)
-        
-        # Create layout
-        layout = QVBoxLayout(full_image_window)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Create scroll area for large images
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setAlignment(Qt.AlignCenter)
-        
-        # Create label for the image
-        image_label = QLabel()
-        image_label.setAlignment(Qt.AlignCenter)
-        
-        # Load the full-size image with rotation applied
-        pixmap = QPixmap(self.current_image_path)
-        if not pixmap.isNull():
-            # Apply the same rotation as preview
-            if self._preview_rotation_angle != 0:
-                transform = QTransform().rotate(self._preview_rotation_angle)
-                pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
-            image_label.setPixmap(pixmap)
-        
-        scroll_area.setWidget(image_label)
-        layout.addWidget(scroll_area)
-        
-        full_image_window.show()
+        # Open the image in the system's default image viewer (Preview on macOS, etc.)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self.current_image_path))
 
     def update_pagination(self):
         start = time.perf_counter()
