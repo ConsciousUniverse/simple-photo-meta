@@ -1,8 +1,7 @@
 # Web version dependencies
-# Django + DRF for local API server
-django>=4.2,<5.0
-djangorestframework>=3.14.0
-django-cors-headers>=4.3.0
+# FastAPI + uvicorn for local API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
 
 # Image processing (same as before)
 pillow>=10.0.0
@@ -13,6 +12,3 @@ appdirs>=1.4.4
 
 # For building the C++ bindings
 pybind11>=2.11.0
-
-# Development server
-gunicorn>=21.0.0

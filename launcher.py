@@ -2,7 +2,7 @@
 """
 Simple Photo Meta - Desktop Launcher
 
-Starts the Django backend and opens a native window using pywebview.
+Starts the FastAPI backend with uvicorn and opens a native window using pywebview.
 Works on macOS (WebKit), Linux (GTK/WebKit), and Windows (EdgeChromium).
 """
 
@@ -18,9 +18,6 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
-# Set Django settings before any Django imports
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "spm_backend.settings")
-
 
 def find_free_port(start_port=8080, max_attempts=100):
     """Find an available port starting from start_port."""
@@ -35,7 +32,7 @@ def find_free_port(start_port=8080, max_attempts=100):
 
 
 def wait_for_server(port, timeout=30):
-    """Wait for Django server to be ready."""
+    """Wait for server to be ready."""
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
@@ -48,27 +45,20 @@ def wait_for_server(port, timeout=30):
     return False
 
 
-def run_django_server(port):
-    """Run Django development server in a thread."""
-    import django
-    django.setup()
+def run_fastapi_server(port):
+    """Run FastAPI server with uvicorn in a thread."""
+    import uvicorn
+    from main import app
     
-    from django.core.management import call_command
-    from django.core.management.commands.runserver import Command as RunserverCommand
-    
-    # Run migrations silently
-    try:
-        call_command("migrate", "--run-syncdb", verbosity=0)
-    except Exception:
-        call_command("migrate", verbosity=0)
-    
-    # Start the server (this blocks)
-    # We use a modified approach to allow clean shutdown
-    from django.core.servers.basehttp import run
-    from django.core.handlers.wsgi import WSGIHandler
-    
-    handler = WSGIHandler()
-    run(addr="127.0.0.1", port=port, wsgi_handler=handler, ipv6=False, threading=True)
+    # Run uvicorn with quiet logging
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+    server.run()
 
 
 def main():
@@ -81,13 +71,13 @@ def main():
     
     print(f"Starting Simple Photo Meta on {url}...")
     
-    # Start Django in a daemon thread
-    server_thread = threading.Thread(target=run_django_server, args=(port,), daemon=True)
+    # Start FastAPI/uvicorn in a daemon thread
+    server_thread = threading.Thread(target=run_fastapi_server, args=(port,), daemon=True)
     server_thread.start()
     
     # Wait for server to be ready
     if not wait_for_server(port):
-        print("Error: Django server failed to start", file=sys.stderr)
+        print("Error: FastAPI server failed to start", file=sys.stderr)
         sys.exit(1)
     
     print("Server ready, opening window...")

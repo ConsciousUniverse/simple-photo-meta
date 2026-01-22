@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Simple Photo Meta - Run Script
-# Starts the local Django server and opens the browser
+# Starts the local FastAPI server and opens the browser
 # NO external dependencies beyond Python
 
 set -e
@@ -30,7 +30,7 @@ source "$PROJECT_DIR/.venv/bin/activate"
 
 # Install backend dependencies
 echo "Installing dependencies..."
-pip install -q django djangorestframework django-cors-headers pillow pillow-heif appdirs
+pip install -q fastapi uvicorn pillow pillow-heif appdirs
 
 # Build C++ bindings if needed
 if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then
@@ -38,11 +38,6 @@ if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; 
     cd "$PROJECT_DIR"
     pip install -e .
 fi
-
-# Run Django migrations
-echo "Setting up database..."
-cd "$BACKEND_DIR"
-python manage.py migrate --run-syncdb 2>/dev/null || python manage.py migrate
 
 # Start the server
 PORT=${PORT:-8080}
@@ -57,5 +52,6 @@ echo ""
 # Open browser after a short delay (background)
 (sleep 2 && python -c "import webbrowser; webbrowser.open('http://127.0.0.1:$PORT')") &
 
-# Run the development server
-python manage.py runserver "127.0.0.1:$PORT"
+# Run the development server with uvicorn
+cd "$BACKEND_DIR"
+python -m uvicorn main:app --host 127.0.0.1 --port "$PORT" --reload

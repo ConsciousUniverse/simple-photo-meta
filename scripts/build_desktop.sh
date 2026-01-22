@@ -74,7 +74,7 @@ elif [[ "$PLATFORM" == "Linux" ]]; then
 fi
 
 # Install Django and other dependencies
-pip install -q django djangorestframework django-cors-headers pillow pillow-heif appdirs
+pip install -q fastapi uvicorn pillow pillow-heif appdirs
 
 # Install PyInstaller
 pip install -q pyinstaller

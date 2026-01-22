@@ -24,15 +24,17 @@ block_cipher = None
 PROJECT_ROOT = Path(SPECPATH)
 BACKEND_DIR = PROJECT_ROOT / "backend"
 
-# Collect Django and DRF data files
+# Collect data files for FastAPI backend
 datas = [
-    # Django templates
+    # Templates
     (str(BACKEND_DIR / "templates"), "templates"),
     # Static files
     (str(PROJECT_ROOT / "frontend" / "static"), "static"),
-    # Django apps
-    (str(BACKEND_DIR / "api"), "api"),
-    (str(BACKEND_DIR / "spm_backend"), "spm_backend"),
+    # Backend modules
+    (str(BACKEND_DIR / "config.py"), "."),
+    (str(BACKEND_DIR / "database.py"), "."),
+    (str(BACKEND_DIR / "main.py"), "."),
+    (str(BACKEND_DIR / "services"), "services"),
 ]
 
 # Collect tag definition files
@@ -46,46 +48,52 @@ for ext in [".so", ".pyd", ".dylib"]:
         datas.append((str(path), "simple_photo_meta"))
         break
 
-# Hidden imports for Django
+# Hidden imports for FastAPI/uvicorn
 hiddenimports = [
-    "django",
-    "django.contrib.contenttypes",
-    "django.contrib.staticfiles",
-    "django.core.management",
-    "django.core.servers.basehttp",
-    "django.core.handlers.wsgi",
-    "django.template.backends.django",
-    "django.template.context_processors",
-    "rest_framework",
-    "corsheaders",
-    "corsheaders.middleware",
+    "fastapi",
+    "fastapi.middleware",
+    "fastapi.middleware.cors",
+    "fastapi.staticfiles",
+    "fastapi.responses",
+    "starlette",
+    "starlette.routing",
+    "starlette.middleware",
+    "uvicorn",
+    "uvicorn.config",
+    "uvicorn.main",
+    "uvicorn.protocols",
+    "uvicorn.protocols.http",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.http.h11_impl",
+    "uvicorn.protocols.websockets",
+    "uvicorn.lifespan",
+    "uvicorn.lifespan.on",
+    "uvicorn.logging",
+    "pydantic",
+    "anyio",
+    "anyio._backends",
+    "anyio._backends._asyncio",
     "appdirs",
     "PIL",
     "PIL.Image",
     "pillow_heif",
-    "api",
-    "api.models",
-    "api.views",
-    "api.serializers",
-    "api.urls",
-    "api.services",
-    "api.services.metadata_service",
-    "api.services.image_service",
-    "api.services.scan_service",
-    "spm_backend",
-    "spm_backend.settings",
-    "spm_backend.urls",
-    "spm_backend.wsgi",
+    "config",
+    "database",
+    "main",
+    "services",
+    "services.image_service",
+    "services.metadata_service",
+    "services.scan_service",
     "simple_photo_meta",
     "simple_photo_meta.exiv2bind",
     "simple_photo_meta.iptc_tags",
     "simple_photo_meta.exif_tags",
 ]
 
-# Collect all Django submodules
-hiddenimports += collect_submodules("django")
-hiddenimports += collect_submodules("rest_framework")
-hiddenimports += collect_submodules("corsheaders")
+# Collect all FastAPI/uvicorn submodules
+hiddenimports += collect_submodules("fastapi")
+hiddenimports += collect_submodules("starlette")
+hiddenimports += collect_submodules("uvicorn")
 
 # Platform-specific pywebview backend
 if is_macos:
