@@ -4,18 +4,19 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pyside6 = "*"
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
 pillow = "*"
-simple-photo-meta = {file = ".", editable = true}
-appdirs = "*"
 pillow-heif = "*"
+appdirs = "*"
+pywebview = ">=5.0"
 
 [dev-packages]
 setuptools = "*"
 build = "*"
 wheel = "*"
-nuitka = "*"
 pybind11 = "*"
+pyinstaller = "*"
 
 [requires]
 python_version = "3.13"

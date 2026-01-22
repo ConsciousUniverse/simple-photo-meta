@@ -1,6 +1,6 @@
 @echo off
 REM Simple Photo Meta - Run Script (Windows)
-REM Starts the local Django server and opens the browser
+REM Starts the local FastAPI server and opens the browser
 REM NO external dependencies beyond Python
 
 setlocal
@@ -23,7 +23,7 @@ call "%PROJECT_DIR%\.venv\Scripts\activate.bat"
 
 REM Install backend dependencies
 echo Installing dependencies...
-pip install -q django djangorestframework django-cors-headers pillow pillow-heif appdirs
+pip install -q fastapi uvicorn pillow pillow-heif appdirs
 
 REM Build C++ bindings if needed
 python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>nul
@@ -32,11 +32,6 @@ if errorlevel 1 (
     cd "%PROJECT_DIR%"
     pip install -e .
 )
-
-REM Run Django migrations
-echo Setting up database...
-cd "%BACKEND_DIR%"
-python manage.py migrate --run-syncdb 2>nul || python manage.py migrate
 
 REM Set port
 if "%PORT%"=="" set PORT=8080
@@ -52,7 +47,8 @@ echo.
 REM Open browser
 start "" "http://127.0.0.1:%PORT%"
 
-REM Run the development server
-python manage.py runserver 127.0.0.1:%PORT%
+REM Run the development server with uvicorn
+cd "%BACKEND_DIR%"
+python -m uvicorn main:app --host 127.0.0.1 --port %PORT%
 
 endlocal

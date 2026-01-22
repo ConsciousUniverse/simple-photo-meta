@@ -1,1 +1,0 @@
-../../Resources/simple_photo_meta/exif_tags.py
