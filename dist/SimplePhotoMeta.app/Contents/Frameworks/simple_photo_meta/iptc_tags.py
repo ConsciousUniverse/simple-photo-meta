@@ -1,1 +1,0 @@
-../../Resources/simple_photo_meta/iptc_tags.py
