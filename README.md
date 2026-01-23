@@ -1,10 +1,10 @@
 # Simple Photo Meta (Alpha)
 
-This is a desktop photograph metadata management software, for MacOS and Linux. It allows the editing of both IPTC and EXIF tags, with a clean interface. This is not a photo processing software - it deals only with metadata. It is intended to do one job, and do it well.
+A local desktop application for viewing and editing IPTC and EXIF metadata in image files. The app provides a browser-based UI while running entirely on your local machine—no remote server required.
 
-The software is written in Python (3.13), and uses the Qt GUI framework. It is powered by the excellent [Exiv2 metadata library](https://github.com/exiv2/exiv2).
+This software is written in Python 3.13 with a FastAPI backend and plain HTML/CSS/JavaScript frontend. It is powered by the excellent [Exiv2 metadata library](https://github.com/exiv2/exiv2) via custom C++ bindings.
 
-This software was written for MacOS (Apple Silicon) and Linux. It is untested on Windows.
+This software was written for macOS (Apple Silicon) and Linux. It is untested on Windows.
 
 ## ⚠️ Currently Potentially Unsafe - Use with Caution
 
@@ -12,9 +12,20 @@ This is an Alpha version of this software, and as such is made available for tes
 
 ## Download Binaries (Mac and Linux)
 
-Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The MacOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as an AppImage.
+Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The macOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as an AppImage.
 
-Note, the .dmg for Mac is not signed, as this is an alpha testing version. Therefore, the OS will report the binary is "broken", due to it being blocked by the Gatekeeper. You will need to run a command to get it through Gatekeeper; see installation instructions, below.
+Note, the .dmg for Mac is not signed, as this is an alpha testing version. Therefore, the OS will report the binary is "broken", due to it being blocked by Gatekeeper. You will need to run a command to get it through Gatekeeper; see installation instructions below.
+
+## What's New in Version 2.0
+
+Version 2.0 is a complete rewrite of the application architecture:
+
+- **Web-based UI**: Now uses a browser-based interface powered by FastAPI, replacing the previous Qt/PySide6 GUI
+- **Plain JavaScript**: No JavaScript frameworks - minimal maintenance burden and no npm dependencies
+- **Lightweight backend**: FastAPI instead of heavier frameworks, with raw SQLite queries for simplicity
+- **Native window**: Uses pywebview to provide a native application window (WebKit on macOS, GTK/WebKit on Linux)
+- **System theme support**: UI now respects your OS light/dark theme settings
+- **Same powerful metadata engine**: Still uses the proven Exiv2 C++ bindings for reliable metadata handling
 
 ## Produced Using AI
 
@@ -51,8 +62,8 @@ This version was produced with the considerable assistance of artificial intelli
 - **Visual Tag Editor**: Clean, card-based interface for managing tags
 - **Autocomplete**: Smart tag suggestions from your discovered tag library while typing
 - **One-click Delete**: Remove tags with a single click
-- **Batch Operations**: Add the same tag to multiple images efficiently (coming soon)
-- **Unsaved Changes Detection**: Automatic prompts to save changes when switching images or tag types
+- **Auto-save**: Tags save immediately on add/remove - no explicit save button needed
+- **Unsaved Changes Detection**: Automatic prompts when switching images or tag types
 - **Input Validation**: Ensures tags meet format requirements
 
 ### Performance & UX
@@ -63,13 +74,24 @@ This version was produced with the considerable assistance of artificial intelli
 - **Error Handling**: Graceful handling of corrupted files and unsupported formats
 - **SQLite Database**: Fast local metadata indexing for quick searches
 
+## Technology Stack
+
+| Component        | Technology                                       |
+| ---------------- | ------------------------------------------------ |
+| Backend          | Python 3.13, FastAPI, uvicorn                    |
+| Frontend         | Plain HTML, CSS, JavaScript (no frameworks)      |
+| Database         | SQLite (raw queries, no ORM)                     |
+| Metadata Engine  | C++ Exiv2 library via pybind11 bindings          |
+| Image Processing | Pillow, pillow-heif                              |
+| Desktop Wrapper  | pywebview (WebKit on macOS, GTK/WebKit on Linux) |
+
 ## Installation
 
 ### Pre-built Binaries
 
 Download alpha releases from the [Releases page](https://github.com/ConsciousUniverse/simple-photo-meta/releases):
 
-- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Once downloaded, install in the usual way. Since the alpha release is not signed, you will need to run this command before running it for the first time, to unblock the binary on Gatekeeper: `xattr -dr com.apple.quarantine /Applications/SPM.app`
+- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Once downloaded, install in the usual way. Since the alpha release is not signed, you will need to run this command before running it for the first time, to unblock the binary on Gatekeeper: `xattr -dr com.apple.quarantine /Applications/SimplePhotoMeta.app`
 - **Linux**: [AppImage (universal)](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
 
 ### From Source
@@ -78,50 +100,52 @@ Download alpha releases from the [Releases page](https://github.com/ConsciousUni
 
 - Python 3.13+
 - Exiv2 library (for metadata operations)
-- Qt6 (via PySide6)
+- pybind11 (for C++ bindings)
 
 **macOS:**
 
 ```bash
 # Install dependencies
-brew install exiv2 brotli python@3.13
+brew install exiv2 brotli pybind11 python@3.13
 
 # Clone and setup
 git clone https://github.com/consciousuniverse/simple-photo-meta.git
 cd simple-photo-meta
-pip install -r requirements.txt
 
-# Run
-python simple_photo_meta/main.py
+# Run (creates venv automatically)
+./scripts/run.sh
 ```
 
-**Linux:**
+**Linux (Ubuntu/Debian):**
 
 ```bash
-# Install dependencies (Ubuntu/Debian)
-sudo apt-get install libexiv2-dev libbrotli-dev python3.13
+# Install dependencies
+sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 python3.13
 
 # Clone and setup
 git clone https://github.com/consciousuniverse/simple-photo-meta.git
 cd simple-photo-meta
-pip install -r requirements.txt
 
-# Run
-python simple_photo_meta/main.py
+# Run (creates venv automatically)
+./scripts/run.sh
 ```
+
+The `run.sh` script will:
+
+1. Create a Python virtual environment (`.venv`)
+2. Install all required packages
+3. Build the C++ Exiv2 bindings if needed
+4. Start the uvicorn server on `http://127.0.0.1:8080`
+5. Open your browser to the app
 
 ### Optional: HEIC/HEIF Support
 
-To enable HEIC/HEIF image format support:
-
-```bash
-pip install pillow-heif
-```
+HEIC/HEIF image format support is included automatically when you run the app.
 
 ## Usage
 
-1. **Open Directory**: Click "Open Directory" to select a folder containing images
-2. **Browse Images**: Navigate through paginated thumbnails (25 per page)
+1. **Open Directory**: Click "Open Folder" to select a folder containing images
+2. **Browse Images**: Navigate through paginated thumbnails
 3. **Select Metadata Type**: Choose between IPTC or EXIF from the dropdown
 4. **Select Field**: Choose which metadata field to edit (e.g., Keywords, Caption, Artist, Copyright)
 5. **Edit Tags**:
@@ -135,22 +159,46 @@ pip install pillow-heif
 
 ![alt text](assets/image.png)
 
-## Technical Architecture
+## Building from Source
 
-### Core Technologies
+### Build Scripts
 
-- **Python 3.13**: Modern Python with type hints
-- **PySide6/Qt6**: Cross-platform GUI framework
-- **Exiv2**: Industry-standard metadata library (via pybind11 bindings)
-- **SQLite**: Local metadata index for fast searches
-- **Pillow**: Image processing and thumbnail generation
-- **pillow-heif**: Optional HEIC/HEIF format support
+| Script                         | Description                                                  |
+| ------------------------------ | ------------------------------------------------------------ |
+| `scripts/run.sh`             | Start dev server - creates venv, installs deps, runs uvicorn |
+| `scripts/build_bindings.sh`  | Build C++ Exiv2 bindings                                     |
+| `scripts/build_desktop.sh`   | Build standalone app with PyInstaller                        |
+| `scripts/build_all.sh`       | Full build - bindings → desktop → installer                |
+| `scripts/create_dmg.sh`      | Create macOS DMG installer                                   |
+| `scripts/create_appimage.sh` | Create Linux AppImage                                        |
 
-### Build System
+### Build Prerequisites
 
-- **Nuitka**: Compiles Python to native machine code for distribution
-- **Static Linking**: Bundles Exiv2 statically on macOS for portable binaries
-- **Dynamic Linking**: Uses system libraries on Linux for better compatibility
+**macOS:**
+
+```bash
+brew install exiv2 brotli pybind11 create-dmg
+```
+
+**Linux (Ubuntu/Debian):**
+
+```bash
+sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 \
+    python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
+```
+
+### Output Locations
+
+| Platform | Output                                                                                |
+| -------- | ------------------------------------------------------------------------------------- |
+| macOS    | `dist/SimplePhotoMeta.app` → `packages/macos/SimplePhotoMeta-2.0.0.dmg`          |
+| Linux    | `dist/SimplePhotoMeta/` → `packages/Linux/SimplePhotoMeta-2.0.0-x86_64.AppImage` |
+
+## Data Storage
+
+- **Database**: `~/Library/Application Support/SimplePhotoMeta/spm_web.db` (macOS) or `~/.local/share/SimplePhotoMeta/` (Linux)
+- **Thumbnails**: Stored in `.thumbnails` folder within each photo directory you open
+- **Metadata**: Written directly to image files via Exiv2
 
 ## License
 
@@ -161,14 +209,15 @@ Simple Photo Meta is licensed under the GPLv3. See the [LICENSE](LICENSE) file f
 This project includes or links to several open-source components. See [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) for complete details:
 
 - **Exiv2**: GPL-2.0+ / GPL-3.0 / LGPL-3.0
-- **PySide6/Qt6**: LGPL-3.0
+- **FastAPI**: MIT
+- **pywebview**: BSD-3-Clause
 - **inih**: BSD-3-Clause
 - **pybind11**: BSD-3-Clause
 - **Pillow**: HPND
 
 ## Current Version
 
-v0.1.146-alpha+75bbba5
+v3.0.2-alpha+fd8af48
 
 ## Contributing
 
