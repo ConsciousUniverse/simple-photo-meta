@@ -36,7 +36,8 @@ pip install -q fastapi uvicorn pillow pillow-heif appdirs
 if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then
     echo "Building C++ metadata bindings..."
     cd "$PROJECT_DIR"
-    pip install -e .
+    pip install -q pybind11 setuptools
+    python setup.py build_ext --inplace
 fi
 
 # Start the server

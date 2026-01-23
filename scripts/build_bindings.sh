@@ -11,6 +11,7 @@
 #
 # Usage:
 #   ./scripts/build_bindings.sh
+#   ./scripts/build_bindings.sh --clean   # Remove stale venvs first
 #
 
 set -e
@@ -24,6 +25,13 @@ echo "========================================"
 echo ""
 
 cd "$PROJECT_DIR"
+
+# Handle --clean flag
+if [[ "$1" == "--clean" ]]; then
+    echo "Cleaning stale virtual environments..."
+    rm -rf .venv .venv-build
+    echo ""
+fi
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -81,19 +89,26 @@ fi
 echo "Cleaning old builds..."
 rm -rf build/ simple_photo_meta/*.so simple_photo_meta/*.pyd
 
-# Check for virtual environment
+# Check for virtual environment (verify it's actually usable - check for pip not just python)
 if [[ -f "Pipfile" ]] && command -v pipenv &>/dev/null; then
     echo "Using pipenv environment..."
-    pipenv run pip install pybind11
+    pipenv run pip install pybind11 setuptools
     pipenv run python setup.py build_ext --inplace
-elif [[ -d ".venv" ]]; then
+elif [[ -x ".venv-build/bin/pip" ]]; then
+    echo "Using .venv-build environment..."
+    source .venv-build/bin/activate
+    pip install pybind11 setuptools
+    python setup.py build_ext --inplace
+elif [[ -x ".venv/bin/pip" ]]; then
     echo "Using .venv environment..."
     source .venv/bin/activate
-    pip install pybind11
+    pip install pybind11 setuptools
     python setup.py build_ext --inplace
 else
-    echo "Using system Python..."
-    pip install pybind11
+    echo "No virtual environment found, creating one..."
+    python3 -m venv .venv-build
+    source .venv-build/bin/activate
+    pip install --upgrade pip wheel pybind11 setuptools
     python setup.py build_ext --inplace
 fi
 

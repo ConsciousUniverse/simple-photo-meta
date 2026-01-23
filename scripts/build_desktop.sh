@@ -41,6 +41,8 @@ if [[ "$1" == "--clean" ]]; then
     echo "Cleaning previous builds..."
     rm -rf "$PROJECT_DIR/dist"
     rm -rf "$PROJECT_DIR/build"
+    rm -rf "$PROJECT_DIR/.venv-build"
+    rm -rf "$PROJECT_DIR/simple_photo_meta.egg-info"
 fi
 
 # Check for Python
@@ -50,9 +52,14 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Create/activate virtual environment
+# On Linux, use --system-site-packages to access GTK/GObject bindings
 if [ ! -d "$PROJECT_DIR/.venv-build" ]; then
     echo "Creating build virtual environment..."
-    python3 -m venv "$PROJECT_DIR/.venv-build"
+    if [[ "$PLATFORM" == "Linux" ]]; then
+        python3 -m venv --system-site-packages "$PROJECT_DIR/.venv-build"
+    else
+        python3 -m venv "$PROJECT_DIR/.venv-build"
+    fi
 fi
 
 source "$PROJECT_DIR/.venv-build/bin/activate"
@@ -66,14 +73,22 @@ pip install -q --upgrade pip wheel
 if [[ "$PLATFORM" == "macOS" ]]; then
     pip install -q 'pywebview>=5.0' pyobjc-framework-WebKit
 elif [[ "$PLATFORM" == "Linux" ]]; then
-    echo "Note: On Linux, you need system packages installed:"
-    echo "  Ubuntu/Debian: sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1"
-    echo "  Fedora: sudo dnf install python3-gobject gtk3 webkit2gtk3"
-    echo ""
+    # Check for required GTK/WebKit system packages (use /usr/bin/python3 to check system packages)
+    if ! /usr/bin/python3 -c "import gi; gi.require_version('Gtk', '3.0'); gi.require_version('WebKit2', '4.1')" 2>/dev/null; then
+        echo "Error: Missing required system packages for pywebview on Linux."
+        echo ""
+        echo "Install with:"
+        echo "  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1"
+        echo ""
+        echo "Or on Fedora:"
+        echo "  sudo dnf install python3-gobject gtk3 webkit2gtk3"
+        exit 1
+    fi
+    
     pip install -q 'pywebview>=5.0'
 fi
 
-# Install Django and other dependencies
+# Install FastAPI and other dependencies
 pip install -q fastapi uvicorn pillow pillow-heif appdirs
 
 # Install PyInstaller
@@ -83,8 +98,8 @@ pip install -q pyinstaller
 cd "$PROJECT_DIR"
 if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then
     echo "Building C++ metadata bindings..."
-    pip install -q pybind11
-    pip install -e .
+    pip install -q pybind11 setuptools
+    python setup.py build_ext --inplace
 fi
 
 echo ""

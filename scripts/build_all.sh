@@ -26,6 +26,12 @@ if [[ "$1" == "--clean" ]]; then
     CLEAN_FLAG="--clean"
     echo "Clean build requested"
     echo ""
+    
+    # Clean up stale environments and build artifacts
+    cd "$SCRIPT_DIR/.."
+    rm -rf .venv .venv-build simple_photo_meta.egg-info build/ dist/
+    echo "Cleaned: .venv, .venv-build, egg-info, build/, dist/"
+    echo ""
 else
     CLEAN_FLAG=""
 fi
@@ -45,7 +51,7 @@ echo ""
 
 # Step 1: Build C++ bindings
 echo "Step 1/3: Building C++ bindings..."
-"$SCRIPT_DIR/build_bindings.sh"
+"$SCRIPT_DIR/build_bindings.sh" $CLEAN_FLAG
 echo ""
 
 # Step 2: Build desktop app
