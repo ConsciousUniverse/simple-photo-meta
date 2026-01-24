@@ -62,9 +62,14 @@ def cancel_scan():
         _scan_state["cancelled"] = True
 
 
-def start_scan(folder_path: str) -> bool:
+def start_scan(folder_path: str, force: bool = False) -> bool:
     """
     Start scanning a directory in the background.
+    
+    Args:
+        folder_path: Directory to scan
+        force: If True, rescan all images. If False, only scan new images.
+    
     Returns True if scan started, False if already running.
     """
     with _scan_lock:
@@ -78,23 +83,38 @@ def start_scan(folder_path: str) -> bool:
         _scan_state["cancelled"] = False
     
     # Start background thread
-    thread = threading.Thread(target=_run_scan, args=(folder_path,))
+    thread = threading.Thread(target=_run_scan, args=(folder_path, force))
     thread.daemon = True
     thread.start()
     
     return True
 
 
-def _run_scan(folder_path: str):
+def _run_scan(folder_path: str, force: bool = False):
     """Background scan worker."""
     try:
-        # Get list of images
-        images = get_images_in_folder(folder_path)
+        # Get list of all images in folder
+        all_images = get_images_in_folder(folder_path)
+        
+        if force:
+            # Full rescan - process all images
+            images_to_scan = all_images
+        else:
+            # Incremental scan - only process new images
+            indexed_images = database.get_indexed_images(os.path.abspath(folder_path))
+            images_to_scan = [img for img in all_images if img not in indexed_images]
         
         with _scan_lock:
-            _scan_state["total"] = len(images)
+            _scan_state["total"] = len(images_to_scan)
         
-        for image_path in images:
+        if len(images_to_scan) == 0:
+            # Nothing to scan
+            with _scan_lock:
+                _scan_state["running"] = False
+                _scan_state["folder"] = None
+            return
+        
+        for image_path in images_to_scan:
             with _scan_lock:
                 if _scan_state["cancelled"]:
                     break

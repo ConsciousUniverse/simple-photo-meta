@@ -78,6 +78,8 @@ function cacheElements() {
         scanProgress: document.getElementById('scan-progress'),
         progressFill: document.getElementById('progress-fill'),
         scanStatus: document.getElementById('scan-status'),
+        rescanContainer: document.getElementById('rescan-container'),
+        btnRescan: document.getElementById('btn-rescan'),
         imagePreview: document.getElementById('image-preview'),
         imageInfo: document.getElementById('image-info'),
         imageFilename: document.getElementById('image-filename'),
@@ -164,6 +166,9 @@ function setupEventListeners() {
         handleRotateRight();
     });
     elements.imagePreview.addEventListener('click', handlePreviewClick);
+    
+    // Rescan button
+    elements.btnRescan.addEventListener('click', handleRescan);
     
     // Close suggestions when clicking outside
     document.addEventListener('click', (e) => {
@@ -292,6 +297,7 @@ function escapeHtml(text) {
 
 async function openFolder(path) {
     elements.currentFolder.textContent = 'Loading...';
+    elements.rescanContainer.classList.add('hidden');
     
     const result = await openDirectory(path);
     
@@ -311,8 +317,8 @@ async function openFolder(path) {
         updateFolderDisplay();
         renderThumbnails();
         
-        // Start scanning for metadata indexing
-        startScanProcess(path);
+        // Start scanning for metadata indexing (incremental - only new images)
+        startScanProcess(path, false);
     }
 }
 
@@ -363,13 +369,22 @@ async function loadCurrentPage() {
 }
 
 // Scanning
-async function startScanProcess(folder) {
-    const result = await startScan(folder);
+async function startScanProcess(folder, force = false) {
+    const result = await startScan(folder, force);
     
     if (result.data && result.data.started) {
         elements.scanProgress.classList.remove('hidden');
+        elements.rescanContainer.classList.add('hidden');
         pollScanStatus();
+    } else if (result.data && !result.data.started && result.data.status.total === 0) {
+        // No new images to scan - show rescan button immediately
+        elements.rescanContainer.classList.remove('hidden');
     }
+}
+
+async function handleRescan() {
+    if (!state.currentFolder) return;
+    await startScanProcess(state.currentFolder, true);
 }
 
 function pollScanStatus() {
@@ -393,6 +408,7 @@ function pollScanStatus() {
                 clearInterval(state.scanPollingInterval);
                 state.scanPollingInterval = null;
                 elements.scanProgress.classList.add('hidden');
+                elements.rescanContainer.classList.remove('hidden');
                 
                 // Refresh the current page
                 await loadCurrentPage();

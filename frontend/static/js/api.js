@@ -48,10 +48,10 @@ async function openDirectory(path) {
     });
 }
 
-async function startScan(path) {
+async function startScan(path, force = false) {
     return apiRequest('/directories/scan', {
         method: 'POST',
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path, force }),
     });
 }
 

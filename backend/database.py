@@ -252,6 +252,16 @@ def update_image_tags(image_path: str, tag_type: str, values: list[str]):
             add_image_tag(image_id, tag_id)
 
 
+def get_indexed_images(folder: str) -> set[str]:
+    """Get all image paths that are already indexed for a folder."""
+    with get_cursor() as cursor:
+        cursor.execute(
+            "SELECT path FROM images WHERE path LIKE ?",
+            (f"{folder}%",)
+        )
+        return {row['path'] for row in cursor.fetchall()}
+
+
 # ============== Scanned directories ==============
 
 def mark_directory_scanned(path: str):

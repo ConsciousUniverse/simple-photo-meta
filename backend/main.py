@@ -29,6 +29,11 @@ class DirectoryRequest(BaseModel):
     path: str
 
 
+class ScanRequest(BaseModel):
+    path: str
+    force: bool = False
+
+
 class MetadataUpdateRequest(BaseModel):
     path: str
     tag_type: str
@@ -155,14 +160,14 @@ async def open_directory(request: DirectoryRequest):
 
 
 @app.post("/api/directories/scan")
-async def start_scan(request: DirectoryRequest):
-    """Start scanning a directory."""
+async def start_scan(request: ScanRequest):
+    """Start scanning a directory. Use force=True to rescan all images."""
     folder_path = request.path
     
     if not os.path.isdir(folder_path):
         raise HTTPException(status_code=404, detail="Directory not found")
     
-    started = scan_service.start_scan(folder_path)
+    started = scan_service.start_scan(folder_path, force=request.force)
     
     return {
         "started": started,
