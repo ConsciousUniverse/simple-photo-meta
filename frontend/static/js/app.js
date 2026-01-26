@@ -752,6 +752,10 @@ async function saveTagsImmediately() {
         setTimeout(() => {
             elements.saveStatus.textContent = '';
         }, 1500);
+        
+        // Refresh the thumbnail list to reflect tag changes
+        // (e.g., image may no longer match search criteria)
+        await loadCurrentPage();
     } else {
         elements.saveStatus.textContent = `Error: ${result.error || 'Failed to save'}`;
     }
