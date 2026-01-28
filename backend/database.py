@@ -161,47 +161,85 @@ def get_or_create_image(path: str) -> int:
 
 
 def search_images(folder: str, search: str, tag_type: Optional[str], page: int, page_size: int) -> list[str]:
-    """Search images by tag value."""
+    """Search images by tag value. Supports multiple words - all words must match (in any tags)."""
     offset = page * page_size
+    
+    # Split search into words
+    words = search.split()
+    if not words:
+        return []
+    
     with get_cursor() as cursor:
-        if tag_type:
-            cursor.execute("""
-                SELECT DISTINCT i.path FROM images i
-                JOIN image_tags it ON i.id = it.image_id
-                JOIN tags t ON it.tag_id = t.id
-                WHERE i.path LIKE ? AND t.tag LIKE ? AND t.tag_type = ?
-                ORDER BY i.path
-                LIMIT ? OFFSET ?
-            """, (f"{folder}%", f"%{search}%", tag_type, page_size, offset))
-        else:
-            cursor.execute("""
-                SELECT DISTINCT i.path FROM images i
-                JOIN image_tags it ON i.id = it.image_id
-                JOIN tags t ON it.tag_id = t.id
-                WHERE i.path LIKE ? AND t.tag LIKE ?
-                ORDER BY i.path
-                LIMIT ? OFFSET ?
-            """, (f"{folder}%", f"%{search}%", page_size, offset))
+        # Build query that requires ALL words to match (each word can be in different tags)
+        # For each word, we check if the image has at least one tag containing that word
+        base_query = """
+            SELECT DISTINCT i.path FROM images i
+            WHERE i.path LIKE ?
+        """
+        params = [f"{folder}%"]
+        
+        for word in words:
+            if tag_type:
+                base_query += """
+                    AND EXISTS (
+                        SELECT 1 FROM image_tags it
+                        JOIN tags t ON it.tag_id = t.id
+                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type = ?
+                    )
+                """
+                params.extend([f"%{word}%", tag_type])
+            else:
+                base_query += """
+                    AND EXISTS (
+                        SELECT 1 FROM image_tags it
+                        JOIN tags t ON it.tag_id = t.id
+                        WHERE it.image_id = i.id AND t.tag LIKE ?
+                    )
+                """
+                params.append(f"%{word}%")
+        
+        base_query += " ORDER BY i.path LIMIT ? OFFSET ?"
+        params.extend([page_size, offset])
+        
+        cursor.execute(base_query, params)
         return [row['path'] for row in cursor.fetchall()]
 
 
 def count_search_results(folder: str, search: str, tag_type: Optional[str]) -> int:
-    """Count search results."""
+    """Count search results. Supports multiple words - all words must match."""
+    # Split search into words
+    words = search.split()
+    if not words:
+        return 0
+    
     with get_cursor() as cursor:
-        if tag_type:
-            cursor.execute("""
-                SELECT COUNT(DISTINCT i.id) as cnt FROM images i
-                JOIN image_tags it ON i.id = it.image_id
-                JOIN tags t ON it.tag_id = t.id
-                WHERE i.path LIKE ? AND t.tag LIKE ? AND t.tag_type = ?
-            """, (f"{folder}%", f"%{search}%", tag_type))
-        else:
-            cursor.execute("""
-                SELECT COUNT(DISTINCT i.id) as cnt FROM images i
-                JOIN image_tags it ON i.id = it.image_id
-                JOIN tags t ON it.tag_id = t.id
-                WHERE i.path LIKE ? AND t.tag LIKE ?
-            """, (f"{folder}%", f"%{search}%"))
+        base_query = """
+            SELECT COUNT(DISTINCT i.id) as cnt FROM images i
+            WHERE i.path LIKE ?
+        """
+        params = [f"{folder}%"]
+        
+        for word in words:
+            if tag_type:
+                base_query += """
+                    AND EXISTS (
+                        SELECT 1 FROM image_tags it
+                        JOIN tags t ON it.tag_id = t.id
+                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type = ?
+                    )
+                """
+                params.extend([f"%{word}%", tag_type])
+            else:
+                base_query += """
+                    AND EXISTS (
+                        SELECT 1 FROM image_tags it
+                        JOIN tags t ON it.tag_id = t.id
+                        WHERE it.image_id = i.id AND t.tag LIKE ?
+                    )
+                """
+                params.append(f"%{word}%")
+        
+        cursor.execute(base_query, params)
         return cursor.fetchone()['cnt']
 
 
