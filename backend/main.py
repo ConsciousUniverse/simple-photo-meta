@@ -281,6 +281,16 @@ async def open_in_viewer(request: OpenInViewerRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/images/overlay-info")
+async def get_image_overlay_info(path: str):
+    """Get overlay info (DateTimeOriginal, GPS, Keywords) for preview hover."""
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    info = database.get_image_overlay_info(path)
+    return info
+
+
 # ============== Metadata Operations ==============
 
 @app.get("/api/metadata")

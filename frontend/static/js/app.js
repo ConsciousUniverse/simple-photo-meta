@@ -522,6 +522,52 @@ function loadPreview(imagePath) {
     
     elements.imageFilename.textContent = getFilename(imagePath);
     elements.imageInfo.classList.remove('hidden');
+    
+    // Load overlay info
+    loadOverlayInfo(imagePath);
+}
+
+async function loadOverlayInfo(imagePath) {
+    // Get or create overlay element
+    let overlay = elements.imagePreview.querySelector('.preview-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'preview-overlay';
+        elements.imagePreview.appendChild(overlay);
+    }
+    
+    // Fetch overlay info from database
+    const result = await getImageOverlayInfo(imagePath);
+    
+    if (!result.data) {
+        overlay.innerHTML = '<p class="overlay-empty">No metadata available</p>';
+        return;
+    }
+    
+    const info = result.data;
+    let html = '';
+    
+    // Date/Time Original
+    if (info.date_time_original) {
+        html += `<div class="overlay-item"><span class="overlay-label">Date:</span> ${escapeHtml(info.date_time_original)}</div>`;
+    }
+    
+    // GPS Location
+    if (info.gps_latitude && info.gps_longitude) {
+        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(info.gps_latitude)}, ${escapeHtml(info.gps_longitude)}</div>`;
+    }
+    
+    // Keywords
+    if (info.keywords && info.keywords.length > 0) {
+        const keywordsStr = info.keywords.map(k => escapeHtml(k)).join(', ');
+        html += `<div class="overlay-item"><span class="overlay-label">Keywords:</span> ${keywordsStr}</div>`;
+    }
+    
+    if (!html) {
+        html = '<p class="overlay-empty">No metadata available</p>';
+    }
+    
+    overlay.innerHTML = html;
 }
 
 // Preview rotation handlers

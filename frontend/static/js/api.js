@@ -151,3 +151,9 @@ async function setPreference(key, value) {
         body: JSON.stringify({ value }),
     });
 }
+
+// Image overlay info
+async function getImageOverlayInfo(path) {
+    const params = new URLSearchParams({ path });
+    return apiRequest(`/images/overlay-info?${params}`);
+}

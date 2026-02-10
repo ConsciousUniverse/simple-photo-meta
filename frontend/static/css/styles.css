@@ -362,6 +362,47 @@ body.resizing-v {
     border-top: 1px solid GrayText;
 }
 
+/* Preview Overlay (shows on hover) */
+.preview-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 12px;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-small);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    max-height: calc(100% - 70px);
+    overflow-y: auto;
+}
+
+.image-preview:hover .preview-overlay {
+    opacity: 1;
+}
+
+.overlay-item {
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.overlay-item:last-child {
+    margin-bottom: 0;
+}
+
+.overlay-label {
+    font-weight: 600;
+    color: #aaa;
+}
+
+.overlay-empty {
+    color: #888;
+    font-style: italic;
+}
+
 /* Metadata Editor */
 .metadata-editor {
     flex: 1;

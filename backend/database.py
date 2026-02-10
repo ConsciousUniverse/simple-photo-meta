@@ -160,6 +160,47 @@ def get_or_create_image(path: str) -> int:
         return cursor.lastrowid
 
 
+def get_image_overlay_info(path: str) -> dict:
+    """Get overlay info (DateTimeOriginal, GPS, Keywords) for an image from tags."""
+    result = {
+        "date_time_original": None,
+        "gps_latitude": None,
+        "gps_longitude": None,
+        "keywords": [],
+    }
+    
+    with get_cursor() as cursor:
+        # Get image ID
+        cursor.execute("SELECT id FROM images WHERE path = ?", (path,))
+        row = cursor.fetchone()
+        if not row:
+            return result
+        
+        image_id = row['id']
+        
+        # Get the relevant tags for this image
+        cursor.execute("""
+            SELECT t.tag, t.tag_type FROM tags t
+            JOIN image_tags it ON t.id = it.tag_id
+            WHERE it.image_id = ? AND t.tag_type IN ('DateTimeOriginal', 'GPSLatitude', 'GPSLongitude', 'Keywords')
+        """, (image_id,))
+        
+        for row in cursor.fetchall():
+            tag_type = row['tag_type']
+            tag_value = row['tag']
+            
+            if tag_type == 'DateTimeOriginal':
+                result['date_time_original'] = tag_value
+            elif tag_type == 'GPSLatitude':
+                result['gps_latitude'] = tag_value
+            elif tag_type == 'GPSLongitude':
+                result['gps_longitude'] = tag_value
+            elif tag_type == 'Keywords':
+                result['keywords'].append(tag_value)
+    
+    return result
+
+
 def search_images(folder: str, search: str, tag_type: Optional[str], page: int, page_size: int) -> list[str]:
     """Search images by tag value. Supports multiple words - all words must match (in any tags)."""
     offset = page * page_size
