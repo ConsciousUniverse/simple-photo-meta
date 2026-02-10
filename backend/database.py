@@ -166,6 +166,10 @@ def get_image_overlay_info(path: str) -> dict:
         "date_time_original": None,
         "gps_latitude": None,
         "gps_longitude": None,
+        "gps_latitude_ref": None,
+        "gps_longitude_ref": None,
+        "gps_altitude": None,
+        "gps_altitude_ref": None,
         "keywords": [],
     }
     
@@ -178,11 +182,17 @@ def get_image_overlay_info(path: str) -> dict:
         
         image_id = row['id']
         
-        # Get the relevant tags for this image
+        # Get the relevant tags for this image (all GPS fields)
         cursor.execute("""
             SELECT t.tag, t.tag_type FROM tags t
             JOIN image_tags it ON t.id = it.tag_id
-            WHERE it.image_id = ? AND t.tag_type IN ('DateTimeOriginal', 'GPSLatitude', 'GPSLongitude', 'Keywords')
+            WHERE it.image_id = ? AND t.tag_type IN (
+                'DateTimeOriginal', 
+                'GPSLatitude', 'GPSLongitude', 
+                'GPSLatitudeRef', 'GPSLongitudeRef',
+                'GPSAltitude', 'GPSAltitudeRef',
+                'Keywords'
+            )
         """, (image_id,))
         
         for row in cursor.fetchall():
@@ -195,6 +205,14 @@ def get_image_overlay_info(path: str) -> dict:
                 result['gps_latitude'] = tag_value
             elif tag_type == 'GPSLongitude':
                 result['gps_longitude'] = tag_value
+            elif tag_type == 'GPSLatitudeRef':
+                result['gps_latitude_ref'] = tag_value
+            elif tag_type == 'GPSLongitudeRef':
+                result['gps_longitude_ref'] = tag_value
+            elif tag_type == 'GPSAltitude':
+                result['gps_altitude'] = tag_value
+            elif tag_type == 'GPSAltitudeRef':
+                result['gps_altitude_ref'] = tag_value
             elif tag_type == 'Keywords':
                 result['keywords'].append(tag_value)
     

@@ -549,12 +549,14 @@ async function loadOverlayInfo(imagePath) {
     
     // Date/Time Original
     if (info.date_time_original) {
-        html += `<div class="overlay-item"><span class="overlay-label">Date:</span> ${escapeHtml(info.date_time_original)}</div>`;
+        const formattedDate = formatExifDate(info.date_time_original);
+        html += `<div class="overlay-item"><span class="overlay-label">Date:</span> ${escapeHtml(formattedDate)}</div>`;
     }
     
-    // GPS Location
-    if (info.gps_latitude && info.gps_longitude) {
-        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(info.gps_latitude)}, ${escapeHtml(info.gps_longitude)}</div>`;
+    // GPS Location - format with ref values
+    const locationStr = formatGpsLocation(info);
+    if (locationStr) {
+        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(locationStr)}</div>`;
     }
     
     // Keywords
@@ -568,6 +570,79 @@ async function loadOverlayInfo(imagePath) {
     }
     
     overlay.innerHTML = html;
+}
+
+function formatExifDate(exifDate) {
+    // EXIF date format: "YYYY:MM:DD HH:MM:SS"
+    // Target format: "10 February 2026, 15:39:00 GMT"
+    if (!exifDate) return exifDate;
+    
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    // Parse EXIF format (YYYY:MM:DD HH:MM:SS)
+    const match = exifDate.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) {
+        return exifDate; // Return original if format doesn't match
+    }
+    
+    const year = match[1];
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    const time = `${match[4]}:${match[5]}:${match[6]}`;
+    
+    const monthName = months[month - 1] || '';
+    
+    return `${day} ${monthName} ${year}, ${time}`;
+}
+
+function formatGpsLocation(info) {
+    // Format GPS coordinates with reference values
+    // Returns null if no valid location data
+    
+    if (!info.gps_latitude && !info.gps_longitude) {
+        return null;
+    }
+    
+    let parts = [];
+    
+    // Format latitude
+    if (info.gps_latitude) {
+        let lat = info.gps_latitude;
+        // Add reference (N/S) if available and not already in the value
+        if (info.gps_latitude_ref && !lat.includes('N') && !lat.includes('S')) {
+            lat = `${lat} ${info.gps_latitude_ref}`;
+        }
+        parts.push(lat);
+    }
+    
+    // Format longitude
+    if (info.gps_longitude) {
+        let lon = info.gps_longitude;
+        // Add reference (E/W) if available and not already in the value
+        if (info.gps_longitude_ref && !lon.includes('E') && !lon.includes('W')) {
+            lon = `${lon} ${info.gps_longitude_ref}`;
+        }
+        parts.push(lon);
+    }
+    
+    // Add altitude if available
+    if (info.gps_altitude) {
+        let alt = info.gps_altitude;
+        // Add "m" if it looks like a number
+        if (/^[\d.]+$/.test(alt)) {
+            alt = `${alt}m`;
+        }
+        // Note if below sea level
+        if (info.gps_altitude_ref === '1') {
+            alt = `-${alt}`;
+        }
+        parts.push(alt);
+    }
+    
+    return parts.length > 0 ? parts.join(', ') : null;
 }
 
 // Preview rotation handlers
