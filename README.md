@@ -49,7 +49,7 @@ This version was produced with the considerable assistance of artificial intelli
 - **Thumbnail Caching**: Fast thumbnail generation with intelligent caching for improved performance
 - **Preview Caching**: High-resolution preview caching for large images and HEIC/HEIF files
 - **Smart Preview Sizing**: Automatic preview size optimization based on file size and format
-- **Metadata Hover Overlay**: Hover over the image preview to see key metadata at a glance — date taken, location (with GPS coordinates automatically converted to place names via offline reverse geocoding), and keywords
+- **Metadata Hover Overlay**: Hover over the image preview to see key metadata at a glance. By default shows date taken, location (with GPS coordinates automatically converted to place names via offline reverse geocoding), and keywords. The displayed fields are fully configurable — open **Preferences → Configure Overlay Fields…** to choose from all available EXIF and IPTC fields
 
 ### Search & Discovery
 
@@ -235,7 +235,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.12-alpha+5befe74
+v3.0.13-alpha+7be4b48
 
 ## Contributing
 
