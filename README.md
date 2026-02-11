@@ -49,6 +49,7 @@ This version was produced with the considerable assistance of artificial intelli
 - **Thumbnail Caching**: Fast thumbnail generation with intelligent caching for improved performance
 - **Preview Caching**: High-resolution preview caching for large images and HEIC/HEIF files
 - **Smart Preview Sizing**: Automatic preview size optimization based on file size and format
+- **Metadata Hover Overlay**: Hover over the image preview to see key metadata at a glance — date taken, location (with GPS coordinates automatically converted to place names via offline reverse geocoding), and keywords
 
 ### Search & Discovery
 
@@ -158,7 +159,7 @@ HEIC/HEIF image format support is included automatically when you run the app.
 
 ## Screenshots
 
-![alt text](assets/image.png)
+![alt text](assets/Screenshot.png)
 
 ## Building from Source
 
@@ -234,7 +235,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.8-alpha+122138e
+v3.0.11-alpha+40e5d01
 
 ## Contributing
 
