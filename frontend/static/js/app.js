@@ -92,9 +92,13 @@ function cacheElements() {
         saveStatus: document.getElementById('save-status'),
         preferencesDialog: document.getElementById('preferences-dialog'),
         aboutDialog: document.getElementById('about-dialog'),
+        overlayFieldsDialog: document.getElementById('overlay-fields-dialog'),
         prefFontSize: document.getElementById('pref-font-size'),
         btnSavePrefs: document.getElementById('btn-save-prefs'),
         btnClosePrefs: document.getElementById('btn-close-prefs'),
+        btnOpenOverlayFields: document.getElementById('btn-open-overlay-fields'),
+        btnSaveOverlayFields: document.getElementById('btn-save-overlay-fields'),
+        btnCloseOverlayFields: document.getElementById('btn-close-overlay-fields'),
         btnCloseAbout: document.getElementById('btn-close-about'),
         // Folder browser dialog
         folderDialog: document.getElementById('folder-dialog'),
@@ -148,6 +152,9 @@ function setupEventListeners() {
     // Dialog buttons
     elements.btnSavePrefs.addEventListener('click', handleSavePreferences);
     elements.btnClosePrefs.addEventListener('click', () => elements.preferencesDialog.close());
+    elements.btnOpenOverlayFields.addEventListener('click', handleOpenOverlayFields);
+    elements.btnSaveOverlayFields.addEventListener('click', handleSaveOverlayFields);
+    elements.btnCloseOverlayFields.addEventListener('click', () => elements.overlayFieldsDialog.close());
     elements.btnCloseAbout.addEventListener('click', () => elements.aboutDialog.close());
     
     // Folder browser dialog
@@ -193,6 +200,79 @@ async function loadPreferences() {
         document.documentElement.style.setProperty('--font-size-base', `${fontSize}px`);
         elements.prefFontSize.value = fontSize;
     }
+    
+}
+
+// GPS tag names that are grouped into the composite "GPS Location" checkbox
+const GPS_COMPONENT_TAGS = new Set([
+    'GPSLatitude', 'GPSLongitude', 'GPSAltitude',
+    'GPSLatitudeRef', 'GPSLongitudeRef', 'GPSAltitudeRef',
+]);
+
+const DEFAULT_OVERLAY_FIELDS = ['Exif.DateTimeOriginal', 'Exif.GPSLocation', 'Iptc.Keywords'];
+
+async function populateOverlayFieldCheckboxes() {
+    const container = document.getElementById('overlay-fields-list');
+    if (!container) return;
+
+    // Get tag definitions (exif + iptc)
+    if (!state.tagDefinitions) {
+        const defResult = await getMetadataDefinitions();
+        if (defResult.data) state.tagDefinitions = defResult.data;
+    }
+    if (!state.tagDefinitions) return;
+
+    // Get saved preference
+    const prefResult = await getPreference('overlay_fields');
+    let selectedFields;
+    if (prefResult.data && prefResult.data.value) {
+        try { selectedFields = JSON.parse(prefResult.data.value); }
+        catch { selectedFields = DEFAULT_OVERLAY_FIELDS; }
+    } else {
+        selectedFields = DEFAULT_OVERLAY_FIELDS;
+    }
+    const selectedSet = new Set(selectedFields);
+
+    let html = '';
+
+    // --- EXIF section ---
+    html += '<div class="overlay-field-group"><div class="overlay-field-group-title">EXIF Fields</div>';
+
+    // GPS Location composite checkbox first
+    const isGpsChecked = selectedSet.has('Exif.GPSLocation');
+    html += `<label class="overlay-field-item">
+        <input type="checkbox" name="overlay_field" value="Exif.GPSLocation"${isGpsChecked ? ' checked' : ''}>
+        <span class="overlay-field-name">GPS Location</span>
+        <span class="overlay-field-desc">Coordinates resolved to place name</span>
+    </label>`;
+
+    // Other EXIF tags (skip individual GPS component tags)
+    for (const def of state.tagDefinitions.exif) {
+        if (GPS_COMPONENT_TAGS.has(def.tag)) continue;
+        const fieldId = `Exif.${def.tag}`;
+        const checked = selectedSet.has(fieldId);
+        html += `<label class="overlay-field-item">
+            <input type="checkbox" name="overlay_field" value="${fieldId}"${checked ? ' checked' : ''}>
+            <span class="overlay-field-name">${escapeHtml(def.name)}</span>
+            <span class="overlay-field-desc">${escapeHtml(def.description)}</span>
+        </label>`;
+    }
+    html += '</div>';
+
+    // --- IPTC section ---
+    html += '<div class="overlay-field-group"><div class="overlay-field-group-title">IPTC Fields</div>';
+    for (const def of state.tagDefinitions.iptc) {
+        const fieldId = `Iptc.${def.tag}`;
+        const checked = selectedSet.has(fieldId);
+        html += `<label class="overlay-field-item">
+            <input type="checkbox" name="overlay_field" value="${fieldId}"${checked ? ' checked' : ''}>
+            <span class="overlay-field-name">${escapeHtml(def.name)}</span>
+            <span class="overlay-field-desc">${escapeHtml(def.description)}</span>
+        </label>`;
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
 }
 
 function updateTagTypeSelector() {
@@ -545,28 +625,46 @@ async function loadOverlayInfo(imagePath) {
     }
     
     const info = result.data;
+    const selectedFields = info.selected_fields || DEFAULT_OVERLAY_FIELDS;
+    const fields = info.fields || {};
     let html = '';
     
-    // Date/Time Original
-    if (info.date_time_original) {
-        const formattedDate = formatExifDate(info.date_time_original);
-        html += `<div class="overlay-item"><span class="overlay-label">Date:</span> ${escapeHtml(formattedDate)}</div>`;
+    // Build a tag→name lookup from definitions
+    const tagNameMap = {};
+    if (state.tagDefinitions) {
+        for (const def of state.tagDefinitions.exif) tagNameMap[`Exif.${def.tag}`] = def.name;
+        for (const def of state.tagDefinitions.iptc) tagNameMap[`Iptc.${def.tag}`] = def.name;
     }
+    tagNameMap['Exif.GPSLocation'] = 'Location';
     
-    // Location - prefer place name, fall back to coordinates
-    if (info.place_name) {
-        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(info.place_name)}</div>`;
-    } else {
-        const locationStr = formatGpsLocation(info);
-        if (locationStr) {
-            html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(locationStr)}</div>`;
+    for (const field of selectedFields) {
+        if (field === 'Exif.GPSLocation') {
+            // Location - prefer place name, fall back to coordinates
+            if (info.place_name) {
+                html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(info.place_name)}</div>`;
+            } else {
+                const locationStr = formatGpsLocation(info);
+                if (locationStr) {
+                    html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(locationStr)}</div>`;
+                }
+            }
+            continue;
         }
-    }
-    
-    // Keywords
-    if (info.keywords && info.keywords.length > 0) {
-        const keywordsStr = info.keywords.map(k => escapeHtml(k)).join(', ');
-        html += `<div class="overlay-item"><span class="overlay-label">Keywords:</span> ${keywordsStr}</div>`;
+        
+        const value = fields[field];
+        if (!value) continue;
+        
+        const label = tagNameMap[field] || field.split('.').pop();
+        
+        if (field === 'Exif.DateTimeOriginal') {
+            const formattedDate = formatExifDate(value);
+            html += `<div class="overlay-item"><span class="overlay-label">${escapeHtml(label)}:</span> ${escapeHtml(formattedDate)}</div>`;
+        } else if (Array.isArray(value)) {
+            const joined = value.map(v => escapeHtml(v)).join(', ');
+            html += `<div class="overlay-item"><span class="overlay-label">${escapeHtml(label)}:</span> ${joined}</div>`;
+        } else {
+            html += `<div class="overlay-item"><span class="overlay-label">${escapeHtml(label)}:</span> ${escapeHtml(String(value))}</div>`;
+        }
     }
     
     if (!html) {
@@ -933,6 +1031,27 @@ async function handleSavePreferences() {
     document.documentElement.style.setProperty('--font-size-base', `${fontSize}px`);
     
     elements.preferencesDialog.close();
+}
+
+async function handleOpenOverlayFields() {
+    await populateOverlayFieldCheckboxes();
+    elements.overlayFieldsDialog.showModal();
+}
+
+async function handleSaveOverlayFields() {
+    const checkboxes = document.querySelectorAll('input[name="overlay_field"]');
+    const selectedFields = [];
+    for (const cb of checkboxes) {
+        if (cb.checked) selectedFields.push(cb.value);
+    }
+    await setPreference('overlay_fields', JSON.stringify(selectedFields));
+    
+    // Refresh overlay if an image is displayed
+    if (state.selectedImage) {
+        loadOverlayInfo(state.selectedImage);
+    }
+    
+    elements.overlayFieldsDialog.close();
 }
 
 // Panel Resizing

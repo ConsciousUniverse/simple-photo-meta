@@ -235,7 +235,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.11-alpha+40e5d01
+v3.0.12-alpha+5befe74
 
 ## Contributing
 

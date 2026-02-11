@@ -137,10 +137,31 @@
                     <option value="22">Massive</option>
                 </select>
             </div>
+            <hr style="margin: 16px 0; border-color: GrayText;">
+            <div class="form-group">
+                <label>Metadata Hover Overlay</label>
+                <p style="font-size: var(--font-size-small); opacity: 0.7; margin: 4px 0 8px;">Choose which fields appear when hovering over the image preview.</p>
+                <button id="btn-open-overlay-fields" class="btn" style="width: 100%;">Configure Overlay Fields…</button>
+            </div>
         </div>
         <div class="dialog-actions">
             <button id="btn-save-prefs" class="btn btn-primary">Save</button>
             <button id="btn-close-prefs" class="btn">Cancel</button>
+        </div>
+    </dialog>
+
+    <!-- Overlay Fields Dialog -->
+    <dialog id="overlay-fields-dialog" class="dialog dialog-large">
+        <h2>Metadata Hover Overlay Fields</h2>
+        <div class="dialog-content">
+            <p style="font-size: var(--font-size-small); opacity: 0.7; margin: 0 0 12px;">Select which metadata fields to display when hovering over the image preview.</p>
+            <div id="overlay-fields-list" class="overlay-fields-list">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+        <div class="dialog-actions">
+            <button id="btn-save-overlay-fields" class="btn btn-primary">Save</button>
+            <button id="btn-close-overlay-fields" class="btn">Cancel</button>
         </div>
     </dialog>
 

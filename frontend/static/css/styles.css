@@ -606,6 +606,63 @@ select {
     width: 90vw;
 }
 
+/* Overlay field checkboxes in overlay fields dialog */
+.overlay-fields-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    border: 1px solid GrayText;
+    border-radius: var(--border-radius-small);
+    padding: 4px 0;
+}
+
+.overlay-field-group {
+    padding: 4px 0;
+}
+
+.overlay-field-group + .overlay-field-group {
+    border-top: 1px solid GrayText;
+}
+
+.overlay-field-group-title {
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+    padding: 6px 12px 2px;
+}
+
+.overlay-field-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    padding: 4px 12px;
+    cursor: pointer;
+    align-items: start;
+}
+
+.overlay-field-item:hover {
+    background-color: Highlight;
+    color: HighlightText;
+}
+
+.overlay-field-item input[type="checkbox"] {
+    margin-top: 2px;
+    grid-row: 1 / 3;
+}
+
+.overlay-field-name {
+    font-size: var(--font-size-base);
+    grid-column: 2;
+}
+
+.overlay-field-desc {
+    font-size: var(--font-size-small);
+    opacity: 0.6;
+    grid-column: 2;
+}
+
 .dialog::backdrop {
     background-color: rgba(0, 0, 0, 0.6);
 }

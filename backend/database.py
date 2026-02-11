@@ -160,18 +160,46 @@ def get_or_create_image(path: str) -> int:
         return cursor.lastrowid
 
 
-def get_image_overlay_info(path: str) -> dict:
-    """Get overlay info (DateTimeOriginal, GPS, Keywords) for an image from tags."""
+def get_image_overlay_info(path: str, selected_fields: list[str] = None) -> dict:
+    """Get overlay info for an image from tags, based on selected fields.
+    
+    Args:
+        path: Image file path
+        selected_fields: List of field identifiers like 'Exif.DateTimeOriginal', 
+                        'Exif.GPSLocation', 'Iptc.Keywords', etc.
+                        If None, uses defaults.
+    """
+    # Default fields if none specified
+    if selected_fields is None:
+        selected_fields = ["Exif.DateTimeOriginal", "Exif.GPSLocation", "Iptc.Keywords"]
+    
     result = {
-        "date_time_original": None,
+        "fields": {},
+        # Keep legacy GPS fields for location resolution
         "gps_latitude": None,
         "gps_longitude": None,
         "gps_latitude_ref": None,
         "gps_longitude_ref": None,
-        "gps_altitude": None,
-        "gps_altitude_ref": None,
-        "keywords": [],
     }
+    
+    # Build list of tag_types to query based on selected fields
+    tag_types_needed = set()
+    for field in selected_fields:
+        if field == "Exif.GPSLocation":
+            # GPS location is a composite of multiple tag types
+            tag_types_needed.update([
+                'GPSLatitude', 'GPSLongitude', 
+                'GPSLatitudeRef', 'GPSLongitudeRef',
+                'GPSAltitude', 'GPSAltitudeRef',
+            ])
+        else:
+            # Extract the tag name from "Exif.TagName" or "Iptc.TagName"
+            parts = field.split('.', 1)
+            if len(parts) == 2:
+                tag_types_needed.add(parts[1])
+    
+    if not tag_types_needed:
+        return result
     
     with get_cursor() as cursor:
         # Get image ID
@@ -182,26 +210,22 @@ def get_image_overlay_info(path: str) -> dict:
         
         image_id = row['id']
         
-        # Get the relevant tags for this image (all GPS fields)
-        cursor.execute("""
+        # Build query for selected tag types
+        placeholders = ','.join('?' * len(tag_types_needed))
+        cursor.execute(f"""
             SELECT t.tag, t.tag_type FROM tags t
             JOIN image_tags it ON t.id = it.tag_id
-            WHERE it.image_id = ? AND t.tag_type IN (
-                'DateTimeOriginal', 
-                'GPSLatitude', 'GPSLongitude', 
-                'GPSLatitudeRef', 'GPSLongitudeRef',
-                'GPSAltitude', 'GPSAltitudeRef',
-                'Keywords'
-            )
-        """, (image_id,))
+            WHERE it.image_id = ? AND t.tag_type IN ({placeholders})
+        """, (image_id, *tag_types_needed))
         
+        # Collect multi-valued fields
+        multi_valued = {}
         for row in cursor.fetchall():
             tag_type = row['tag_type']
             tag_value = row['tag']
             
-            if tag_type == 'DateTimeOriginal':
-                result['date_time_original'] = tag_value
-            elif tag_type == 'GPSLatitude':
+            # Handle GPS fields specially for location resolution
+            if tag_type == 'GPSLatitude':
                 result['gps_latitude'] = tag_value
             elif tag_type == 'GPSLongitude':
                 result['gps_longitude'] = tag_value
@@ -209,12 +233,23 @@ def get_image_overlay_info(path: str) -> dict:
                 result['gps_latitude_ref'] = tag_value
             elif tag_type == 'GPSLongitudeRef':
                 result['gps_longitude_ref'] = tag_value
-            elif tag_type == 'GPSAltitude':
-                result['gps_altitude'] = tag_value
-            elif tag_type == 'GPSAltitudeRef':
-                result['gps_altitude_ref'] = tag_value
-            elif tag_type == 'Keywords':
-                result['keywords'].append(tag_value)
+            
+            # Accumulate values (some tags like Keywords are multi-valued)
+            if tag_type not in multi_valued:
+                multi_valued[tag_type] = []
+            multi_valued[tag_type].append(tag_value)
+        
+        # Build the fields dict based on selected fields
+        for field in selected_fields:
+            if field == "Exif.GPSLocation":
+                # Will be resolved to place_name in the endpoint
+                continue
+            parts = field.split('.', 1)
+            if len(parts) == 2:
+                tag_name = parts[1]
+                values = multi_valued.get(tag_name, [])
+                if values:
+                    result["fields"][field] = values if len(values) > 1 else values[0]
     
     return result
 

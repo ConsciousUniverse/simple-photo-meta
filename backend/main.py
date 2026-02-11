@@ -283,14 +283,26 @@ async def open_in_viewer(request: OpenInViewerRequest):
 
 @app.get("/api/images/overlay-info")
 async def get_image_overlay_info(path: str):
-    """Get overlay info (DateTimeOriginal, GPS, Keywords) for preview hover."""
+    """Get overlay info for preview hover, based on user-selected fields."""
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Image not found")
     
-    info = database.get_image_overlay_info(path)
+    # Get user's selected overlay fields (stored as JSON)
+    import json
+    selected_fields_json = database.get_preference('overlay_fields')
+    if selected_fields_json:
+        try:
+            selected_fields = json.loads(selected_fields_json)
+        except (json.JSONDecodeError, TypeError):
+            selected_fields = None
+    else:
+        selected_fields = None
     
-    # Try to resolve GPS coordinates to a place name
-    if info.get('gps_latitude') and info.get('gps_longitude'):
+    info = database.get_image_overlay_info(path, selected_fields)
+    
+    # Resolve GPS coordinates to a place name if GPS location is selected
+    wants_location = selected_fields is None or 'Exif.GPSLocation' in selected_fields
+    if wants_location and info.get('gps_latitude') and info.get('gps_longitude'):
         place_name = location_service.get_place_name(
             info['gps_latitude'],
             info['gps_longitude'],
@@ -300,6 +312,9 @@ async def get_image_overlay_info(path: str):
         info['place_name'] = place_name
     else:
         info['place_name'] = None
+    
+    # Include which fields were selected so frontend knows what to render
+    info['selected_fields'] = selected_fields or ["Exif.DateTimeOriginal", "Exif.GPSLocation", "Iptc.Keywords"]
     
     return info
 
