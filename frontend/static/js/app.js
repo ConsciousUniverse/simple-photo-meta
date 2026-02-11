@@ -553,10 +553,14 @@ async function loadOverlayInfo(imagePath) {
         html += `<div class="overlay-item"><span class="overlay-label">Date:</span> ${escapeHtml(formattedDate)}</div>`;
     }
     
-    // GPS Location - format with ref values
-    const locationStr = formatGpsLocation(info);
-    if (locationStr) {
-        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(locationStr)}</div>`;
+    // Location - prefer place name, fall back to coordinates
+    if (info.place_name) {
+        html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(info.place_name)}</div>`;
+    } else {
+        const locationStr = formatGpsLocation(info);
+        if (locationStr) {
+            html += `<div class="overlay-item"><span class="overlay-label">Location:</span> ${escapeHtml(locationStr)}</div>`;
+        }
     }
     
     // Keywords

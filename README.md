@@ -119,8 +119,9 @@ cd simple-photo-meta
 **Linux (Ubuntu/Debian):**
 
 ```bash
-# Install dependencies
-sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 python3.13
+# Install system dependencies
+sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 \
+    python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
 
 # Clone and setup
 git clone https://github.com/consciousuniverse/simple-photo-meta.git
@@ -183,9 +184,25 @@ brew install exiv2 brotli pybind11 create-dmg
 **Linux (Ubuntu/Debian):**
 
 ```bash
-sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 \
-    python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
+# System libraries for building C++ bindings
+sudo apt install libexiv2-dev libbrotli-dev python3-pybind11
+
+# GTK/WebKit for pywebview (required system packages - cannot be pip installed)
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
 ```
+
+### What Gets Bundled vs System Dependencies
+
+**Linux AppImage bundles:**
+- Python runtime and all pip packages
+- FastAPI, uvicorn, pillow, pillow-heif, pywebview
+- numpy, scipy, reverse_geocoder (for GPS coordinate to place name conversion)
+- Compiled `exiv2bind` C++ extension
+- Application code and geonames database
+
+**Linux system requirements (must be pre-installed for building):**
+- `libexiv2-dev libbrotli-dev python3-pybind11` - for compiling C++ bindings
+- `python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1` - GTK/WebKit for pywebview
 
 ### Output Locations
 
@@ -217,7 +234,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.7-alpha+f0f3253
+v3.0.8-alpha+122138e
 
 ## Contributing
 

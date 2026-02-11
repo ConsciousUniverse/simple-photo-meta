@@ -19,10 +19,21 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Detect platform
+if [[ "$OSTYPE" == "linux"* ]]; then
+    PLATFORM="Linux"
+else
+    PLATFORM="macOS"
+fi
+
 # Check if virtual environment exists
 if [ ! -d "$PROJECT_DIR/.venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv "$PROJECT_DIR/.venv"
+    if [[ "$PLATFORM" == "Linux" ]]; then
+        python3 -m venv --system-site-packages "$PROJECT_DIR/.venv"
+    else
+        python3 -m venv "$PROJECT_DIR/.venv"
+    fi
 fi
 
 # Activate virtual environment
@@ -30,7 +41,7 @@ source "$PROJECT_DIR/.venv/bin/activate"
 
 # Install backend dependencies
 echo "Installing dependencies..."
-pip install -q fastapi uvicorn pillow pillow-heif appdirs
+pip install -q fastapi uvicorn pillow pillow-heif appdirs numpy scipy reverse_geocoder
 
 # Build C++ bindings if needed
 if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then

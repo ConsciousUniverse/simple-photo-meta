@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 import database
-from services import image_service, metadata_service, scan_service
+from services import image_service, metadata_service, scan_service, location_service
 
 
 # ============== Pydantic Models ==============
@@ -288,6 +288,19 @@ async def get_image_overlay_info(path: str):
         raise HTTPException(status_code=404, detail="Image not found")
     
     info = database.get_image_overlay_info(path)
+    
+    # Try to resolve GPS coordinates to a place name
+    if info.get('gps_latitude') and info.get('gps_longitude'):
+        place_name = location_service.get_place_name(
+            info['gps_latitude'],
+            info['gps_longitude'],
+            info.get('gps_latitude_ref'),
+            info.get('gps_longitude_ref')
+        )
+        info['place_name'] = place_name
+    else:
+        info['place_name'] = None
+    
     return info
 
 

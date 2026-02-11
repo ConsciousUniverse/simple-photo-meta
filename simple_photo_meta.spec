@@ -36,7 +36,8 @@ datas = [
     (str(BACKEND_DIR / "main.py"), "."),
     (str(BACKEND_DIR / "services"), "services"),
 ]
-
+# Collect reverse_geocoder data files (geonames database)
+datas += collect_data_files("reverse_geocoder")
 # Collect tag definition files
 datas.append((str(PROJECT_ROOT / "simple_photo_meta" / "iptc_tags.py"), "simple_photo_meta"))
 datas.append((str(PROJECT_ROOT / "simple_photo_meta" / "exif_tags.py"), "simple_photo_meta"))
@@ -88,6 +89,10 @@ hiddenimports = [
     "simple_photo_meta.exiv2bind",
     "simple_photo_meta.iptc_tags",
     "simple_photo_meta.exif_tags",
+    "reverse_geocoder",
+    "numpy",
+    "scipy",
+    "scipy.spatial",
 ]
 
 # Collect all FastAPI/uvicorn submodules
@@ -131,8 +136,6 @@ a = Analysis(
         "PyQt5",
         "PyQt6",
         "matplotlib",
-        "numpy",
-        "scipy",
         "pandas",
     ],
     win_no_prefer_redirects=False,

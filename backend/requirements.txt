@@ -10,5 +10,10 @@ pillow-heif>=0.14.0
 # App directories
 appdirs>=1.4.4
 
+# Offline reverse geocoding (requires numpy, scipy)
+numpy>=1.26.0
+scipy>=1.11.0
+reverse_geocoder>=1.5.1
+
 # For building the C++ bindings
 pybind11>=2.11.0

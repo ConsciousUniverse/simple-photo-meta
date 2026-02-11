@@ -10,6 +10,9 @@ pillow = "*"
 pillow-heif = "*"
 appdirs = "*"
 pywebview = ">=5.0"
+numpy = "*"
+scipy = "*"
+reverse_geocoder = "*"
 
 [dev-packages]
 setuptools = "*"
