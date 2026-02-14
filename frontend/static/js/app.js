@@ -34,7 +34,8 @@ const state = {
     tagDefinitions: null,
     scanPollingInterval: null,
     previewRotation: 0,  // Current rotation angle (0, 90, 180, 270)
-    thumbnailAbortController: null,  // AbortController for pending thumbnail fetches
+    thumbnailLoadAbort: null,   // AbortController for the current in-flight thumbnail fetch
+    thumbnailDebounceTimer: null, // Timer ID for the 1-second page-settle debounce
 };
 
 // DOM Elements cache
@@ -459,7 +460,8 @@ async function loadCurrentPage() {
         state.page,
         state.pageSize,
         state.searchQuery || '',
-        currentTagType
+        currentTagType,
+        state.metadataType || ''
     );
     
     if (result.data) {
@@ -522,41 +524,78 @@ function pollScanStatus() {
 
 // Thumbnails
 function renderThumbnails() {
-    // Abort any in-flight thumbnail fetches from the previous page
-    if (state.thumbnailAbortController) {
-        state.thumbnailAbortController.abort();
+    // Cancel any pending thumbnail work from the previous page:
+    // 1. Clear the debounce timer so generation doesn't start for the old page
+    if (state.thumbnailDebounceTimer) {
+        clearTimeout(state.thumbnailDebounceTimer);
+        state.thumbnailDebounceTimer = null;
     }
-    state.thumbnailAbortController = new AbortController();
-    const signal = state.thumbnailAbortController.signal;
+    // 2. Abort any currently in-flight single thumbnail fetch
+    //    (the server will finish generating that one thumbnail, which is fine)
+    if (state.thumbnailLoadAbort) {
+        state.thumbnailLoadAbort.abort();
+        state.thumbnailLoadAbort = null;
+    }
 
     if (state.images.length === 0) {
         elements.thumbnailGrid.innerHTML = '<p class="empty-state">No images found</p>';
         return;
     }
     
+    // Render all items immediately with placeholder (no src)
     elements.thumbnailGrid.innerHTML = '';
     
     for (const imagePath of state.images) {
-        const item = createThumbnailElement(imagePath, signal);
+        const item = createThumbnailElement(imagePath);
         elements.thumbnailGrid.appendChild(item);
     }
+
+    // After 1 second on this page, begin sequential thumbnail loading
+    const imagesToLoad = [...state.images];
+    state.thumbnailDebounceTimer = setTimeout(() => {
+        state.thumbnailDebounceTimer = null;
+        loadThumbnailsSequentially(imagesToLoad);
+    }, 1000);
 }
 
-function createThumbnailElement(imagePath, signal) {
+async function loadThumbnailsSequentially(imagePaths) {
+    for (const imagePath of imagePaths) {
+        // Create a fresh AbortController for this single fetch
+        const controller = new AbortController();
+        state.thumbnailLoadAbort = controller;
+
+        try {
+            const response = await fetch(getThumbnailUrl(imagePath), { signal: controller.signal });
+            const blob = await response.blob();
+
+            // Find the matching <img> in the grid and set its src
+            const items = elements.thumbnailGrid.querySelectorAll('.thumbnail-item');
+            for (const item of items) {
+                if (item.dataset.path === imagePath) {
+                    const img = item.querySelector('img');
+                    if (img) img.src = URL.createObjectURL(blob);
+                    break;
+                }
+            }
+        } catch {
+            // Aborted (page changed) or network error — stop the loop
+            return;
+        }
+    }
+    state.thumbnailLoadAbort = null;
+}
+
+function createThumbnailElement(imagePath) {
     const item = document.createElement('div');
     item.className = 'thumbnail-item';
+    item.dataset.path = imagePath;
     if (imagePath === state.selectedImage) {
         item.classList.add('selected');
     }
     
     const img = document.createElement('img');
     img.alt = getFilename(imagePath);
-
-    // Fetch thumbnail with abort support so page navigation cancels pending loads
-    fetch(getThumbnailUrl(imagePath), { signal })
-        .then(r => r.blob())
-        .then(blob => { img.src = URL.createObjectURL(blob); })
-        .catch(() => { /* aborted or failed — ignore */ });
+    // src is set later by loadThumbnailsSequentially
     
     const name = document.createElement('span');
     name.className = 'thumbnail-name';

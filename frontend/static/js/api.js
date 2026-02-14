@@ -64,7 +64,7 @@ async function cancelScan() {
 }
 
 // Image operations
-async function getImages(folder, page = 0, pageSize = 25, search = '', tagType = '') {
+async function getImages(folder, page = 0, pageSize = 25, search = '', tagType = '', metadataType = '') {
     const params = new URLSearchParams({
         folder,
         page: String(page),
@@ -72,6 +72,7 @@ async function getImages(folder, page = 0, pageSize = 25, search = '', tagType =
     });
     if (search) params.set('search', search);
     if (tagType) params.set('tag_type', tagType);
+    if (metadataType) params.set('metadata_type', metadataType);
 
     return apiRequest(`/images?${params}`);
 }

@@ -254,14 +254,26 @@ def get_image_overlay_info(path: str, selected_fields: list[str] = None) -> dict
     return result
 
 
-def search_images(folder: str, search: str, tag_type: Optional[str], page: int, page_size: int) -> list[str]:
-    """Search images by tag value. Supports multiple words - all words must match (in any tags)."""
+def search_images(folder: str, search: str, tag_type: Optional[str], metadata_type: Optional[str], page: int, page_size: int) -> list[str]:
+    """Search images by tag value. Supports multiple words - all words must match (in any tags).
+    
+    Args:
+        folder: Base folder path
+        search: Space-separated search words (ALL must match)
+        tag_type: Specific field name to search within (e.g. 'Keywords')
+        metadata_type: 'iptc' or 'exif' to restrict search to that metadata category
+        page: Page number (0-based)
+        page_size: Results per page
+    """
     offset = page * page_size
     
     # Split search into words
     words = search.split()
     if not words:
         return []
+    
+    # Determine which tag_types (fields) to search within
+    allowed_fields = _get_allowed_fields(tag_type, metadata_type)
     
     with get_cursor() as cursor:
         # Build query that requires ALL words to match (each word can be in different tags)
@@ -273,15 +285,17 @@ def search_images(folder: str, search: str, tag_type: Optional[str], page: int, 
         params = [f"{folder}%"]
         
         for word in words:
-            if tag_type:
-                base_query += """
+            if allowed_fields is not None:
+                placeholders = ','.join('?' * len(allowed_fields))
+                base_query += f"""
                     AND EXISTS (
                         SELECT 1 FROM image_tags it
                         JOIN tags t ON it.tag_id = t.id
-                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type = ?
+                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type IN ({placeholders})
                     )
                 """
-                params.extend([f"%{word}%", tag_type])
+                params.append(f"%{word}%")
+                params.extend(allowed_fields)
             else:
                 base_query += """
                     AND EXISTS (
@@ -299,12 +313,15 @@ def search_images(folder: str, search: str, tag_type: Optional[str], page: int, 
         return [row['path'] for row in cursor.fetchall()]
 
 
-def count_search_results(folder: str, search: str, tag_type: Optional[str]) -> int:
+def count_search_results(folder: str, search: str, tag_type: Optional[str], metadata_type: Optional[str]) -> int:
     """Count search results. Supports multiple words - all words must match."""
     # Split search into words
     words = search.split()
     if not words:
         return 0
+    
+    # Determine which tag_types (fields) to search within
+    allowed_fields = _get_allowed_fields(tag_type, metadata_type)
     
     with get_cursor() as cursor:
         base_query = """
@@ -314,15 +331,17 @@ def count_search_results(folder: str, search: str, tag_type: Optional[str]) -> i
         params = [f"{folder}%"]
         
         for word in words:
-            if tag_type:
-                base_query += """
+            if allowed_fields is not None:
+                placeholders = ','.join('?' * len(allowed_fields))
+                base_query += f"""
                     AND EXISTS (
                         SELECT 1 FROM image_tags it
                         JOIN tags t ON it.tag_id = t.id
-                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type = ?
+                        WHERE it.image_id = i.id AND t.tag LIKE ? AND t.tag_type IN ({placeholders})
                     )
                 """
-                params.extend([f"%{word}%", tag_type])
+                params.append(f"%{word}%")
+                params.extend(allowed_fields)
             else:
                 base_query += """
                     AND EXISTS (
@@ -335,6 +354,26 @@ def count_search_results(folder: str, search: str, tag_type: Optional[str]) -> i
         
         cursor.execute(base_query, params)
         return cursor.fetchone()['cnt']
+
+
+def _get_allowed_fields(tag_type: Optional[str], metadata_type: Optional[str]) -> Optional[list[str]]:
+    """Get list of tag_type field names to search within.
+    
+    Returns None if no restriction (search all fields).
+    Returns a list of field names to restrict to.
+    """
+    if tag_type:
+        # Specific field selected — search only that field
+        return [tag_type]
+    
+    if metadata_type == 'iptc':
+        from simple_photo_meta import iptc_tags
+        return iptc_tags.iptc_writabable_fields_list
+    elif metadata_type == 'exif':
+        from simple_photo_meta import exif_tags
+        return exif_tags.exif_writable_fields_list
+    
+    return None
 
 
 def get_tagged_images(folder: str, tag_type: str) -> set[str]:

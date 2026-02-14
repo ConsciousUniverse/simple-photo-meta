@@ -197,17 +197,19 @@ async def list_images(
     page: int = 0,
     page_size: int = Query(default=25),
     search: str = "",
-    tag_type: str = ""
+    tag_type: str = "",
+    metadata_type: str = ""
 ):
     """Get paginated list of images."""
     search = search.strip()
     tag_type = tag_type.strip()
+    metadata_type = metadata_type.strip()
     
     # Get images based on search mode
     if search:
         # Search terms provided - filter by those terms
-        images = database.search_images(folder, search, tag_type or None, page, page_size)
-        total = database.count_search_results(folder, search, tag_type or None)
+        images = database.search_images(folder, search, tag_type or None, metadata_type or None, page, page_size)
+        total = database.count_search_results(folder, search, tag_type or None, metadata_type or None)
     elif tag_type:
         # No search terms but tag_type selected - show images WITHOUT any tags of this type
         all_images = set(scan_service.get_images_in_folder(folder))
