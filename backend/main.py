@@ -6,11 +6,12 @@ A lightweight REST API for photo metadata editing.
 
 import os
 import sys
+import asyncio
 import subprocess
 from pathlib import Path
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -233,12 +234,17 @@ async def list_images(
 
 
 @app.get("/api/images/thumbnail")
-async def get_thumbnail(path: str):
+async def get_thumbnail(path: str, request: Request):
     """Get thumbnail for an image."""
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Image not found")
     
-    thumb_path = image_service.ensure_thumbnail(path)
+    # Run thumbnail generation in a thread pool so it doesn't block the event loop
+    thumb_path = await asyncio.to_thread(image_service.ensure_thumbnail, path)
+    
+    # If the client disconnected while we were generating, don't bother responding
+    if await request.is_disconnected():
+        return
     
     if not thumb_path or not os.path.isfile(thumb_path):
         raise HTTPException(status_code=500, detail="Thumbnail generation failed")
@@ -247,12 +253,16 @@ async def get_thumbnail(path: str):
 
 
 @app.get("/api/images/preview")
-async def get_preview(path: str, edge: int = Query(default=2048)):
+async def get_preview(path: str, request: Request, edge: int = Query(default=2048)):
     """Get preview for an image."""
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Image not found")
     
-    preview_path = image_service.ensure_preview(path, edge)
+    # Run preview generation in a thread pool so it doesn't block the event loop
+    preview_path = await asyncio.to_thread(image_service.ensure_preview, path, edge)
+    
+    if await request.is_disconnected():
+        return
     
     if not preview_path or not os.path.isfile(preview_path):
         raise HTTPException(status_code=500, detail="Preview generation failed")
