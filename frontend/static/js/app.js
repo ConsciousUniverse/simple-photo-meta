@@ -34,6 +34,7 @@ const state = {
     tagDefinitions: null,
     scanPollingInterval: null,
     previewRotation: 0,  // Current rotation angle (0, 90, 180, 270)
+    thumbnailAbortController: null,  // AbortController for pending thumbnail fetches
 };
 
 // DOM Elements cache
@@ -75,6 +76,7 @@ function cacheElements() {
         btnPrevPage: document.getElementById('btn-prev-page'),
         btnNextPage: document.getElementById('btn-next-page'),
         pageInfo: document.getElementById('page-info'),
+        pageSelector: document.getElementById('page-selector'),
         scanProgress: document.getElementById('scan-progress'),
         progressFill: document.getElementById('progress-fill'),
         scanStatus: document.getElementById('scan-status'),
@@ -137,6 +139,13 @@ function setupEventListeners() {
     // Pagination
     elements.btnPrevPage.addEventListener('click', () => changePage(-1));
     elements.btnNextPage.addEventListener('click', () => changePage(1));
+    elements.pageSelector.addEventListener('change', (e) => {
+        const newPage = parseInt(e.target.value, 10);
+        if (!isNaN(newPage) && newPage !== state.page) {
+            state.page = newPage;
+            loadCurrentPage();
+        }
+    });
     
     // Metadata type selector
     elements.metadataType.addEventListener('change', handleMetadataTypeChange);
@@ -412,6 +421,20 @@ function updatePaginationControls() {
     elements.pageInfo.textContent = `Page ${state.page + 1} of ${state.totalPages}`;
     elements.btnPrevPage.disabled = state.page === 0;
     elements.btnNextPage.disabled = state.page >= state.totalPages - 1;
+
+    // Update page selector dropdown
+    const sel = elements.pageSelector;
+    // Only rebuild options if total pages changed
+    if (sel.options.length !== state.totalPages) {
+        sel.innerHTML = '';
+        for (let i = 0; i < state.totalPages; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = i + 1;
+            sel.appendChild(opt);
+        }
+    }
+    sel.value = state.page;
 }
 
 async function changePage(delta) {
@@ -499,6 +522,13 @@ function pollScanStatus() {
 
 // Thumbnails
 function renderThumbnails() {
+    // Abort any in-flight thumbnail fetches from the previous page
+    if (state.thumbnailAbortController) {
+        state.thumbnailAbortController.abort();
+    }
+    state.thumbnailAbortController = new AbortController();
+    const signal = state.thumbnailAbortController.signal;
+
     if (state.images.length === 0) {
         elements.thumbnailGrid.innerHTML = '<p class="empty-state">No images found</p>';
         return;
@@ -507,12 +537,12 @@ function renderThumbnails() {
     elements.thumbnailGrid.innerHTML = '';
     
     for (const imagePath of state.images) {
-        const item = createThumbnailElement(imagePath);
+        const item = createThumbnailElement(imagePath, signal);
         elements.thumbnailGrid.appendChild(item);
     }
 }
 
-function createThumbnailElement(imagePath) {
+function createThumbnailElement(imagePath, signal) {
     const item = document.createElement('div');
     item.className = 'thumbnail-item';
     if (imagePath === state.selectedImage) {
@@ -520,9 +550,13 @@ function createThumbnailElement(imagePath) {
     }
     
     const img = document.createElement('img');
-    img.src = getThumbnailUrl(imagePath);
     img.alt = getFilename(imagePath);
-    img.loading = 'lazy';
+
+    // Fetch thumbnail with abort support so page navigation cancels pending loads
+    fetch(getThumbnailUrl(imagePath), { signal })
+        .then(r => r.blob())
+        .then(blob => { img.src = URL.createObjectURL(blob); })
+        .catch(() => { /* aborted or failed — ignore */ });
     
     const name = document.createElement('span');
     name.className = 'thumbnail-name';

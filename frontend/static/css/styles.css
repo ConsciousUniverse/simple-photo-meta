@@ -259,6 +259,13 @@ body.resizing-v {
     opacity: 0.8;
 }
 
+.page-selector {
+    width: auto;
+    min-width: 48px;
+    padding: 2px 4px;
+    font-size: var(--font-size-small);
+}
+
 /* Scan Progress */
 .scan-progress {
     padding: 8px 12px;

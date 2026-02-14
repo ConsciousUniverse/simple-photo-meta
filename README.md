@@ -92,53 +92,67 @@ This version was produced with the considerable assistance of artificial intelli
 
 Download alpha releases from the [Releases page](https://github.com/ConsciousUniverse/simple-photo-meta/releases):
 
-- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Once downloaded, install in the usual way. Since the alpha release is not signed, you will need to run this command before running it for the first time, to unblock the binary on Gatekeeper: `xattr -dr com.apple.quarantine /Applications/SimplePhotoMeta.app`
+- **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Install in the usual way. Since the alpha release is not signed, you must unblock it on Gatekeeper before first launch: `xattr -dr com.apple.quarantine /Applications/SimplePhotoMeta.app`
 - **Linux**: [AppImage (universal)](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
 
-### From Source
+### System Dependencies
 
-**Requirements:**
-
-- Python 3.13+
-- Exiv2 library (for metadata operations)
-- pybind11 (for C++ bindings)
+These must be installed before running from source or building.
 
 **macOS:**
 
 ```bash
-# Install dependencies
 brew install exiv2 brotli pybind11 python@3.13
-
-# Clone and setup
-git clone https://github.com/consciousuniverse/simple-photo-meta.git
-cd simple-photo-meta
-
-# Run (creates venv automatically)
-./scripts/run.sh
 ```
 
 **Linux (Ubuntu/Debian):**
 
 ```bash
-# Install system dependencies
-sudo apt install libexiv2-dev libbrotli-dev python3-pybind11 \
-    python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
+# C++ bindings build dependencies
+sudo apt install libexiv2-dev libbrotli-dev python3-pybind11
 
-# Clone and setup
+# GTK/WebKit for pywebview (system packages — cannot be pip-installed)
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
+```
+
+### Running from Source (Development)
+
+Use `run.sh` to launch the app directly from source. This starts a FastAPI/uvicorn server at `http://127.0.0.1:8080` which you can also open in a browser for debugging with devtools.
+
+```bash
 git clone https://github.com/consciousuniverse/simple-photo-meta.git
 cd simple-photo-meta
-
-# Run (creates venv automatically)
 ./scripts/run.sh
 ```
 
-The `run.sh` script will:
+The script creates a virtual environment (`.venv`), installs all pip dependencies, builds the C++ Exiv2 bindings if needed, and starts the server. On Linux, the venv is created with `--system-site-packages` so it can access the GTK/WebKit bindings.
 
-1. Create a Python virtual environment (`.venv`)
-2. Install all required packages
-3. Build the C++ Exiv2 bindings if needed
-4. Start the uvicorn server on `http://127.0.0.1:8080`
-5. Open your browser to the app
+### Building the Desktop App
+
+To build a standalone desktop application (`.app` on macOS, AppImage on Linux), run:
+
+```bash
+./scripts/build_all.sh            # full build
+./scripts/build_all.sh --clean    # clean build (removes previous artifacts first)
+```
+
+`build_all.sh` performs three steps in sequence:
+
+1. **`build_bindings.sh`** — Compiles the C++ Exiv2/pybind11 extension module (`exiv2bind`)
+2. **`build_desktop.sh`** — Creates a separate build venv (`.venv-build`), installs all dependencies, and runs PyInstaller using `simple_photo_meta.spec` to produce a standalone app bundle
+3. **Platform installer** — Calls `create_dmg.sh` (macOS) or `create_appimage.sh` (Linux) to package the app into a distributable installer
+
+Each sub-script can also be run independently. For macOS DMG creation, you additionally need: `brew install create-dmg`
+
+**Build outputs:**
+
+| Platform | App bundle                 | Installer                                            |
+| -------- | -------------------------- | ---------------------------------------------------- |
+| macOS    | `dist/SimplePhotoMeta.app` | `packages/macos/SimplePhotoMeta-<version>.dmg`       |
+| Linux    | `dist/SimplePhotoMeta/`    | `packages/Linux/SimplePhotoMeta-<version>.AppImage`  |
+
+**What gets bundled:**
+The PyInstaller build bundles the Python runtime, all pip packages (FastAPI, uvicorn, Pillow, pillow-heif, pywebview, numpy, scipy, reverse_geocoder), the compiled `exiv2bind` C++ extension, and the geonames database for offline reverse geocoding. On Linux, the GTK/GObject system packages must be pre-installed on the build machine as they are accessed via `--system-site-packages`.
 
 ### Optional: HEIC/HEIF Support
 
@@ -160,57 +174,6 @@ HEIC/HEIF image format support is included automatically when you run the app.
 ## Screenshots
 
 ![alt text](assets/Screenshot.png)
-
-## Building from Source
-
-### Build Scripts
-
-| Script                         | Description                                                  |
-| ------------------------------ | ------------------------------------------------------------ |
-| `scripts/run.sh`             | Start dev server - creates venv, installs deps, runs uvicorn |
-| `scripts/build_bindings.sh`  | Build C++ Exiv2 bindings                                     |
-| `scripts/build_desktop.sh`   | Build standalone app with PyInstaller                        |
-| `scripts/build_all.sh`       | Full build - bindings → desktop → installer                |
-| `scripts/create_dmg.sh`      | Create macOS DMG installer                                   |
-| `scripts/create_appimage.sh` | Create Linux AppImage                                        |
-
-### Build Prerequisites
-
-**macOS:**
-
-```bash
-brew install exiv2 brotli pybind11 create-dmg
-```
-
-**Linux (Ubuntu/Debian):**
-
-```bash
-# System libraries for building C++ bindings
-sudo apt install libexiv2-dev libbrotli-dev python3-pybind11
-
-# GTK/WebKit for pywebview (required system packages - cannot be pip installed)
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
-```
-
-### What Gets Bundled vs System Dependencies
-
-**Linux AppImage bundles:**
-- Python runtime and all pip packages
-- FastAPI, uvicorn, pillow, pillow-heif, pywebview
-- numpy, scipy, reverse_geocoder (for GPS coordinate to place name conversion)
-- Compiled `exiv2bind` C++ extension
-- Application code and geonames database
-
-**Linux system requirements (must be pre-installed for building):**
-- `libexiv2-dev libbrotli-dev python3-pybind11` - for compiling C++ bindings
-- `python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1` - GTK/WebKit for pywebview
-
-### Output Locations
-
-| Platform | Output                                                                                |
-| -------- | ------------------------------------------------------------------------------------- |
-| macOS    | `dist/SimplePhotoMeta.app` → `packages/macos/SimplePhotoMeta-2.0.0.dmg`          |
-| Linux    | `dist/SimplePhotoMeta/` → `packages/Linux/SimplePhotoMeta-2.0.0-x86_64.AppImage` |
 
 ## Data Storage
 
@@ -235,7 +198,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.13-alpha+7be4b48
+v3.0.14-alpha+6dbf298
 
 ## Contributing
 
