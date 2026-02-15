@@ -36,6 +36,7 @@ const state = {
     previewRotation: 0,  // Current rotation angle (0, 90, 180, 270)
     thumbnailLoadAbort: null,   // AbortController for the current in-flight thumbnail fetch
     thumbnailDebounceTimer: null, // Timer ID for the 1-second page-settle debounce
+    thumbnailCache: new Map(),    // imagePath → blob URL for already-fetched thumbnails
 };
 
 // DOM Elements cache
@@ -404,6 +405,10 @@ async function openFolder(path) {
         state.totalPages = result.data.total_pages;
         state.totalImages = result.data.total_images;
         
+        // Clear thumbnail cache when switching folders
+        for (const url of state.thumbnailCache.values()) URL.revokeObjectURL(url);
+        state.thumbnailCache.clear();
+        
         updateFolderDisplay();
         renderThumbnails();
         
@@ -542,24 +547,39 @@ function renderThumbnails() {
         return;
     }
     
-    // Render all items immediately with placeholder (no src)
+    // Render all items immediately; use cached blob URL if available
     elements.thumbnailGrid.innerHTML = '';
+    const uncachedImages = [];
     
     for (const imagePath of state.images) {
         const item = createThumbnailElement(imagePath);
         elements.thumbnailGrid.appendChild(item);
+
+        // If we already have this thumbnail cached, show it instantly
+        const cachedUrl = state.thumbnailCache.get(imagePath);
+        if (cachedUrl) {
+            const img = item.querySelector('img');
+            if (img) img.src = cachedUrl;
+        } else {
+            uncachedImages.push(imagePath);
+        }
     }
 
-    // After 1 second on this page, begin sequential thumbnail loading
-    const imagesToLoad = [...state.images];
-    state.thumbnailDebounceTimer = setTimeout(() => {
-        state.thumbnailDebounceTimer = null;
-        loadThumbnailsSequentially(imagesToLoad);
-    }, 1000);
+    // Only fetch thumbnails we don't already have
+    if (uncachedImages.length > 0) {
+        // If every thumbnail was cached, skip the debounce entirely
+        state.thumbnailDebounceTimer = setTimeout(() => {
+            state.thumbnailDebounceTimer = null;
+            loadThumbnailsSequentially(uncachedImages);
+        }, 1000);
+    }
 }
 
 async function loadThumbnailsSequentially(imagePaths) {
     for (const imagePath of imagePaths) {
+        // Skip if it was cached in the meantime (e.g. by a parallel render)
+        if (state.thumbnailCache.has(imagePath)) continue;
+
         // Create a fresh AbortController for this single fetch
         const controller = new AbortController();
         state.thumbnailLoadAbort = controller;
@@ -567,13 +587,17 @@ async function loadThumbnailsSequentially(imagePaths) {
         try {
             const response = await fetch(getThumbnailUrl(imagePath), { signal: controller.signal });
             const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            // Store in cache
+            state.thumbnailCache.set(imagePath, blobUrl);
 
             // Find the matching <img> in the grid and set its src
             const items = elements.thumbnailGrid.querySelectorAll('.thumbnail-item');
             for (const item of items) {
                 if (item.dataset.path === imagePath) {
                     const img = item.querySelector('img');
-                    if (img) img.src = URL.createObjectURL(blob);
+                    if (img) img.src = blobUrl;
                     break;
                 }
             }
@@ -1049,9 +1073,28 @@ async function saveTagsImmediately() {
             elements.saveStatus.textContent = '';
         }, 1500);
         
-        // Refresh the thumbnail list to reflect tag changes
+        // Refresh the image list to reflect tag changes
         // (e.g., image may no longer match search criteria)
-        await loadCurrentPage();
+        const prevImages = [...state.images];
+        const result2 = await getImages(
+            state.currentFolder,
+            state.page,
+            state.pageSize,
+            state.searchQuery || '',
+            elements.tagType ? elements.tagType.value : '',
+            state.metadataType || ''
+        );
+        if (result2.data) {
+            const newImages = result2.data.images;
+            // Only re-render thumbnails if the image list actually changed
+            if (JSON.stringify(prevImages) !== JSON.stringify(newImages)) {
+                state.images = newImages;
+                state.totalImages = result2.data.total_images;
+                state.totalPages = result2.data.total_pages;
+                updatePaginationControls();
+                renderThumbnails();
+            }
+        }
     } else {
         elements.saveStatus.textContent = `Error: ${result.error || 'Failed to save'}`;
     }
