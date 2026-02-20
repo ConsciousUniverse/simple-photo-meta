@@ -95,6 +95,12 @@ def _run_scan(folder_path: str, force: bool = False):
     try:
         # Get list of all images in folder
         all_images = get_images_in_folder(folder_path)
+        all_images_set = set(all_images)
+        
+        # Purge database records for files that no longer exist
+        purged = database.purge_missing_images(os.path.abspath(folder_path), all_images_set)
+        if purged > 0:
+            print(f"Purged {purged} missing image(s) from database")
         
         if force:
             # Full rescan - process all images

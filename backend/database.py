@@ -433,6 +433,37 @@ def get_indexed_images(folder: str) -> set[str]:
         return {row['path'] for row in cursor.fetchall()}
 
 
+def purge_missing_images(folder: str, existing_files: set[str]) -> int:
+    """Remove database records for images that no longer exist on disk.
+    
+    Args:
+        folder: Base folder path
+        existing_files: Set of image paths that currently exist on disk
+    
+    Returns:
+        Number of records removed
+    """
+    indexed = get_indexed_images(folder)
+    missing = indexed - existing_files
+    
+    if not missing:
+        return 0
+    
+    with get_cursor() as cursor:
+        for path in missing:
+            # Get image ID
+            cursor.execute("SELECT id FROM images WHERE path = ?", (path,))
+            row = cursor.fetchone()
+            if row:
+                image_id = row['id']
+                # Delete tag associations (cascades won't work without foreign_keys pragma)
+                cursor.execute("DELETE FROM image_tags WHERE image_id = ?", (image_id,))
+                # Delete image record
+                cursor.execute("DELETE FROM images WHERE id = ?", (image_id,))
+    
+    return len(missing)
+
+
 # ============== Scanned directories ==============
 
 def mark_directory_scanned(path: str):
