@@ -38,6 +38,8 @@ datas = [
 ]
 # Collect reverse_geocoder data files (geonames database)
 datas += collect_data_files("reverse_geocoder")
+# Collect setuptools metadata so pkg_resources runtime hook doesn't crash
+datas += collect_data_files("setuptools")
 # Collect tag definition files
 datas.append((str(PROJECT_ROOT / "simple_photo_meta" / "iptc_tags.py"), "simple_photo_meta"))
 datas.append((str(PROJECT_ROOT / "simple_photo_meta" / "exif_tags.py"), "simple_photo_meta"))
@@ -93,6 +95,7 @@ hiddenimports = [
     "numpy",
     "scipy",
     "scipy.spatial",
+    "pkg_resources",
 ]
 
 # Collect all FastAPI/uvicorn submodules
