@@ -138,6 +138,9 @@ a = Analysis(
         "PySide6",
         "PyQt5",
         "PyQt6",
+        "PySide2",
+        "qtpy",
+        "Qt5",
         "matplotlib",
         "pandas",
     ],
@@ -184,7 +187,7 @@ if is_macos:
         coll,
         name="SimplePhotoMeta.app",
         icon=str(PROJECT_ROOT / "icons" / "SimplePhotoMeta.icns") if (PROJECT_ROOT / "icons" / "SimplePhotoMeta.icns").exists() else None,
-        bundle_identifier="com.zaziork.simplephotoMeta",
+        bundle_identifier="uk.danbright.SimplePhotoMeta",
         info_plist={
             "CFBundleName": "Simple Photo Meta",
             "CFBundleDisplayName": "Simple Photo Meta",

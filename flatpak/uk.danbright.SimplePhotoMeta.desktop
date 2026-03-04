@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Simple Photo Meta
+Comment=Photo metadata editor for IPTC and EXIF data
+Exec=simple-photo-meta
+Icon=uk.danbright.SimplePhotoMeta
+Categories=Graphics;Photography;
+Terminal=false

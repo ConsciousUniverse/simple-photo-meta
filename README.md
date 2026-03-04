@@ -12,7 +12,7 @@ This is an Alpha version of this software, and as such is made available for tes
 
 ## Download Binaries (Mac and Linux)
 
-Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The macOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as an AppImage.
+Binaries of the latest version may be downloaded from the [releases page here on GitHub](https://github.com/ConsciousUniverse/simple-photo-meta/releases). The macOS (Apple Silicon) version is available as a .dmg, while the Linux version is available as a Flatpak.
 
 Note, the .dmg for Mac is not signed, as this is an alpha testing version. Therefore, the OS will report the binary is "broken", due to it being blocked by Gatekeeper. You will need to run a command to get it through Gatekeeper; see installation instructions below.
 
@@ -93,7 +93,22 @@ This version was produced with the considerable assistance of artificial intelli
 Download alpha releases from the [Releases page](https://github.com/ConsciousUniverse/simple-photo-meta/releases):
 
 - **macOS (Apple Silicon)**: [DMG installer](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Install in the usual way. Since the alpha release is not signed, you must unblock it on Gatekeeper before first launch: `xattr -dr com.apple.quarantine /Applications/SimplePhotoMeta.app`
-- **Linux**: [AppImage (universal)](https://github.com/ConsciousUniverse/simple-photo-meta/releases)
+- **Linux**: [Flatpak bundle](https://github.com/ConsciousUniverse/simple-photo-meta/releases). Ensure flatpak is installed, then:
+
+  ```bash
+  # Install (first time)
+  sudo apt install flatpak                          # if not already installed
+  flatpak install --user SimplePhotoMeta-2.0.0.flatpak
+
+  # Run from the terminal
+  flatpak run uk.danbright.SimplePhotoMeta
+  ```
+
+  **Desktop launcher:** To make the app appear in your application launcher, ensure the flatpak export paths are in `XDG_DATA_DIRS`. Add the following to `~/.profile` and then **log out and log back in**:
+
+  ```bash
+  export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"
+  ```
 
 ### System Dependencies
 
@@ -125,34 +140,44 @@ cd simple-photo-meta
 ./scripts/run.sh
 ```
 
-The script creates a virtual environment (`.venv`), installs all pip dependencies, builds the C++ Exiv2 bindings if needed, and starts the server. On Linux, the venv is created with `--system-site-packages` so it can access the GTK/WebKit bindings.
+The script uses pipenv to install all pip dependencies, builds the C++ Exiv2 bindings if needed, and starts the server. On Linux, the pipenv environment is created with system site-packages access so it can use the GTK/WebKit bindings.
 
 ### Building the Desktop App
 
-To build a standalone desktop application (`.app` on macOS, AppImage on Linux), run:
+To build a standalone desktop application (`.app` on macOS, Flatpak on Linux), run:
 
 ```bash
 ./scripts/build_all.sh            # full build
 ./scripts/build_all.sh --clean    # clean build (removes previous artifacts first)
 ```
 
-`build_all.sh` performs three steps in sequence:
+**macOS** — `build_all.sh` performs three steps:
 
 1. **`build_bindings.sh`** — Compiles the C++ Exiv2/pybind11 extension module (`exiv2bind`)
-2. **`build_desktop.sh`** — Creates a separate build venv (`.venv-build`), installs all dependencies, and runs PyInstaller using `simple_photo_meta.spec` to produce a standalone app bundle
-3. **Platform installer** — Calls `create_dmg.sh` (macOS) or `create_appimage.sh` (Linux) to package the app into a distributable installer
+2. **`build_desktop.sh`** — Installs dependencies with pipenv and runs PyInstaller using `simple_photo_meta.spec` to produce a standalone app bundle
+3. **`create_dmg.sh`** — Packages the app into a DMG installer (requires `brew install create-dmg`)
 
-Each sub-script can also be run independently. For macOS DMG creation, you additionally need: `brew install create-dmg`
+**Linux** — `build_all.sh` calls `build_flatpak.sh`, which handles everything in a single step:
+
+- Downloads brotli and exiv2 source tarballs
+- Builds them inside the Flatpak sandbox using the GNOME SDK
+- Installs pip dependencies
+- Compiles the C++ bindings
+- Installs the app locally and creates a distributable `.flatpak` bundle
+
+The Flatpak uses the `org.gnome.Platform` runtime which provides GTK3, WebKit2GTK, and PyGObject natively. Prerequisites: `sudo apt install flatpak flatpak-builder`
+
+Each sub-script can also be run independently.
 
 **Build outputs:**
 
-| Platform | App bundle                 | Installer                                            |
-| -------- | -------------------------- | ---------------------------------------------------- |
-| macOS    | `dist/SimplePhotoMeta.app` | `packages/macos/SimplePhotoMeta-<version>.dmg`       |
-| Linux    | `dist/SimplePhotoMeta/`    | `packages/Linux/SimplePhotoMeta-<version>.AppImage`  |
+| Platform | App bundle                 | Installer                                             |
+| -------- | -------------------------- | ----------------------------------------------------- |
+| macOS    | `dist/SimplePhotoMeta.app` | `packages/macos/SimplePhotoMeta-<version>.dmg`        |
+| Linux    | (installed via Flatpak)    | `packages/linux/SimplePhotoMeta-<version>.flatpak`    |
 
 **What gets bundled:**
-The PyInstaller build bundles the Python runtime, all pip packages (FastAPI, uvicorn, Pillow, pillow-heif, pywebview, numpy, scipy, reverse_geocoder), the compiled `exiv2bind` C++ extension, and the geonames database for offline reverse geocoding. On Linux, the GTK/GObject system packages must be pre-installed on the build machine as they are accessed via `--system-site-packages`.
+On macOS, PyInstaller bundles the Python runtime, all pip packages (FastAPI, uvicorn, Pillow, pillow-heif, pywebview, numpy, scipy, reverse_geocoder), the compiled `exiv2bind` C++ extension, and the geonames database for offline reverse geocoding. On Linux, the Flatpak runtime provides GTK3, WebKit2GTK, PyGObject, and Python; the app module builds brotli and exiv2 from source and installs pip dependencies inside the sandbox.
 
 ### Optional: HEIC/HEIF Support
 
@@ -198,7 +223,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.21-alpha+77717e3
+v3.0.22-alpha+ee84354
 
 ## Contributing
 

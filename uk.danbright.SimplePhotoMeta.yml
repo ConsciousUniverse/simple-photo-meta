@@ -1,0 +1,131 @@
+# Flatpak manifest for Simple Photo Meta
+#
+# Build with: ./scripts/build_flatpak.sh
+#
+# The GNOME runtime provides GTK3, WebKit2GTK, PyGObject, and Python 3,
+# eliminating the GTK/WebKit bundling problems that plagued the AppImage.
+#
+
+app-id: uk.danbright.SimplePhotoMeta
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: simple-photo-meta
+
+finish-args:
+  # Display (X11 + Wayland)
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  # Localhost network for the uvicorn backend server
+  - --share=network
+  # Read/write access to the filesystem for photo metadata editing
+  - --filesystem=host
+  # GPU acceleration for WebKit rendering
+  - --device=dri
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  # ── 1. Brotli compression library (required by exiv2) ──────────────
+  - name: brotli
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_LIBDIR=lib
+    sources:
+      - type: archive
+        url: https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz
+        sha256: e720a6ca29428b803f4ad165371771f5398faba397edf6778837a18599ea13ff
+
+  # ── 2. inih INI parser library (required by exiv2) ──────────────────
+  - name: inih
+    buildsystem: meson
+    config-opts:
+      - -Ddefault_library=shared
+      - -Ddistro_install=true
+      - --libdir=lib
+    sources:
+      - type: archive
+        url: https://github.com/benhoyt/inih/archive/refs/tags/r58.tar.gz
+        sha256: e79216260d5dffe809bda840be48ab0eec7737b2bb9f02d2275c1b46344ea7b7
+
+  # ── 3. Exiv2 image-metadata library ────────────────────────────────
+  - name: exiv2
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DEXIV2_BUILD_SAMPLES=OFF
+      - -DEXIV2_BUILD_EXIV2_COMMAND=OFF
+      - -DBUILD_SHARED_LIBS=ON
+    sources:
+      - type: archive
+        url: https://github.com/Exiv2/exiv2/archive/refs/tags/v0.28.8.tar.gz
+        sha256: ea51b0609f58a9afa063b60daa1539948b62247721e154f4fff0ad3aec9f9756
+
+  # ── 3. Python pip dependencies ─────────────────────────────────────
+  #
+  # Network access is granted during this build step so pip can
+  # download packages.  Pipfile is declared as a source so that
+  # flatpak-builder invalidates its cache when dependencies change.
+  #
+  - name: python-deps
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=${FLATPAK_DEST} --no-cache-dir fastapi 'uvicorn[standard]' pillow pillow-heif appdirs 'pywebview>=5.0' numpy scipy reverse_geocoder pybind11 setuptools
+    sources:
+      - type: file
+        path: Pipfile
+
+  # ── 4. Simple Photo Meta application ───────────────────────────────
+  - name: simple-photo-meta
+    buildsystem: simple
+    build-options:
+      env:
+        CPLUS_INCLUDE_PATH: /app/include
+        LIBRARY_PATH: /app/lib
+        LDFLAGS: -Wl,-rpath,/app/lib
+    build-commands:
+      # Build C++ Exiv2 bindings (LDFLAGS bakes /app/lib RPATH into the .so)
+      - python3 setup.py build_ext --inplace
+      # Verify libraries are findable
+      - echo '--- /app/lib contents ---' && ls /app/lib/libexiv2* /app/lib/libINI* /app/lib/libinih* 2>&1 || true
+      - echo '--- find all libINI/libinih ---' && find /app -name 'libINI*' -o -name 'libinih*' 2>&1 || true
+      # Install application files
+      - mkdir -p /app/share/simple-photo-meta
+      - cp -r backend/ frontend/ simple_photo_meta/ launcher.py /app/share/simple-photo-meta/
+      # Install wrapper script
+      - install -Dm755 flatpak/run.sh /app/bin/simple-photo-meta
+      # Install desktop file
+      - install -Dm644 flatpak/uk.danbright.SimplePhotoMeta.desktop /app/share/applications/uk.danbright.SimplePhotoMeta.desktop
+      # Install icon
+      - install -Dm644 icons/SimplePhotoMetaIcon.iconset/icon_256x256.png /app/share/icons/hicolor/256x256/apps/uk.danbright.SimplePhotoMeta.png
+    sources:
+      - type: dir
+        path: .
+        skip:
+          - .git
+          - .flatpak-builder
+          - .flatpak-sources
+          - flatpak-build
+          - flatpak-repo
+          - build
+          - dist
+          - packages
+          - photo_directory
+          - __pycache__
+          - node_modules
+          - '*.pyc'
+          - '*.AppImage'
+          - '*.dmg'
+          - '*.flatpak'

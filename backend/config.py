@@ -9,7 +9,7 @@ from appdirs import user_data_dir
 
 # Application info
 APP_NAME = "SimplePhotoMeta"
-APP_AUTHOR = "Zaziork"
+APP_AUTHOR = "DanBright"
 
 # Data directory
 DATA_DIR = Path(user_data_dir(APP_NAME, APP_AUTHOR))

@@ -21,6 +21,11 @@ fi
 
 cd "$PROJECT_DIR"
 
+# On Linux, allow pipenv venv to see system site-packages (for GTK/GObject bindings)
+if [[ "$OSTYPE" == "linux"* ]]; then
+    export PIPENV_SITE_PACKAGES=1
+fi
+
 # Install dependencies
 echo "Installing dependencies with pipenv..."
 pipenv install
