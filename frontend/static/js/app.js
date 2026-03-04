@@ -98,6 +98,7 @@ function cacheElements() {
         aboutDialog: document.getElementById('about-dialog'),
         overlayFieldsDialog: document.getElementById('overlay-fields-dialog'),
         prefFontSize: document.getElementById('pref-font-size'),
+        prefExcludedDirs: document.getElementById('pref-excluded-dirs'),
         btnSavePrefs: document.getElementById('btn-save-prefs'),
         btnClosePrefs: document.getElementById('btn-close-prefs'),
         btnOpenOverlayFields: document.getElementById('btn-open-overlay-fields'),
@@ -212,6 +213,15 @@ async function loadPreferences() {
         elements.prefFontSize.value = fontSize;
     }
     
+    const exclResult = await getPreference('excluded_directories');
+    if (exclResult.data && exclResult.data.value) {
+        try {
+            const patterns = JSON.parse(exclResult.data.value);
+            elements.prefExcludedDirs.value = patterns.join('\n');
+        } catch (e) {
+            // ignore bad data
+        }
+    }
 }
 
 // GPS tag names that are grouped into the composite "GPS Location" checkbox
@@ -555,58 +565,54 @@ function renderThumbnails() {
         const item = createThumbnailElement(imagePath);
         elements.thumbnailGrid.appendChild(item);
 
-        // If we already have this thumbnail cached, show it instantly
-        const cachedUrl = state.thumbnailCache.get(imagePath);
-        if (cachedUrl) {
-            const img = item.querySelector('img');
-            if (img) img.src = cachedUrl;
-        } else {
+        if (!state.thumbnailCache.has(imagePath)) {
             uncachedImages.push(imagePath);
         }
     }
 
-    // Only fetch thumbnails we don't already have
+    // Fetch uncached thumbnails after a short debounce to let rapid
+    // page clicks settle (avoids queuing work for pages the user skips through)
     if (uncachedImages.length > 0) {
-        // If every thumbnail was cached, skip the debounce entirely
         state.thumbnailDebounceTimer = setTimeout(() => {
             state.thumbnailDebounceTimer = null;
-            loadThumbnailsSequentially(uncachedImages);
-        }, 1000);
+            loadThumbnailsBatched(uncachedImages);
+        }, 150);
     }
 }
 
-async function loadThumbnailsSequentially(imagePaths) {
-    for (const imagePath of imagePaths) {
-        // Skip if it was cached in the meantime (e.g. by a parallel render)
-        if (state.thumbnailCache.has(imagePath)) continue;
+async function loadThumbnailsBatched(imagePaths) {
+    const BATCH_SIZE = 6; // parallel requests per batch
+    const controller = new AbortController();
+    state.thumbnailLoadAbort = controller;
 
-        // Create a fresh AbortController for this single fetch
-        const controller = new AbortController();
-        state.thumbnailLoadAbort = controller;
+    for (let i = 0; i < imagePaths.length; i += BATCH_SIZE) {
+        if (controller.signal.aborted) return;
 
-        try {
-            const response = await fetch(getThumbnailUrl(imagePath), { signal: controller.signal });
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
+        const batch = imagePaths.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(async (imagePath) => {
+            if (state.thumbnailCache.has(imagePath)) return;
+            try {
+                const response = await fetch(getThumbnailUrl(imagePath), { signal: controller.signal });
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                state.thumbnailCache.set(imagePath, blobUrl);
 
-            // Store in cache
-            state.thumbnailCache.set(imagePath, blobUrl);
-
-            // Find the matching <img> in the grid and set its src
-            const items = elements.thumbnailGrid.querySelectorAll('.thumbnail-item');
-            for (const item of items) {
-                if (item.dataset.path === imagePath) {
+                // Find the matching <img> in the grid and set its src
+                const item = elements.thumbnailGrid.querySelector(`.thumbnail-item[data-path="${CSS.escape(imagePath)}"]`);
+                if (item) {
                     const img = item.querySelector('img');
                     if (img) img.src = blobUrl;
-                    break;
                 }
+            } catch {
+                // Aborted or network error — ignore individual failures
             }
-        } catch {
-            // Aborted (page changed) or network error — stop the loop
-            return;
-        }
+        });
+        await Promise.all(promises);
     }
-    state.thumbnailLoadAbort = null;
+
+    if (state.thumbnailLoadAbort === controller) {
+        state.thumbnailLoadAbort = null;
+    }
 }
 
 function createThumbnailElement(imagePath) {
@@ -619,7 +625,14 @@ function createThumbnailElement(imagePath) {
     
     const img = document.createElement('img');
     img.alt = getFilename(imagePath);
-    // src is set later by loadThumbnailsSequentially
+    // Hidden via CSS (opacity 0) until loaded to avoid broken-image borders
+    img.addEventListener('load', () => img.classList.add('loaded'));
+    
+    // If already cached, set src immediately
+    const cachedUrl = state.thumbnailCache.get(imagePath);
+    if (cachedUrl) {
+        img.src = cachedUrl;
+    }
     
     const name = document.createElement('span');
     name.className = 'thumbnail-name';
@@ -1143,6 +1156,11 @@ async function handleSavePreferences() {
     const fontSize = elements.prefFontSize.value;
     
     await setPreference('font_size', fontSize);
+    
+    // Save excluded directories as JSON array
+    const rawText = elements.prefExcludedDirs.value;
+    const patterns = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    await setPreference('excluded_directories', JSON.stringify(patterns));
     
     document.documentElement.style.setProperty('--font-size-base', `${fontSize}px`);
     

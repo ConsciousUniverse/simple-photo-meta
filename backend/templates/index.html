@@ -142,6 +142,12 @@
             </div>
             <hr style="margin: 16px 0; border-color: GrayText;">
             <div class="form-group">
+                <label for="pref-excluded-dirs">Excluded Directories</label>
+                <p style="font-size: var(--font-size-small); opacity: 0.7; margin: 4px 0 8px;">Directory names to skip when scanning. One pattern per line. Supports wildcards (e.g. <code>.*</code> for all dot-directories, <code>__*</code> for dunder-directories).</p>
+                <textarea id="pref-excluded-dirs" class="input" rows="4" style="width: 100%; resize: vertical; font-family: monospace;" placeholder=".*&#10;__pycache__&#10;node_modules"></textarea>
+            </div>
+            <hr style="margin: 16px 0; border-color: GrayText;">
+            <div class="form-group">
                 <label>Metadata Hover Overlay</label>
                 <p style="font-size: var(--font-size-small); opacity: 0.7; margin: 4px 0 8px;">Choose which fields appear when hovering over the image preview.</p>
                 <button id="btn-open-overlay-fields" class="btn" style="width: 100%;">Configure Overlay Fields…</button>

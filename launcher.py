@@ -58,6 +58,8 @@ def run_fastapi_server(port):
         log_level="warning",
     )
     server = uvicorn.Server(config)
+    # Store server reference so we can shut it down cleanly
+    run_fastapi_server.server = server
     server.run()
 
 
@@ -97,6 +99,13 @@ def main():
     webview.start()
     
     print("Window closed, shutting down...")
+    
+    # Gracefully shut down the uvicorn server before Python finalises,
+    # otherwise the uvloop timer thread will SIGSEGV trying to acquire the GIL.
+    server = getattr(run_fastapi_server, 'server', None)
+    if server is not None:
+        server.should_exit = True
+        server_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

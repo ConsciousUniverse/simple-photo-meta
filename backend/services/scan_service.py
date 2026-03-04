@@ -3,6 +3,8 @@ Directory scanning service.
 No Django dependencies.
 """
 
+import fnmatch
+import json
 import os
 import sys
 import threading
@@ -28,8 +30,35 @@ _scan_state = {
 _scan_lock = threading.Lock()
 
 
+def _get_exclusion_patterns() -> list[str]:
+    """Load exclusion patterns from preferences."""
+    raw = database.get_preference('excluded_directories')
+    if not raw:
+        return []
+    try:
+        patterns = json.loads(raw)
+        return [p.strip() for p in patterns if p.strip()]
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _is_excluded(dirname: str, patterns: list[str]) -> bool:
+    """Check if a directory name matches any exclusion pattern.
+    
+    Supports shell-style wildcards via fnmatch:
+      .*     — all dot-directories
+      __*    — all dunder-directories
+      backup — exact name match
+    """
+    for pattern in patterns:
+        if fnmatch.fnmatch(dirname, pattern):
+            return True
+    return False
+
+
 def get_images_in_folder(folder_path: str) -> list[str]:
     """Get list of all image files in folder (recursive)."""
+    exclusion_patterns = _get_exclusion_patterns()
     images = []
     for root, dirs, files in os.walk(folder_path):
         # Skip cache directories
@@ -37,6 +66,10 @@ def get_images_in_folder(folder_path: str) -> list[str]:
             dirs.remove(THUMBNAIL_DIR_NAME)
         if PREVIEW_CACHE_DIR_NAME in dirs:
             dirs.remove(PREVIEW_CACHE_DIR_NAME)
+        
+        # Apply user-defined exclusion patterns (modify dirs in-place to skip subtrees)
+        if exclusion_patterns:
+            dirs[:] = [d for d in dirs if not _is_excluded(d, exclusion_patterns)]
         
         for fname in files:
             if fname.lower().endswith(SUPPORTED_EXTENSIONS):
