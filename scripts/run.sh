@@ -13,42 +13,23 @@ BACKEND_DIR="$PROJECT_DIR/backend"
 echo "=== Simple Photo Meta ==="
 echo ""
 
-# Check for Python
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 is required but not found."
+# Check for pipenv
+if ! command -v pipenv &> /dev/null; then
+    echo "Error: pipenv is required. Install with: pip install pipenv"
     exit 1
 fi
 
-# Detect platform
-if [[ "$OSTYPE" == "linux"* ]]; then
-    PLATFORM="Linux"
-else
-    PLATFORM="macOS"
-fi
+cd "$PROJECT_DIR"
 
-# Check if virtual environment exists
-if [ ! -d "$PROJECT_DIR/.venv" ]; then
-    echo "Creating virtual environment..."
-    if [[ "$PLATFORM" == "Linux" ]]; then
-        python3 -m venv --system-site-packages "$PROJECT_DIR/.venv"
-    else
-        python3 -m venv "$PROJECT_DIR/.venv"
-    fi
-fi
-
-# Activate virtual environment
-source "$PROJECT_DIR/.venv/bin/activate"
-
-# Install backend dependencies
-echo "Installing dependencies..."
-pip install -q fastapi uvicorn pillow pillow-heif appdirs numpy scipy reverse_geocoder
+# Install dependencies
+echo "Installing dependencies with pipenv..."
+pipenv install
 
 # Build C++ bindings if needed
-if ! python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then
+if ! pipenv run python -c "from simple_photo_meta.exiv2bind import Exiv2Bind" 2>/dev/null; then
     echo "Building C++ metadata bindings..."
-    cd "$PROJECT_DIR"
-    pip install -q pybind11 setuptools
-    python setup.py build_ext --inplace
+    pipenv install --dev
+    pipenv run python setup.py build_ext --inplace
 fi
 
 # Start the server
@@ -62,8 +43,8 @@ echo "========================================="
 echo ""
 
 # Open browser after a short delay (background)
-(sleep 2 && python -c "import webbrowser; webbrowser.open('http://127.0.0.1:$PORT')") &
+(sleep 2 && pipenv run python -c "import webbrowser; webbrowser.open('http://127.0.0.1:$PORT')") &
 
 # Run the development server with uvicorn
 cd "$BACKEND_DIR"
-python -m uvicorn main:app --host 127.0.0.1 --port "$PORT" --reload
+pipenv run python -m uvicorn main:app --host 127.0.0.1 --port "$PORT" --reload

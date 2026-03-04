@@ -198,7 +198,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.18-alpha+cf20500
+v3.0.19-alpha+c24021b
 
 ## Contributing
 

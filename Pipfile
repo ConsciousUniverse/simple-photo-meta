@@ -13,6 +13,7 @@ pywebview = ">=5.0"
 numpy = "*"
 scipy = "*"
 reverse_geocoder = "*"
+pyobjc-framework-WebKit = {version = "*", sys_platform = "== 'darwin'"}
 
 [dev-packages]
 setuptools = "*"
