@@ -98,6 +98,8 @@ Download alpha releases from the [Releases page](https://github.com/ConsciousUni
   ```bash
   # Install (first time)
   sudo apt install flatpak                          # if not already installed
+  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  flatpak install flathub org.gnome.Platform//48    # install the GNOME runtime
   flatpak install --user SimplePhotoMeta-2.0.0.flatpak
 
   # Run from the terminal
@@ -223,7 +225,7 @@ This project includes or links to several open-source components. See [THIRD_PAR
 
 ## Current Version
 
-v3.0.22-alpha+ee84354
+v3.0.23-alpha+78888a5
 
 ## Contributing
 
